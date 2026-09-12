@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/background"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/eventlog"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
@@ -412,7 +413,7 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 	}
 	newID, _ := res.LastInsertId()
 	w.WriteHeader(http.StatusCreated)
-	go func() {
+	background.Go("auth.notifyAdminsMembershipRequest", func() {
 		rows, err := h.db.Query(`SELECT id FROM users WHERE role = 'admin'`)
 		if err != nil {
 			return
@@ -428,7 +429,7 @@ func (h *Handler) RequestMembership(w http.ResponseWriter, r *http.Request) {
 			"Neue Beitrittsanfrage",
 			req.FirstName+" "+req.LastName+" möchte Mitglied werden",
 			fmt.Sprintf("/anfragen?id=%d", newID))
-	}()
+	})
 }
 
 func (h *Handler) ListMembershipRequests(w http.ResponseWriter, r *http.Request) {
@@ -1080,23 +1081,39 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
-		go func() {
+		background.Go("auth.activateProxyAccount", func() {
 			plain, tokenHash, err := GenerateOpaqueToken()
 			if err != nil {
+				slog.Error("auth.activateProxyAccount: token generation failed", "user_id", targetID, "error", err)
 				return
 			}
-			h.db.ExecContext(r.Context(), //nolint:errcheck
+			// r.Context() wird storniert, sobald ServeHTTP für diesen Request
+			// zurückkehrt — was hier fast immer VOR dieser Goroutine passiert
+			// (der Handler schreibt nur noch w.WriteHeader danach). Ein
+			// unabhängiger Context mit eigenem Timeout statt r.Context() ist
+			// deshalb Pflicht (design.md Entscheidung 3), sonst verliert der
+			// INSERT das Rennen gegen die Response und der Reset-Token landet
+			// nie in der DB.
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if _, err := h.db.ExecContext(ctx,
 				`INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?,?,?)`,
 				targetID, tokenHash, PasswordResetExpiry(),
-			)
+			); err != nil {
+				slog.Error("auth.activateProxyAccount: reset token insert failed", "user_id", targetID, "error", err)
+				return
+			}
 			fullName := firstName
 			if lastName != "" {
 				fullName += " " + lastName
 			}
 			link := fmt.Sprintf("%s/reset-password?token=%s", h.baseURL, plain)
-			h.mailer.Send(*req.Email, "Dein TeamWERK-Konto wurde aktiviert", //nolint:errcheck
-				fmt.Sprintf("Hallo %s,\n\ndein Konto wurde aktiviert. Bitte setze jetzt dein Passwort:\n%s\n\nDer Link ist 1 Stunde gültig.", fullName, link))
-		}()
+			if err := h.mailer.Send(*req.Email, "Dein TeamWERK-Konto wurde aktiviert",
+				fmt.Sprintf("Hallo %s,\n\ndein Konto wurde aktiviert. Bitte setze jetzt dein Passwort:\n%s\n\nDer Link ist 1 Stunde gültig.", fullName, link),
+			); err != nil {
+				slog.Error("auth.activateProxyAccount: mail failed", "user_id", targetID, "error", err)
+			}
+		})
 		// Proxy-Konto aktiviert (can_login/email geändert) → Nutzerliste, und da
 		// das Konto i.d.R. an ein Mitglied gekoppelt ist auch die Mitgliederliste;
 		// der Betroffene sieht seine Aktivierung sofort.

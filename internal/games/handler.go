@@ -16,6 +16,7 @@ import (
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/httpcache"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
@@ -94,9 +95,7 @@ func gameLocksAt(dateISO, timeHHMM string) (time.Time, error) {
 }
 
 func writeRSVPLocked(w http.ResponseWriter, message string, locksAt time.Time) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnprocessableEntity)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	httpx.WriteJSON(w, http.StatusUnprocessableEntity, map[string]any{
 		"error":    "rsvp_locked",
 		"message":  message,
 		"locks_at": locksAt.UTC().Format(time.RFC3339),
@@ -267,38 +266,38 @@ func (h *Handler) UpdateGameNote(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var req struct {
 		Note string `json:"note"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if utf8.RuneCountInString(req.Note) > 200 {
-		http.Error(w, "note too long", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "note_too_long", nil)
 		return
 	}
 
 	var exists int
 	if err := h.db.QueryRowContext(r.Context(),
 		`SELECT 1 FROM games WHERE id=?`, gameID).Scan(&exists); err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	} else if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !h.canEditGameNote(r.Context(), claims, gameID) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -306,14 +305,14 @@ func (h *Handler) UpdateGameNote(w http.ResponseWriter, r *http.Request) {
 	req.Note = strings.TrimSpace(req.Note)
 	if _, err = tx.ExecContext(r.Context(),
 		`UPDATE games SET note = ? WHERE id = ?`, req.Note, gameID); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if strings.TrimSpace(req.Note) == "" {
 		if _, err = tx.ExecContext(r.Context(),
 			`DELETE FROM pending_event_notes_push WHERE ref_type='game' AND ref_id=?`,
 			gameID); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	} else {
@@ -325,12 +324,12 @@ func (h *Handler) UpdateGameNote(w http.ResponseWriter, r *http.Request) {
 				notify_after = excluded.notify_after,
 				updated_by   = excluded.updated_by`,
 			gameID, req.Note, claims.UserID); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 	if err = tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -606,27 +605,14 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	seasonID := r.URL.Query().Get("season_id")
 	claims := auth.ClaimsFromCtx(r.Context())
 
-	limit := 50
-	if l := r.URL.Query().Get("limit"); l != "" {
-		fmt.Sscanf(l, "%d", &limit)
-	}
-	if limit < 1 {
-		limit = 50
-	}
-	offset := 0
-	if o := r.URL.Query().Get("offset"); o != "" {
-		fmt.Sscanf(o, "%d", &offset)
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset := httpx.Paging(r, 50, 200)
 
 	// Event-Sichtbarkeitsregel (Funktionsträger sehen alles, sonst nur Team-
 	// Zugehörigkeit). Ersetzt das alte policy.ScopeGamesQuery, das Trainer auf
 	// kader_trainers einschränkte und erweiterte Kader-Member ignorierte.
 	visClause, visArgs, _, err := auth.GameVisibilityClause(r.Context(), h.db, claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	andScope := ""
@@ -667,14 +653,14 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 	var total int
 	if err := h.db.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM games g`+where, whereArgs...).Scan(&total); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	rows, err := h.db.QueryContext(r.Context(),
 		base+where+suffix, append(append([]any{}, whereArgs...), limit, offset)...)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer rows.Close()
@@ -790,8 +776,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		g.Can = gameCan
 		result[i] = *g
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"items": result, "total": total})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": result, "total": total})
 }
 
 // GET /api/games/{id}
@@ -802,7 +787,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		claims := auth.ClaimsFromCtx(r.Context())
 		ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, gid)
 		if !ok {
-			http.Error(w, "not found", http.StatusNotFound)
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 			return
 		}
 	}
@@ -885,11 +870,11 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		g.RsvpLocksAt = locksAt.Format(time.RFC3339)
 	}
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -982,8 +967,7 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		slots = append(slots, s)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"game": g, "slots": slots})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"game": g, "slots": slots})
 }
 
 // POST /api/admin/games
@@ -1010,17 +994,17 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		} `json:"slots"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Date == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 
 	if len(req.TeamIDs) == 0 {
-		http.Error(w, "team_ids required", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "team_ids_required", nil)
 		return
 	}
 
 	if req.EventType != "heim" && req.EventType != "auswärts" && req.EventType != "generisch" {
-		http.Error(w, "invalid event_type", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_event_type", nil)
 		return
 	}
 
@@ -1035,11 +1019,11 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	allowed, err := h.checkTeamScope(r.Context(), claims, req.EventType, req.TeamIDs)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !allowed {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -1052,7 +1036,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		req.RsvpDefaultExtended = "none"
 	}
 	if !validRsvpDefault(req.RsvpDefaultPlayers) || !validRsvpDefault(req.RsvpDefaultExtended) {
-		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default", nil)
 		return
 	}
 
@@ -1065,7 +1049,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -1085,7 +1069,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 	var endDateVal interface{}
 	if req.EndDate != nil && *req.EndDate != "" {
 		if *req.EndDate < req.Date {
-			http.Error(w, "end_date must be >= date", http.StatusBadRequest)
+			httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 			return
 		}
 		endDateVal = *req.EndDate
@@ -1094,7 +1078,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO games (season_id, opponent, date, time, end_time, end_date, is_home, event_type, template_id, venue_id, rsvp_default_players, rsvp_default_extended, rsvp_require_reason) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		req.SeasonID, req.Opponent, req.Date, req.Time, endTimeVal, endDateVal, isHome, req.EventType, templateIDVal, venueIDVal, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, rsvpRequireReason)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	gameID, _ := res.LastInsertId()
@@ -1130,7 +1114,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 				`INSERT INTO duty_slots (event_name, event_date, event_time, duty_type_id, role_desc, slots_total, team_id, season_id, game_id, is_custom)
 				 VALUES (?,?,?,?,?,?,NULL,?,?,1)`,
 				eventName, req.Date, s.EventTime, s.DutyTypeID, "", n, req.SeasonID, gameID); err != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
+				httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 				return
 			}
 		}
@@ -1138,12 +1122,12 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 
 	summary, err := h.runAutoRegen(r.Context(), tx, dateWindow(req.Date), req.SeasonID, nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -1170,9 +1154,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 			notify.ActorName(h.db, claims.UserID)),
 		fmt.Sprintf("/termine?focus=game-%d", gameID))
 	h.dispatchRegenNotifications(summary)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{"id": gameID, "regen_summary": summary})
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": gameID, "regen_summary": summary})
 }
 
 func toAny(teamIDs []int) []any {
@@ -1211,13 +1193,13 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		if string(req.TemplateID) == "null" {
 			tplToNull = true
 		} else if err := json.Unmarshal(req.TemplateID, &tplValue); err != nil {
-			http.Error(w, "bad request: template_id muss null oder Zahl sein", http.StatusBadRequest)
+			httpx.WriteError(w, r, http.StatusBadRequest, "invalid_template_id", nil)
 			return
 		}
 	}
 
 	if req.EndDate != nil && *req.EndDate != "" && req.Date != "" && *req.EndDate < req.Date {
-		http.Error(w, "end_date must be >= date", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 		return
 	}
 
@@ -1226,7 +1208,7 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	// unterscheidbar werden.
 	gameIDInt, err := strconv.Atoi(id)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -1234,19 +1216,19 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	switch err := h.db.QueryRowContext(r.Context(),
 		`SELECT event_type FROM games WHERE id=?`, gameIDInt).Scan(&storedEventType); {
 	case err == sql.ErrNoRows:
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	case err != nil:
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	mayMutate, err := h.canMutateGame(r.Context(), claims, gameIDInt)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !mayMutate {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	// Hängt der Request die Mannschaften um, gilt die Typ-Regel für den ZIEL-Typ:
@@ -1258,18 +1240,18 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		}
 		allowed, err := h.checkTeamScope(r.Context(), claims, targetType, req.TeamIDs)
 		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		if !allowed {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 			return
 		}
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -1283,20 +1265,20 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		`SELECT date, time, season_id FROM games WHERE id=?`, id).
 		Scan(&oldDate, &oldTime, &oldSeasonID); err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "not found", http.StatusNotFound)
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 			return
 		}
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	// Enum-Validierung der bereitgestellten RSVP-Felder (keine Konflikt-Prüfung mehr).
 	if req.RsvpDefaultPlayers != nil && !validRsvpDefault(*req.RsvpDefaultPlayers) {
-		http.Error(w, "invalid rsvp_default_players", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default_players", nil)
 		return
 	}
 	if req.RsvpDefaultExtended != nil && !validRsvpDefault(*req.RsvpDefaultExtended) {
-		http.Error(w, "invalid rsvp_default_extended", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default_extended", nil)
 		return
 	}
 
@@ -1332,12 +1314,12 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	res, err = tx.ExecContext(r.Context(),
 		`UPDATE games SET `+strings.Join(setCols, ", ")+` WHERE id=?`, setArgs...)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 
@@ -1375,7 +1357,7 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 		setArgs = append(setArgs, id)
 		if _, err = tx.ExecContext(r.Context(),
 			`UPDATE games SET `+strings.Join(setParts, ", ")+` WHERE id=?`, setArgs...); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
@@ -1383,12 +1365,12 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 	regenDates := append(dateWindow(oldDate), dateWindow(req.Date)...)
 	summary, err := h.runAutoRegen(r.Context(), tx, regenDates, oldSeasonID, nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	// broadcastGame/gameTeamIDs adressieren die AKTUELLEN (neuen) game_teams. Bei einer
@@ -1418,8 +1400,7 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 			"games", changeTitle, changeBody, fmt.Sprintf("/termine?focus=game-%d", gameIDInt))
 	}
 	h.dispatchRegenNotifications(summary)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"regen_summary": summary})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"regen_summary": summary})
 }
 
 // DELETE /api/games/{id}
@@ -1458,11 +1439,11 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		`SELECT season_id, COALESCE(opponent, ''), date, event_type FROM games WHERE id=?`, id).
 		Scan(&seasonID, &opponent, &eventDate, &eventType)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -1471,46 +1452,46 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	// beteiligt ist.
 	gameIDInt, err := strconv.Atoi(id)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	mayMutate, err := h.canMutateGame(r.Context(), claims, gameIDInt)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !mayMutate {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
 	assignedUIDs, fulfilledUIDs, err := h.dutyAssigneesForGame(r.Context(), id)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
 
 	res, err := tx.ExecContext(r.Context(), `DELETE FROM games WHERE id=?`, id)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 
 	// event-notes: etwaige pending Push-Row mitlöschen, sonst Karteileiche.
 	if _, err = tx.ExecContext(r.Context(),
 		`DELETE FROM pending_event_notes_push WHERE ref_type='game' AND ref_id=?`, id); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -1530,7 +1511,7 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 			)
 			WHERE user_id = ? AND season_id = ?`,
 			uid, seasonID, uid, seasonID); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
@@ -1540,12 +1521,12 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	neighborDates := []string{window[0], window[2]}
 	summary, err := h.runAutoRegen(r.Context(), tx, neighborDates, seasonID, nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	if err = tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -1582,8 +1563,7 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 
 	h.dispatchRegenNotifications(summary)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"regen_summary": summary})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"regen_summary": summary})
 }
 
 // cancellationTitle wählt die Überschrift der Absage-Meldung passend zum
@@ -1677,7 +1657,7 @@ func formatDateDMY(s string) string { return notify.FormatDateDMY(s) }
 func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	if claims == nil {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		httpx.WriteError(w, r, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
 
@@ -1844,7 +1824,7 @@ func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 		 LEFT JOIN game_template_items gti ON gti.template_id = gt.id
 		 GROUP BY gt.id ORDER BY gt.id`)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer rows.Close()
@@ -1862,8 +1842,7 @@ func (h *Handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&t.ID, &t.Name, &t.TemplateType, &t.DurationMinutes, &t.ItemCount)
 		result = append(result, t)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 // GET /api/admin/duty-templates/{id}
@@ -1879,16 +1858,15 @@ func (h *Handler) GetTemplateByID(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, name, template_type, duration_minutes FROM game_templates WHERE id=?`, id).
 		Scan(&t.ID, &t.Name, &t.TemplateType, &t.DurationMinutes)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	items := h.scanTemplateItems(r.Context(), t.ID)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{
 		"id": t.ID, "name": t.Name, "template_type": t.TemplateType,
 		"duration_minutes": t.DurationMinutes, "items": items,
 	})
@@ -1902,11 +1880,11 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 		DurationMinutes int    `json:"duration_minutes"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.TemplateType != "heim" && req.TemplateType != "auswärts" && req.TemplateType != "generisch" {
-		http.Error(w, "invalid template_type", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_template_type", nil)
 		return
 	}
 	if req.DurationMinutes <= 0 {
@@ -1916,16 +1894,14 @@ func (h *Handler) CreateTemplate(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO game_templates (name, template_type, duration_minutes) VALUES (?,?,?)`,
 		req.Name, req.TemplateType, req.DurationMinutes)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	newID, _ := res.LastInsertId()
 	// Templates sind nicht team-gebunden (sie steuern die Dienst-Generierung
 	// vereinsweit) → bewusst global, kein Team-Scoping.
 	h.hub.Broadcast("games")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
 		"id": newID, "name": req.Name, "template_type": req.TemplateType,
 		"duration_minutes": req.DurationMinutes, "items": []any{},
 	})
@@ -1954,7 +1930,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil || id <= 0 {
-		http.Error(w, "invalid template id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_template_id", nil)
 		return
 	}
 	var req struct {
@@ -1964,11 +1940,11 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		Items           []templateItem `json:"items"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.TemplateType != "heim" && req.TemplateType != "auswärts" && req.TemplateType != "generisch" {
-		http.Error(w, "invalid template_type", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_template_type", nil)
 		return
 	}
 	if req.DurationMinutes <= 0 {
@@ -1993,11 +1969,11 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 			 FROM duty_types WHERE id=?`, it.DutyTypeID,
 		).Scan(&sameDayBehavior, &adjacentDayBehavior, &typeHours, &typeMode, &typeEndAnchor, &typeEndOffset, &typeEndAtNextDuty)
 		if err == sql.ErrNoRows {
-			http.Error(w, "invalid duty_type_id", http.StatusBadRequest)
+			httpx.WriteError(w, r, http.StatusBadRequest, "invalid_duty_type_id", nil)
 			return
 		}
 		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		// Rotation setzt same_day_behavior='normal' UND
@@ -2005,7 +1981,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		// zusätzlich mit variantenwechselndem Duty-Type umgehen (siehe
 		// design.md). Nichts wird persistiert, wenn diese Prüfung fehlschlägt.
 		if it.RotationEnabled && (sameDayBehavior != "normal" || adjacentDayBehavior != "normal") {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "rotation_requires_normal_behavior"})
+			httpx.WriteError(w, r, http.StatusBadRequest, "rotation_requires_normal_behavior", nil)
 			return
 		}
 		// Dauer (dienst-dauer): fehlendes Feld erbt einmalig vom Diensttyp
@@ -2016,7 +1992,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		if it.HoursValue == nil {
 			it.HoursValue = &typeHours
 		} else if *it.HoursValue <= 0 {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_hours_value"})
+			httpx.WriteError(w, r, http.StatusBadRequest, "invalid_hours_value", nil)
 			return
 		}
 		// Dauer-Modus (dienst-dauer-dynamisch): fehlende Felder erben vom Diensttyp,
@@ -2025,13 +2001,13 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		if it.DurationMode == "" {
 			it.DurationMode = typeMode
 		} else if it.DurationMode != "absolut" && it.DurationMode != "dynamisch" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_duration_mode"})
+			httpx.WriteError(w, r, http.StatusBadRequest, "invalid_duration_mode", nil)
 			return
 		}
 		if it.EndAnchor == "" {
 			it.EndAnchor = typeEndAnchor
 		} else if it.EndAnchor != "start" && it.EndAnchor != "end" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_end_anchor"})
+			httpx.WriteError(w, r, http.StatusBadRequest, "invalid_end_anchor", nil)
 			return
 		}
 		if it.EndOffsetMinutes == nil {
@@ -2053,7 +2029,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		// Prüfungen ringsum vor tx.BeginTx, damit ein 400 keine Teil-Persistenz
 		// hinterlässt.
 		if dynamicSpanImpossible(it.DurationMode, it.Anchor, it.OffsetMinutes, it.EndAnchor, *it.EndOffsetMinutes) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "impossible_duration_span"})
+			httpx.WriteError(w, r, http.StatusBadRequest, "impossible_duration_span", nil)
 			return
 		}
 		// team_ids wird nur gegen die Existenz in teams geprüft, bewusst NICHT
@@ -2063,7 +2039,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 			var teamExists int
 			if err := h.db.QueryRowContext(r.Context(),
 				`SELECT COUNT(*) FROM teams WHERE id=?`, tid).Scan(&teamExists); err != nil || teamExists == 0 {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_team"})
+				httpx.WriteError(w, r, http.StatusBadRequest, "invalid_team", nil)
 				return
 			}
 		}
@@ -2073,13 +2049,13 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		// hier, VOR tx.BeginTx unten, damit ein 400 keine Teil-Persistenz hinterlässt.
 		if it.AusrichterID != nil {
 			if req.TemplateType != "heim" {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ausrichter_requires_heim_template"})
+				httpx.WriteError(w, r, http.StatusBadRequest, "ausrichter_requires_heim_template", nil)
 				return
 			}
 			var ausrichterExists int
 			if err := h.db.QueryRowContext(r.Context(),
 				`SELECT COUNT(*) FROM ausrichter WHERE id=?`, *it.AusrichterID).Scan(&ausrichterExists); err != nil || ausrichterExists == 0 {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_ausrichter"})
+				httpx.WriteError(w, r, http.StatusBadRequest, "invalid_ausrichter", nil)
 				return
 			}
 		}
@@ -2087,7 +2063,7 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -2096,18 +2072,18 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		`UPDATE game_templates SET name=?, template_type=?, duration_minutes=? WHERE id=?`,
 		req.Name, req.TemplateType, req.DurationMinutes, id)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 
 	_, err = tx.ExecContext(r.Context(), `DELETE FROM game_template_items WHERE template_id=?`, id)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	for i, it := range req.Items {
@@ -2122,13 +2098,13 @@ func (h *Handler) UpdateTemplate(w http.ResponseWriter, r *http.Request) {
 			audiencesToDB(it.Audiences), teamIDsToDB(it.TeamIDs), it.RotationEnabled, ausrichterID,
 			*it.HoursValue, it.DurationMode, it.EndAnchor, *it.EndOffsetMinutes, *it.EndAtNextDuty)
 		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	// Template-Änderung ist vereinsweit (nicht team-gebunden) → bewusst global.
@@ -2141,12 +2117,12 @@ func (h *Handler) DeleteTemplate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	res, err := h.db.ExecContext(r.Context(), `DELETE FROM game_templates WHERE id=?`, id)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	// Template-Löschung ist vereinsweit (nicht team-gebunden) → bewusst global.
@@ -2159,7 +2135,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 	templateIDStr := r.PathValue("id")
 	gameTime := r.URL.Query().Get("time")
 	if gameTime == "" {
-		http.Error(w, "time is required", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "time_required", nil)
 		return
 	}
 	gameEndTime := r.URL.Query().Get("end_time")
@@ -2172,11 +2148,11 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, duration_minutes, template_type FROM game_templates WHERE id=?`, templateIDStr).
 		Scan(&templateID, &durationMins, &templateType)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -2220,6 +2196,13 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		if h.db.QueryRowContext(r.Context(),
 			`SELECT date, season_id, end_time FROM games WHERE id=?`, gameIDStr).
 			Scan(&gameDate, &seasonID, &dbEndTime) == nil {
+			// SQLite-DATE-Gotcha (docs/agent/06-gotchas.md): der Scan liefert
+			// ggf. einen ISO-Timestamp statt der reinen Datumszeichenkette —
+			// vor jeder Weiterverwendung als Vergleichs-/Match-Schlüssel
+			// (loadSameDayContext, Konfliktprüfung unten) normalisieren.
+			if len(gameDate) > 10 {
+				gameDate = gameDate[:10]
+			}
 			if gameEndTime == "" && dbEndTime.Valid {
 				gameEndTime = dbEndTime.String
 			}
@@ -2249,7 +2232,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.loadTemplateItems(r.Context(), templateID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -2298,6 +2281,11 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 	if gameIDStr != "" {
 		var gameDate string
 		h.db.QueryRowContext(r.Context(), `SELECT date FROM games WHERE id=?`, gameIDStr).Scan(&gameDate)
+		// SQLite-DATE-Gotcha: siehe Normalisierung oben — ohne sie matcht der
+		// event_date=?-Vergleich unten nie gegen einen ISO-Timestamp.
+		if len(gameDate) > 10 {
+			gameDate = gameDate[:10]
+		}
 		if gameDate != "" {
 			for i, p := range result {
 				var count int
@@ -2312,8 +2300,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 // POST /api/admin/games/regenerate-day
@@ -2322,7 +2309,7 @@ func (h *Handler) PreviewSlots(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 	date := r.URL.Query().Get("date")
 	if date == "" {
-		http.Error(w, "date is required", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "date_required", nil)
 		return
 	}
 
@@ -2336,17 +2323,17 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
 	summary, err := h.runAutoRegen(r.Context(), tx, []string{date}, seasonID, nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	h.dispatchRegenNotifications(summary)
@@ -2355,8 +2342,7 @@ func (h *Handler) RegenerateDaySlots(w http.ResponseWriter, r *http.Request) {
 	if h.hub != nil {
 		h.hub.Broadcast("duties")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summary)
+	httpx.WriteJSON(w, http.StatusOK, summary)
 }
 
 // POST /api/admin/games/{id}/regenerate
@@ -2369,26 +2355,34 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	err := h.db.QueryRowContext(r.Context(),
 		`SELECT season_id, date FROM games WHERE id=?`, gameID).Scan(&seasonID, &date)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
+	}
+	// SQLite-DATE-Gotcha (docs/agent/06-gotchas.md): der Scan liefert ggf.
+	// einen ISO-Timestamp statt der reinen Datumszeichenkette. runAutoRegen →
+	// regenSingleDay → loadDayGames matcht per WHERE date=? nur gegen die
+	// reine "2006-01-02"-Form (Muster: loadBulkRangeGames in
+	// bulkregen_handler.go) — ohne Truncate entstehen hier still keine Slots.
+	if len(date) > 10 {
+		date = date[:10]
 	}
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
 	summary, err := h.runAutoRegen(r.Context(), tx, []string{date}, seasonID, nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	h.dispatchRegenNotifications(summary)
@@ -2397,8 +2391,7 @@ func (h *Handler) RegenerateSlots(w http.ResponseWriter, r *http.Request) {
 	if h.hub != nil {
 		h.hub.Broadcast("duties")
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summary)
+	httpx.WriteJSON(w, http.StatusOK, summary)
 }
 
 // ── Game RSVP ────────────────────────────────────────────────────────────────
@@ -2484,7 +2477,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 
 	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -2588,8 +2581,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListMyGames: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListMyGames: %w", err))
 		return
 	}
 	defer rows.Close()
@@ -2607,8 +2599,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 			&teamNames, &teamIDsCSV, &teamShortCSV, &teamLongCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked, &myReason,
 			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note, &inRegularKader, &inExtendedKader, &inTrainerKader,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
-			fmt.Fprintf(os.Stderr, "ListMyGames scan: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListMyGames scan: %w", err))
 			return
 		}
 		g.IsHome = isHome == 1
@@ -2664,8 +2655,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 // POST /api/games/{id}/respond
@@ -2673,11 +2663,11 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	if ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, gameID); !ok {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 
@@ -2687,11 +2677,11 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		Reason   string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.Status != "confirmed" && req.Status != "declined" && req.Status != "maybe" {
-		http.Error(w, "status must be confirmed, declined, or maybe", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 		return
 	}
 
@@ -2702,14 +2692,14 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 	// (mit Spiel-Sichtbarkeit) konnte fremde Spiel-RSVP setzen (Broken Access Control).
 	ownMemberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	var memberID int
 	if req.MemberID == 0 || req.MemberID == ownMemberID {
 		if ownMemberID == 0 {
-			http.Error(w, "your account is not linked to a member record", http.StatusUnprocessableEntity)
+			httpx.WriteError(w, r, http.StatusUnprocessableEntity, "no_member_record", nil)
 			return
 		}
 		memberID = ownMemberID
@@ -2718,16 +2708,16 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		staff := claims.Role == auth.RoleAdmin || claims.HasFunction("vorstand") || claims.IsTrainerLike()
 		if !staff {
 			if !claims.IsParent {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 				return
 			}
 			okParent, perr := h.parentHasChild(r.Context(), claims.UserID, req.MemberID)
 			if perr != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
+				httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, perr)
 				return
 			}
 			if !okParent {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 				return
 			}
 		}
@@ -2738,7 +2728,7 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		`SELECT absence_id FROM game_responses WHERE game_id = ? AND member_id = ?`,
 		gameID, memberID).Scan(&existingAbsenceID)
 	if existingAbsenceID.Valid {
-		http.Error(w, "response is locked by an absence", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, "rsvp_locked_absence", nil)
 		return
 	}
 
@@ -2747,12 +2737,12 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		if err := h.db.QueryRowContext(r.Context(),
 			`SELECT date(date), substr(time,1,5) FROM games WHERE id = ?`,
 			gameID).Scan(&gameDate, &gameTime); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		locksAt, err := gameLocksAt(gameDate, gameTime)
 		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		if h.now().After(locksAt) {
@@ -2771,8 +2761,7 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		  responded_at = datetime('now')`,
 		gameID, memberID, claims.UserID, req.Status, req.Reason)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "RespondToGame upsert: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("RespondToGame upsert: %w", err))
 		return
 	}
 	h.broadcastGame(r.Context(), gameID, "games")
@@ -2791,11 +2780,11 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	if ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, gameID); !ok {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 
@@ -2803,7 +2792,7 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 
 	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -2832,8 +2821,7 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 		LEFT JOIN game_responses gr ON gr.game_id = ? AND gr.member_id = m.id
 		ORDER BY m.last_name, m.first_name`, gameID, gameID, gameID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListGameResponses: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListGameResponses: %w", err))
 		return
 	}
 	defer rows.Close()
@@ -2854,8 +2842,7 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, resp)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 type participantItem struct {
@@ -2894,32 +2881,19 @@ type participantsResponse struct {
 func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 
 	claims := auth.ClaimsFromCtx(r.Context())
 	if claims != nil {
 		if ok, _ := auth.UserCanSeeGame(r.Context(), h.db, claims.UserID, gameID); !ok {
-			http.Error(w, "not found", http.StatusNotFound)
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 			return
 		}
 	}
 
-	limit := 200
-	if l := r.URL.Query().Get("limit"); l != "" {
-		fmt.Sscanf(l, "%d", &limit)
-	}
-	if limit < 1 {
-		limit = 200
-	}
-	offset := 0
-	if o := r.URL.Query().Get("offset"); o != "" {
-		fmt.Sscanf(o, "%d", &offset)
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset := httpx.Paging(r, 200, 200)
 	bypass := claims != nil && (claims.Role == "admin" ||
 		claims.HasFunction("trainer") ||
 		claims.HasFunction("sportliche_leitung") ||
@@ -2932,7 +2906,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	if claims != nil {
 		callerMemberID, err = h.memberIDForUser(r.Context(), claims.UserID)
 		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		if claims.IsParent {
@@ -2958,8 +2932,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	if applyFilter {
 		myTeamSet, err = h.myTeamsInEvent(r.Context(), gameID, claims.UserID)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "GetParticipants/myTeams: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("GetParticipants/myTeams: %w", err))
 			return
 		}
 	}
@@ -3035,8 +3008,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		gameID, gameID, gameID, gameID,
 		gameID, gameID, gameID, gameID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "GetParticipants: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("GetParticipants: %w", err))
 		return
 	}
 	defer rows.Close()
@@ -3101,8 +3073,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	}
 	items = items[offset:end]
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(participantsResponse{Items: items, Total: total, HiddenTeamIDs: hidden})
+	httpx.WriteJSON(w, http.StatusOK, participantsResponse{Items: items, Total: total, HiddenTeamIDs: hidden})
 }
 
 // myTeamsInEvent liefert die Menge der team_ids im Event gameID, in deren
@@ -3159,17 +3130,17 @@ func (h *Handler) SaveLineup(w http.ResponseWriter, r *http.Request) {
 
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 
 	ok, err := h.canRecordGameAttendance(r.Context(), claims, gameID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -3177,20 +3148,20 @@ func (h *Handler) SaveLineup(w http.ResponseWriter, r *http.Request) {
 		MemberIDs []int `json:"member_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
 
 	// Delete all existing lineup entries for this game
 	if _, err := tx.ExecContext(r.Context(), `DELETE FROM game_lineup WHERE game_id=?`, gameID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -3199,13 +3170,13 @@ func (h *Handler) SaveLineup(w http.ResponseWriter, r *http.Request) {
 		if _, err := tx.ExecContext(r.Context(),
 			`INSERT INTO game_lineup (game_id, member_id, added_by) VALUES (?,?,?)`,
 			gameID, memberID, claims.UserID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -3358,7 +3329,7 @@ func (h *Handler) ListTeamNames(w http.ResponseWriter, r *http.Request) {
 		 WHERE k.season_id = `+activeSeasonSub+` AND t.is_active = 1
 		 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer rows.Close()
@@ -3376,8 +3347,7 @@ func (h *Handler) ListTeamNames(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&t.ID, &t.AgeClass, &t.Gender, &t.TeamNumber, &t.GroupCount)
 		result = append(result, t)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 // gameAttendanceItem ist die Repräsentation eines Kader-Mitglieds in der
@@ -3451,7 +3421,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 
@@ -3459,26 +3429,26 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	err = h.db.QueryRowContext(r.Context(),
 		`SELECT date(date) <= date('now') FROM games WHERE id = ?`, gameID).Scan(&isPastOrToday)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	ok, err := h.canRecordGameAttendance(r.Context(), claims, gameID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
 	if !isPastOrToday {
-		http.Error(w, "attendance can only be recorded for past or current games", http.StatusUnprocessableEntity)
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, "attendance_window", nil)
 		return
 	}
 
@@ -3487,13 +3457,13 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		Present  bool `json:"present"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&entries); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -3506,8 +3476,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	// erlaubt — der Trainer kann bewusst erfassen, dass jemand trotz Absage da war.
 	declined, err := declinedMembersForGame(r.Context(), tx, gameID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SaveGameAttendances declined lookup: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveGameAttendances declined lookup: %w", err))
 		return
 	}
 
@@ -3535,8 +3504,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 			  )
 			  THEN 1 ELSE 0 END`,
 			gameID, e.MemberID, gameID, gameID, e.MemberID, gameID).Scan(&isTrainerOnly); err != nil {
-			fmt.Fprintf(os.Stderr, "SaveGameAttendances trainer check: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveGameAttendances trainer check: %w", err))
 			return
 		}
 		if isTrainerOnly == 1 {
@@ -3551,8 +3519,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 			VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 			ON CONFLICT(game_id, member_id) DO UPDATE SET present=excluded.present, noted_at=CURRENT_TIMESTAMP`,
 			gameID, e.MemberID, present); err != nil {
-			fmt.Fprintf(os.Stderr, "SaveGameAttendances upsert: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveGameAttendances upsert: %w", err))
 			return
 		}
 		wroteAny = true
@@ -3563,13 +3530,12 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	if wroteAny {
 		if _, err := tx.ExecContext(r.Context(),
 			`UPDATE games SET attendance_tracked=1 WHERE id=?`, gameID); err != nil {
-			fmt.Fprintf(os.Stderr, "SaveGameAttendances set tracked: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveGameAttendances set tracked: %w", err))
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	h.broadcastGame(r.Context(), gameID, "attendance-changed")
@@ -3583,33 +3549,32 @@ func (h *Handler) ResetAttendanceTracking(w http.ResponseWriter, r *http.Request
 	claims := auth.ClaimsFromCtx(r.Context())
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var exists int
 	err = h.db.QueryRowContext(r.Context(),
 		`SELECT 1 FROM games WHERE id = ?`, gameID).Scan(&exists)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.canRecordGameAttendance(r.Context(), claims, gameID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	if _, err := h.db.ExecContext(r.Context(),
 		`UPDATE games SET attendance_tracked=0 WHERE id=?`, gameID); err != nil {
-		fmt.Fprintf(os.Stderr, "ResetGameAttendanceTracking: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ResetGameAttendanceTracking: %w", err))
 		return
 	}
 	h.broadcastGame(r.Context(), gameID, "attendance-changed")
@@ -3623,7 +3588,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	gameID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var seasonID int
@@ -3632,21 +3597,21 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		`SELECT season_id, rsvp_default_players, rsvp_default_extended FROM games WHERE id = ?`, gameID).
 		Scan(&seasonID, &defPlayers, &defExtended)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	ok, err := h.canRecordGameAttendance(r.Context(), claims, gameID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -3655,7 +3620,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	isTrainerLike := claims.Role == "admin" || claims.HasFunction("trainer")
 	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	childMemberIDs := map[int]bool{}
@@ -3749,8 +3714,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		seasonID, gameID, gameID, gameID, seasonID, gameID,
 		seasonID, gameID, gameID, gameID, seasonID, gameID, seasonID, gameID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "GetGameAttendances: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("GetGameAttendances: %w", err))
 		return
 	}
 	defer rows.Close()
@@ -3814,6 +3778,5 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	for _, id := range order {
 		result = append(result, byID[id])
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }

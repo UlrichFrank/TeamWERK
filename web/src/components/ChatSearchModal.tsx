@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { errorMessage } from '../lib/errors'
 import { relativeTime } from '../lib/relativeTime'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { highlight } from '../lib/chatSearchHighlight'
 
 /**
@@ -37,6 +38,8 @@ const PAGE_SIZE = 50
  */
 export default function ChatSearchModal({ onClose, onSelect }: Props) {
   useEscapeKey(onClose)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, true)
 
   const [query, setQuery] = useState('')
   const [items, setItems] = useState<SearchHit[]>([])
@@ -102,6 +105,7 @@ export default function ChatSearchModal({ onClose, onSelect }: Props) {
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Nachrichten durchsuchen"

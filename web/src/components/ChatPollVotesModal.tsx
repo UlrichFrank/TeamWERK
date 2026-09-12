@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 import type { Poll } from '../pages/ChatPage'
 
@@ -16,7 +17,10 @@ interface Props {
 // MessageReadsModal), unabhängig vom womöglich noch optimistischen Stand der
 // Karte, die dieses Modal geöffnet hat.
 export default function ChatPollVotesModal({ messageId, onClose }: Props) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
   const [poll, setPoll] = useState<Poll | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -44,11 +48,15 @@ export default function ChatPollVotesModal({ messageId, onClose }: Props) {
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h2 className="text-lg font-bold text-brand-text">Stimmen</h2>
+          <h2 id={titleId} className="text-lg font-bold text-brand-text">Stimmen</h2>
           <button
             onClick={onClose}
             aria-label="Schließen"

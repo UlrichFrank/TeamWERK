@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { X, AlertTriangle } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorStatus } from '../lib/errors'
 import { DUTY_INSTRUCTION_TEMPLATE } from '../lib/dutyInstructionTemplate'
 import MarkdownRenderer from './MarkdownRenderer'
@@ -23,7 +24,10 @@ export default function DutyInstructionEditorModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string>('')
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
   // Der Volltext liegt nicht mehr in der Typen-Liste — beim Öffnen aus dem
   // Detail-Pfad nachladen. Leerer Text → Beispiel-Template vorbelegen.
   useEffect(() => {
@@ -65,9 +69,15 @@ export default function DutyInstructionEditorModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]"
+      >
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
-          <h2 className="font-semibold text-lg text-brand-text">Anleitung: {dutyTypeName}</h2>
+          <h2 id={titleId} className="font-semibold text-lg text-brand-text">Anleitung: {dutyTypeName}</h2>
           <button
             onClick={onClose}
             aria-label="Schließen"

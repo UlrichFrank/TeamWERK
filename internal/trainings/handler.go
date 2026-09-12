@@ -15,6 +15,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
@@ -300,8 +301,7 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListSeries: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListSeries: %w", err))
 		return
 	}
 	defer rows.Close()
@@ -353,8 +353,7 @@ func (h *Handler) ListSeries(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, s)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 // POST /api/training-series
@@ -377,7 +376,7 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		RsvpRequireReason   int    `json:"rsvp_require_reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.RsvpDefaultPlayers == "" {
@@ -387,47 +386,45 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		req.RsvpDefaultExtended = "none"
 	}
 	if !validRsvpDefault(req.RsvpDefaultPlayers) || !validRsvpDefault(req.RsvpDefaultExtended) {
-		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default", nil)
 		return
 	}
 	kader, err := h.resolveKaderTarget(r.Context(), req.KaderID, req.TeamID, req.SeasonID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "kader not found", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "kader_not_found", nil)
 		return
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "CreateSeries kader lookup: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("CreateSeries kader lookup: %w", err))
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kader.ID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "CreateSeries kader check: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("CreateSeries kader check: %w", err))
 		return
 	}
 	if !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	from, err := time.Parse("2006-01-02", req.ValidFrom)
 	if err != nil {
-		http.Error(w, "invalid valid_from date", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_valid_from", nil)
 		return
 	}
 	until, err := time.Parse("2006-01-02", req.ValidUntil)
 	if err != nil {
-		http.Error(w, "invalid valid_until date", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_valid_until", nil)
 		return
 	}
 	if req.DayOfWeek < 0 || req.DayOfWeek > 6 {
-		http.Error(w, "day_of_week must be 0-6", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -443,27 +440,23 @@ func (h *Handler) CreateSeries(w http.ResponseWriter, r *http.Request) {
 		req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, claims.UserID,
 		req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "CreateSeries insert series: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("CreateSeries insert series: %w", err))
 		return
 	}
 	seriesID, _ := res.LastInsertId()
 
 	dates := generateSessionDates(from, until, req.DayOfWeek)
 	if err := insertSessions(r.Context(), tx, int(seriesID), kader, req.StartTime, req.EndTime, req.VenueID, req.Note, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason, dates); err != nil {
-		fmt.Fprintf(os.Stderr, "CreateSeries insert sessions: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("CreateSeries insert sessions: %w", err))
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	h.broadcastKader(r.Context(), []int{kader.ID}, "trainings")
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
 		"id":               seriesID,
 		"sessions_created": len(dates),
 	})
@@ -474,7 +467,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	seriesID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 
@@ -494,11 +487,11 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		RsvpRequireReason   *int    `json:"rsvp_require_reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.Scope != "all" && req.Scope != "this_and_following" {
-		http.Error(w, "scope must be 'all' or 'this_and_following'", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 		return
 	}
 
@@ -511,16 +504,16 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		`SELECT kader_id, team_id, season_id, rsvp_default_players, rsvp_default_extended, rsvp_require_reason, day_of_week, start_time FROM training_series WHERE id = ?`, seriesID).
 		Scan(&kader.ID, &kader.TeamID, &kader.SeasonID, &curDefPlayers, &curDefExtended, &curReqReason, &prevDayOfWeek, &prevStart)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kader.ID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -528,7 +521,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	rsvpDefaultPlayers := curDefPlayers
 	if req.RsvpDefaultPlayers != nil {
 		if !validRsvpDefault(*req.RsvpDefaultPlayers) {
-			http.Error(w, "invalid rsvp_default_players", http.StatusBadRequest)
+			httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default_players", nil)
 			return
 		}
 		rsvpDefaultPlayers = *req.RsvpDefaultPlayers
@@ -536,7 +529,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	rsvpDefaultExtended := curDefExtended
 	if req.RsvpDefaultExtended != nil {
 		if !validRsvpDefault(*req.RsvpDefaultExtended) {
-			http.Error(w, "invalid rsvp_default_extended", http.StatusBadRequest)
+			httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default_extended", nil)
 			return
 		}
 		rsvpDefaultExtended = *req.RsvpDefaultExtended
@@ -548,13 +541,13 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 
 	until, err := time.Parse("2006-01-02", req.ValidUntil)
 	if err != nil {
-		http.Error(w, "invalid valid_until", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_valid_until", nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -567,7 +560,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		`UPDATE training_series SET name=?, venue_id=?, day_of_week=?, start_time=?, end_time=?, valid_from=?, valid_until=?, note=?, rsvp_default_players=?, rsvp_default_extended=?, rsvp_require_reason=? WHERE id=?`,
 		req.Name, venueIDVal, req.DayOfWeek, req.StartTime, req.EndTime, req.ValidFrom, req.ValidUntil, req.Note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason, seriesID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -578,12 +571,12 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		genFrom, _ = time.Parse("2006-01-02", req.ValidFrom)
 	} else {
 		if req.FromDate == "" {
-			http.Error(w, "from_date required for this_and_following scope", http.StatusBadRequest)
+			httpx.WriteError(w, r, http.StatusBadRequest, "from_date_required", nil)
 			return
 		}
 		genFrom, err = time.Parse("2006-01-02", req.FromDate)
 		if err != nil {
-			http.Error(w, "invalid from_date", http.StatusBadRequest)
+			httpx.WriteError(w, r, http.StatusBadRequest, "invalid_from_date", nil)
 			return
 		}
 		_, err = tx.ExecContext(r.Context(),
@@ -591,17 +584,17 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 			seriesID, req.FromDate)
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	dates := generateSessionDates(genFrom, until, req.DayOfWeek)
 	if err := insertSessions(r.Context(), tx, seriesID, kader, req.StartTime, req.EndTime, req.VenueID, req.Note, rsvpDefaultPlayers, rsvpDefaultExtended, rsvpRequireReason, dates); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	h.broadcastKader(r.Context(), []int{kader.ID}, "trainings")
@@ -615,8 +608,7 @@ func (h *Handler) UpdateSeries(w http.ResponseWriter, r *http.Request) {
 			previousRhythm(prevDayOfWeek, prevStart, req.DayOfWeek, req.StartTime),
 			notify.ActorName(h.db, claims.UserID)),
 		"/termine")
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"sessions_created": len(dates)})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"sessions_created": len(dates)})
 }
 
 // seriesSubject ist der Name einer Serie im Benachrichtigungstext — das
@@ -710,7 +702,7 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	seriesID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var kaderID int
@@ -719,16 +711,16 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		`SELECT kader_id, name, date(valid_from), date(valid_until) FROM training_series WHERE id = ?`,
 		seriesID).Scan(&kaderID, &seriesName, &validFrom, &validUntil)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	reason, silent := cancellationRequest(r, claims)
@@ -763,11 +755,11 @@ func (h *Handler) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 			`DELETE FROM training_sessions WHERE series_id = ? AND date >= ?`, seriesID, today)
 	}
 	if execErr != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, execErr)
 		return
 	}
 	if _, err = h.db.ExecContext(r.Context(), `DELETE FROM training_series WHERE id = ?`, seriesID); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	// Serie gelöscht → Empfänger aus dem vorab geladenen kaderID scopen. Das
@@ -789,7 +781,7 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var kaderID int
@@ -798,26 +790,26 @@ func (h *Handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		`SELECT kader_id, title, date(date) FROM training_sessions WHERE id = ?`,
 		sessionID).Scan(&kaderID, &title, &date)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	reason, silent := cancellationRequest(r, claims)
 	if _, err = h.db.ExecContext(r.Context(),
 		`DELETE FROM pending_event_notes_push WHERE ref_type='training' AND ref_id=?`, sessionID); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if _, err = h.db.ExecContext(r.Context(), `DELETE FROM training_sessions WHERE id = ?`, sessionID); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	// Session gelöscht → Empfänger aus dem vorab geladenen kaderID scopen. Das
@@ -841,18 +833,18 @@ func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var req struct {
 		Note string `json:"note"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid body", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if utf8.RuneCountInString(req.Note) > 200 {
-		http.Error(w, "note too long", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "note_too_long", nil)
 		return
 	}
 
@@ -860,36 +852,36 @@ func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
 	err = h.db.QueryRowContext(r.Context(),
 		`SELECT kader_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&kaderID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
 
 	if _, err = tx.ExecContext(r.Context(),
 		`UPDATE training_sessions SET note = ? WHERE id = ?`, req.Note, sessionID); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if strings.TrimSpace(req.Note) == "" {
 		if _, err = tx.ExecContext(r.Context(),
 			`DELETE FROM pending_event_notes_push WHERE ref_type='training' AND ref_id=?`,
 			sessionID); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	} else {
@@ -901,12 +893,12 @@ func (h *Handler) UpdateTrainingNote(w http.ResponseWriter, r *http.Request) {
 				notify_after = excluded.notify_after,
 				updated_by   = excluded.updated_by`,
 			sessionID, req.Note, claims.UserID); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 	if err = tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -932,7 +924,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		RsvpRequireReason   int    `json:"rsvp_require_reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.RsvpDefaultPlayers == "" {
@@ -942,22 +934,21 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		req.RsvpDefaultExtended = "none"
 	}
 	if !validRsvpDefault(req.RsvpDefaultPlayers) || !validRsvpDefault(req.RsvpDefaultExtended) {
-		http.Error(w, "invalid rsvp_default_*", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default", nil)
 		return
 	}
 	kader, err := h.resolveKaderTarget(r.Context(), req.KaderID, req.TeamID, req.SeasonID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "kader not found", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "kader_not_found", nil)
 		return
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "CreateSession kader lookup: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("CreateSession kader lookup: %w", err))
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kader.ID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	var venueIDVal interface{}
@@ -969,8 +960,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		kader.ID, kader.teamIDArg(), kader.SeasonID, req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, req.Note, req.RsvpDefaultPlayers, req.RsvpDefaultExtended, req.RsvpRequireReason)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "CreateSession: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("CreateSession: %w", err))
 		return
 	}
 	id, _ := res.LastInsertId()
@@ -986,9 +976,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		id, kader.ID, req.Date)
 
 	h.broadcastKader(r.Context(), []int{kader.ID}, "trainings")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{"id": id})
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": id})
 }
 
 // PUT /api/training-sessions/{id}
@@ -996,7 +984,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	// prevStatus wird vor dem UPDATE gelesen: nur der Wechsel nach 'cancelled'
@@ -1010,16 +998,16 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		`SELECT kader_id, status, date(date), start_time FROM training_sessions WHERE id = ?`,
 		sessionID).Scan(&kaderID, &prevStatus, &prevDate, &prevStart)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -1037,11 +1025,11 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		RsvpRequireReason   *int    `json:"rsvp_require_reason,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.Status != "" && req.Status != "active" && req.Status != "cancelled" {
-		http.Error(w, "invalid status", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 		return
 	}
 	status := req.Status
@@ -1056,7 +1044,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		`UPDATE training_sessions SET title=?, date=?, start_time=?, end_time=?, venue_id=?, status=?, cancel_reason=? WHERE id=?`,
 		req.Title, req.Date, req.StartTime, req.EndTime, venueIDVal, status, req.CancelReason, sessionID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	// note ist Tri-State: fehlt das Feld, bleibt der Hinweis unverändert (er wird
@@ -1064,7 +1052,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	if req.Note != nil {
 		if _, err = h.db.ExecContext(r.Context(),
 			`UPDATE training_sessions SET note=? WHERE id=?`, *req.Note, sessionID); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
@@ -1074,7 +1062,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		setArgs := []interface{}{}
 		if req.RsvpDefaultPlayers != nil {
 			if !validRsvpDefault(*req.RsvpDefaultPlayers) {
-				http.Error(w, "invalid rsvp_default_players", http.StatusBadRequest)
+				httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default_players", nil)
 				return
 			}
 			setParts = append(setParts, "rsvp_default_players=?")
@@ -1082,7 +1070,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.RsvpDefaultExtended != nil {
 			if !validRsvpDefault(*req.RsvpDefaultExtended) {
-				http.Error(w, "invalid rsvp_default_extended", http.StatusBadRequest)
+				httpx.WriteError(w, r, http.StatusBadRequest, "invalid_rsvp_default_extended", nil)
 				return
 			}
 			setParts = append(setParts, "rsvp_default_extended=?")
@@ -1095,7 +1083,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		setArgs = append(setArgs, sessionID)
 		if _, err = h.db.ExecContext(r.Context(),
 			`UPDATE training_sessions SET `+strings.Join(setParts, ", ")+` WHERE id=?`, setArgs...); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
@@ -1182,27 +1170,14 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		to = time.Now().AddDate(0, 3, 0).Format("2006-01-02")
 	}
 
-	limit := 100
-	if l := q.Get("limit"); l != "" {
-		fmt.Sscanf(l, "%d", &limit)
-	}
-	if limit < 1 {
-		limit = 100
-	}
-	offset := 0
-	if o := q.Get("offset"); o != "" {
-		fmt.Sscanf(o, "%d", &offset)
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset := httpx.Paging(r, 100, 200)
 	// Serverseitiger Filter: ?exclude_series=1 → nur Einzeltermine (series_id IS NULL),
 	// ersetzt das frühere Client-filter(series_id===null) in AdminTrainingsPage.
 	excludeSeries := q.Get("exclude_series") == "1"
 
 	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -1293,8 +1268,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		`SELECT COUNT(*) FROM training_sessions ts WHERE %s AND ts.date >= ? AND ts.date <= ? %s %s`,
 		teamSQL, optTeamFilter, optExcludeSeries)
 	if err := h.db.QueryRowContext(r.Context(), countQuery, whereArgs...).Scan(&total); err != nil {
-		fmt.Fprintf(os.Stderr, "ListSessions count: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListSessions count: %w", err))
 		return
 	}
 
@@ -1381,8 +1355,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListSessions query: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListSessions query: %w", err))
 		return
 	}
 	defer rows.Close()
@@ -1404,8 +1377,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 			&s.RsvpDefaultPlayers, &s.RsvpDefaultExtended, &s.RsvpRequireReason,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "ListSessions scan: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListSessions scan: %w", err))
 			return
 		}
 		s.TeamID = int(teamID.Int64)
@@ -1443,8 +1415,7 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"items": result, "total": total})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": result, "total": total})
 }
 
 type sessionResponse struct {
@@ -1466,13 +1437,13 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 
 	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -1556,12 +1527,11 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		&attendanceTracked,
 		&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "GetSession: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("GetSession: %w", err))
 		return
 	}
 	s.TeamID = int(teamID.Int64)
@@ -1590,18 +1560,18 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	if !s.AmIParticipant {
 		mayAccess, err := h.hasKaderAccess(r.Context(), claims, s.KaderID)
 		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		if !mayAccess && claims.IsParent {
 			mayAccess, err = h.parentHasChildInKader(r.Context(), claims.UserID, s.KaderID)
 			if err != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
+				httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 				return
 			}
 		}
 		if !mayAccess {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 			return
 		}
 	}
@@ -1626,7 +1596,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 		WHERE tr.training_id = ?
 		ORDER BY m.last_name, m.first_name`, sessionID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer rows.Close()
@@ -1665,8 +1635,7 @@ func (h *Handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	if detail.Responses == nil {
 		detail.Responses = []sessionResponse{}
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(detail)
+	httpx.WriteJSON(w, http.StatusOK, detail)
 }
 
 // POST /api/training-sessions/{id}/respond
@@ -1674,7 +1643,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 
@@ -1684,11 +1653,11 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		Reason   string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.Status != "confirmed" && req.Status != "declined" && req.Status != "maybe" {
-		http.Error(w, "status must be confirmed, declined, or maybe", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 		return
 	}
 
@@ -1700,7 +1669,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 	// control). This resolves the member and enforces ownership before mutating.
 	ownMemberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -1708,7 +1677,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 	if req.MemberID == 0 || req.MemberID == ownMemberID {
 		// Responding for oneself.
 		if ownMemberID == 0 {
-			http.Error(w, "your account is not linked to a member record", http.StatusUnprocessableEntity)
+			httpx.WriteError(w, r, http.StatusUnprocessableEntity, "no_member_record", nil)
 			return
 		}
 		memberID = ownMemberID
@@ -1719,16 +1688,16 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		staff := claims.Role == auth.RoleAdmin || claims.HasFunction("vorstand") || claims.IsTrainerLike()
 		if !staff {
 			if !claims.IsParent {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 				return
 			}
 			okParent, perr := h.parentHasChild(r.Context(), claims.UserID, req.MemberID)
 			if perr != nil {
-				http.Error(w, "internal error", http.StatusInternalServerError)
+				httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, perr)
 				return
 			}
 			if !okParent {
-				http.Error(w, "forbidden", http.StatusForbidden)
+				httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 				return
 			}
 		}
@@ -1746,19 +1715,19 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 	var ownerKaderID int
 	if err := h.db.QueryRowContext(r.Context(),
 		`SELECT kader_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&ownerKaderID); err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	} else if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	participant, err := h.isKaderParticipant(r.Context(), ownerKaderID, memberID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if !participant {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -1767,17 +1736,17 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		`SELECT absence_id FROM training_responses WHERE training_id = ? AND member_id = ?`,
 		sessionID, memberID).Scan(&existingAbsenceID)
 	if existingAbsenceID.Valid {
-		http.Error(w, "response is locked by an absence", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, "rsvp_locked_absence", nil)
 		return
 	}
 
 	// Serien-Abmeldung: Ist das Mitglied für die Serie dieser Session abgemeldet,
 	// wird keine RSVP zugelassen (kein Insert/Upsert), analog zum Absence-Lock.
 	if unavailable, _, uerr := sessionUnavailabilityForMember(r.Context(), h.db, sessionID, memberID); uerr != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, uerr)
 		return
 	} else if unavailable {
-		http.Error(w, "für diese Terminserie abgemeldet", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, "series_unavailable", nil)
 		return
 	}
 
@@ -1786,12 +1755,12 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		if err := h.db.QueryRowContext(r.Context(),
 			`SELECT date(date), substr(start_time,1,5) FROM training_sessions WHERE id = ?`,
 			sessionID).Scan(&sessDate, &sessStart); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		locksAt, err := trainingLocksAt(sessDate, sessStart)
 		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		if h.now().After(locksAt) {
@@ -1810,8 +1779,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		  responded_at = CURRENT_TIMESTAMP`,
 		sessionID, memberID, claims.UserID, req.Status, req.Reason)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Respond upsert: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("Respond upsert: %w", err))
 		return
 	}
 	h.broadcastSession(r.Context(), sessionID, "trainings")
@@ -1819,9 +1787,7 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 }
 
 func writeRSVPLocked(w http.ResponseWriter, message string, locksAt time.Time) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnprocessableEntity)
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	httpx.WriteJSON(w, http.StatusUnprocessableEntity, map[string]any{
 		"error":    "rsvp_locked",
 		"message":  message,
 		"locks_at": locksAt.UTC().Format(time.RFC3339),
@@ -1849,7 +1815,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var kaderID int
@@ -1858,17 +1824,17 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		`SELECT kader_id, rsvp_default_players, rsvp_default_extended FROM training_sessions WHERE id = ?`, sessionID).
 		Scan(&kaderID, &defPlayers, &defExtended)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	isTrainerLike, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -1895,7 +1861,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 			) WHERE user_id = ?`,
 			kaderID, kaderID, kaderID, kaderID, kaderID, claims.UserID).Scan(&count)
 		if count == 0 {
-			http.Error(w, "forbidden", http.StatusForbidden)
+			httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 			return
 		}
 	}
@@ -1904,7 +1870,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	// Elternteil zusätzlich Zeilen ihrer Kinder (family_links).
 	memberID, err := h.memberIDForUser(r.Context(), claims.UserID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	childMemberIDs := map[int]bool{}
@@ -1982,8 +1948,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		kaderID, sessionID, sessionID, kaderID,
 		kaderID, sessionID, sessionID, kaderID, kaderID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "GetAttendances: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("GetAttendances: %w", err))
 		return
 	}
 	defer rows.Close()
@@ -1991,8 +1956,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 	// Serien-Abmeldungen einmalig für diese Session laden (member_id -> Status).
 	unavail, err := unavailableMembersForSession(r.Context(), h.db, sessionID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "GetAttendances unavailability: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("GetAttendances unavailability: %w", err))
 		return
 	}
 
@@ -2042,8 +2006,7 @@ func (h *Handler) GetAttendances(w http.ResponseWriter, r *http.Request) {
 		}
 		result = append(result, item)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 // POST /api/training-sessions/{id}/attendances
@@ -2051,7 +2014,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 
@@ -2060,21 +2023,21 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	err = h.db.QueryRowContext(r.Context(),
 		`SELECT kader_id, date(date) <= date('now') FROM training_sessions WHERE id = ?`, sessionID).Scan(&kaderID, &isPastOrToday)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
 	if !isPastOrToday {
-		http.Error(w, "attendance can only be recorded for past or current sessions", http.StatusUnprocessableEntity)
+		httpx.WriteError(w, r, http.StatusUnprocessableEntity, "attendance_window", nil)
 		return
 	}
 
@@ -2083,13 +2046,13 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 		Present  bool `json:"present"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&entries); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -2099,8 +2062,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	// scheitern. Effekt: kein Attendance-Record → nicht im Statistik-Nenner.
 	unavailable, err := unavailableMembersForSession(r.Context(), tx, sessionID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SaveAttendances unavailability: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveAttendances unavailability: %w", err))
 		return
 	}
 
@@ -2112,8 +2074,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	// erlaubt — der Trainer kann bewusst erfassen, dass jemand trotz Absage da war.
 	declined, err := declinedMembersForSession(r.Context(), tx, sessionID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SaveAttendances declined lookup: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveAttendances declined lookup: %w", err))
 		return
 	}
 
@@ -2137,8 +2098,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 			    AND NOT EXISTS (SELECT 1 FROM kader_members pm WHERE pm.member_id=? AND pm.kader_id=?)
 			  THEN 1 ELSE 0 END`,
 			e.MemberID, kaderID, e.MemberID, kaderID).Scan(&isTrainerOnly); err != nil {
-			fmt.Fprintf(os.Stderr, "SaveAttendances trainer check: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveAttendances trainer check: %w", err))
 			return
 		}
 		if isTrainerOnly == 1 {
@@ -2154,8 +2114,7 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 			ON CONFLICT(training_id, member_id) DO UPDATE SET present=excluded.present, noted_at=CURRENT_TIMESTAMP`,
 			sessionID, e.MemberID, present)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "SaveAttendances upsert: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveAttendances upsert: %w", err))
 			return
 		}
 		wroteAny = true
@@ -2166,13 +2125,12 @@ func (h *Handler) SaveAttendances(w http.ResponseWriter, r *http.Request) {
 	if wroteAny {
 		if _, err := tx.ExecContext(r.Context(),
 			`UPDATE training_sessions SET attendance_tracked=1 WHERE id=?`, sessionID); err != nil {
-			fmt.Fprintf(os.Stderr, "SaveAttendances set tracked: %v\n", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("SaveAttendances set tracked: %w", err))
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	h.broadcastSession(r.Context(), sessionID, "trainings")
@@ -2187,29 +2145,28 @@ func (h *Handler) ResetAttendanceTracking(w http.ResponseWriter, r *http.Request
 	claims := auth.ClaimsFromCtx(r.Context())
 	sessionID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var kaderID int
 	err = h.db.QueryRowContext(r.Context(),
 		`SELECT kader_id FROM training_sessions WHERE id = ?`, sessionID).Scan(&kaderID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	if _, err := h.db.ExecContext(r.Context(),
 		`UPDATE training_sessions SET attendance_tracked=0 WHERE id=?`, sessionID); err != nil {
-		fmt.Fprintf(os.Stderr, "ResetAttendanceTracking: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ResetAttendanceTracking: %w", err))
 		return
 	}
 	h.broadcastSession(r.Context(), sessionID, "trainings")

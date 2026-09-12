@@ -44,6 +44,12 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
       const img = container.querySelector('img')
       expect(img).not.toBeNull()
       expect(img?.getAttribute('style')).toMatch(/aspect-ratio:\s*1200\s*\/\s*800/)
+      // Auch der <img> trägt die explizite Breite: ohne sie bemisst er sich an
+      // der intrinsischen Größe, die bei einer frischen Blob-URL bis zum
+      // Eintreffen der Daten 0 ist (complete=false, naturalWidth=0) — die
+      // Blase schrumpft um die Bildhöhe und wächst ohne DOM-Mutation wieder
+      // (unter iOS Safari ein sichtbarer Sprung pro Bild).
+      expect(img?.getAttribute('style')).toMatch(/width:\s*1200px/)
     })
 
     expect(imageSpy).not.toHaveBeenCalled()
@@ -73,6 +79,10 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
       const img = container.querySelector('img')
       expect(img).not.toBeNull()
       expect(img?.getAttribute('style')).toMatch(/aspect-ratio:\s*640\s*\/\s*480/)
+      // Die per Probe ermittelten Dims reservieren die Breite genauso wie
+      // Server-Dims — der <img> darf sich nie an der (noch fehlenden)
+      // intrinsischen Größe bemessen.
+      expect(img?.getAttribute('style')).toMatch(/width:\s*640px/)
     })
 
     globalThis.Image = originalImage

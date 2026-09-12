@@ -22,6 +22,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/teamstuttgart/teamwerk/internal/background"
 )
 
 // startTime wird bei Package-Init (Prozessstart) gesetzt und speist die Uptime-Metrik.
@@ -93,6 +95,7 @@ func (h *Handler) Metrics(w http.ResponseWriter, r *http.Request) {
 	}
 	writeMetric(&b, "teamwerk_scheduler_age_seconds", "gauge", "Sekunden seit letztem Scheduler-Heartbeat (-1 = nie)", float64(h.schedulerAgeSec()))
 	writeMetric(&b, "teamwerk_panics_total", "counter", "Abgefangene HTTP-Handler-Panics seit Prozessstart", float64(PanicsTotal()))
+	writeMetric(&b, "teamwerk_background_panics_total", "counter", "Abgefangene Background-Job-Panics seit Prozessstart (internal/background)", float64(background.PanicsTotal()))
 	writeMetric(&b, "teamwerk_uptime_seconds", "gauge", "Prozess-Laufzeit in Sekunden", time.Since(startTime).Seconds())
 	writeMetric(&b, "teamwerk_sqlite_wal_bytes", "gauge", "Größe der SQLite-WAL-Datei in Bytes (0 wenn nicht vorhanden)", float64(walBytes(h.dbPath)))
 	writeMetric(&b, "teamwerk_sqlite_busy_total", "counter", "Beobachtete SQLITE_BUSY-Returns im HTTP-Schreibpfad seit Prozessstart", float64(SQLiteBusyTotal()))

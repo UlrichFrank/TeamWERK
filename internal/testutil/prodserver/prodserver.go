@@ -28,6 +28,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
 	"github.com/teamstuttgart/teamwerk/internal/matchreports"
+	"github.com/teamstuttgart/teamwerk/internal/media"
 	"github.com/teamstuttgart/teamwerk/internal/members"
 	"github.com/teamstuttgart/teamwerk/internal/notifications"
 	"github.com/teamstuttgart/teamwerk/internal/practicegroups"
@@ -80,13 +81,16 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Calendar:       calendar.NewHandler(database),
 		Videos:         videos.NewHandler(database, hubInstance, cfg),
 		MatchReports:   matchreports.NewHandler(database, hubInstance, cfg),
-		Settings:       settings.NewHandler(database, settingsStore, hubInstance),
-		SettingsStore:  settingsStore,
-		Stammvereine:   stammvereine.NewHandler(database, hubInstance),
-		Hub:            hub.NewHandler(hubInstance, "test", auth.UserIDFromCtx),
-		JWTSecret:      testutil.TestJWTSecret,
-		Database:       database,
-		BaseURL:        "",
+		// Media fehlte hier bis zur Objekt-Matrix: GET /api/media/{id} lief mit
+		// nil-Receiver in einen Panic (500) statt in das Objekt-Gate des Handlers.
+		Media:         media.NewHandler(database, t.TempDir()),
+		Settings:      settings.NewHandler(database, settingsStore, hubInstance),
+		SettingsStore: settingsStore,
+		Stammvereine:  stammvereine.NewHandler(database, hubInstance),
+		Hub:           hub.NewHandler(hubInstance, "test", auth.UserIDFromCtx),
+		JWTSecret:     testutil.TestJWTSecret,
+		Database:      database,
+		BaseURL:       "",
 	}, hubInstance
 }
 

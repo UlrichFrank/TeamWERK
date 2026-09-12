@@ -313,6 +313,17 @@ test('Konversationswechsel zeigt keinen Fremdinhalt', async ({ page }) => {
 // alle Platzhalter sichtbar sind. „E2E Chat mit Bildern" hat 4 Bilder, ALLE mit Server-Dims
 // (seedChatMedia → seedImage(…, true)); die langen Threads mischen absichtlich Bilder ohne
 // Dims (6-rem-Fallback) und taugen deshalb nicht für Δ≈0.
+//
+// ZWEITER BLINDER FLECK (Vorher/Nachher reicht nicht): Der <img> bemisst sich ohne explizite
+// Breite an seiner intrinsischen Größe — und die ist bei einer frisch gesetzten Blob-URL noch
+// NICHT bekannt: im Einfüge-Moment ist er `complete=false`, naturalWidth=0 und misst 0×0
+// (Chromium UND WebKit), der Scroll-Inhalt schrumpft um die volle Bildhöhe und wächst beim
+// Eintreffen der Daten OHNE DOM-Mutation wieder. Vorher/Nachher-Messung sieht davon nichts,
+// weil beide Zustände gleich hoch sind; unter iOS Safari (kein scroll-anchoring, `load` erst
+// nach dem nächsten Paint) ist das Wachsen oberhalb des Sichtbereichs ein sichtbarer Sprung
+// pro Bild. Deshalb misst der Test zusätzlich SYNCHRON im Einfüge-Moment (MutationObserver,
+// registriert vor dem Freigeben der Routen): jeder eingefügte <img> muss bereits seine
+// Zielhöhe haben, und scrollHeight darf in diesem Moment nicht unter die Ausgangshöhe fallen.
 test('Bild-Platzhalter mit Dims: Inhaltshöhe bleibt beim Decode stabil', async ({ page }) => {
   await loginAsAdmin(page)
 
@@ -340,6 +351,28 @@ test('Bild-Platzhalter mit Dims: Inhaltshöhe bleibt beim Decode stabil', async 
     ),
   }))
 
+  // Einfüge-Moment beobachten: Höhe jedes neuen <img> und scrollHeight, gemessen im
+  // MutationObserver-Callback (Microtask nach dem Commit, VOR dem Eintreffen der Blob-Daten).
+  await box.evaluate((el: HTMLElement) => {
+    const w = window as unknown as {
+      __insertedImgs: Array<{ h: number; complete: boolean; scrollHeight: number }>
+    }
+    w.__insertedImgs = []
+    const mo = new MutationObserver((records) => {
+      for (const r of records)
+        for (const n of Array.from(r.addedNodes)) {
+          if (n instanceof HTMLImageElement) {
+            w.__insertedImgs.push({
+              h: n.getBoundingClientRect().height,
+              complete: n.complete,
+              scrollHeight: el.scrollHeight,
+            })
+          }
+        }
+    })
+    mo.observe(el, { childList: true, subtree: true })
+  })
+
   // Routen freigeben → Blobs kommen, <img> ersetzen die Platzhalter.
   pending.splice(0).forEach((release) => release())
   await waitAllImagesLoaded(page, 4)
@@ -351,10 +384,29 @@ test('Bild-Platzhalter mit Dims: Inhaltshöhe bleibt beim Decode stabil', async 
         (i) => i.getBoundingClientRect().width,
       ),
     ),
+    minImgHeight: Math.min(
+      ...Array.from(el.querySelectorAll('img[alt="Bild"]')).map(
+        (i) => i.getBoundingClientRect().height,
+      ),
+    ),
+    inserted: (
+      window as unknown as {
+        __insertedImgs: Array<{ h: number; complete: boolean; scrollHeight: number }>
+      }
+    ).__insertedImgs,
   }))
 
   // Ohne Fix: ~4 × 430 px Wachstum (Platzhalter 16 px → Bild ~444 px).
   expect(Math.abs(after.height - before.height)).toBeLessThanOrEqual(4)
   // Kein Platzhalter war schmaler als das Bild, das ihn ersetzt hat.
   expect(before.minPlaceholderWidth).toBeGreaterThanOrEqual(after.minImgWidth - 1)
+
+  // Einfüge-Moment: alle 4 <img> beobachtet, jeder hatte sofort seine Zielhöhe (nicht 0),
+  // und der Scroll-Inhalt ist zwischendurch nie unter die Ausgangshöhe gefallen.
+  // Ohne explizite <img>-Breite: h=0 für jeden Eintrag, scrollHeight um 4 × Bildhöhe kleiner.
+  expect(after.inserted).toHaveLength(4)
+  for (const ins of after.inserted) {
+    expect(ins.h).toBeGreaterThanOrEqual(after.minImgHeight - 1)
+    expect(before.height - ins.scrollHeight).toBeLessThanOrEqual(4)
+  }
 })

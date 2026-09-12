@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Home, Plane, Calendar, Dumbbell, X, Check, Pencil, ClipboardList, Trash2, BriefcaseMedical, AlertTriangle } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { formatTeamList } from '../lib/teamName'
 import MapsLink from './MapsLink'
 import EventNoteIndicator from './EventNoteIndicator'
@@ -118,7 +119,10 @@ function RsvpRow({ confirmed, declined, maybe }: { confirmed: number; declined: 
 const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 export default function EventInfoModal({ type, game, training, absence, onClose, onEdit, onDienste, canEditAbsence, onAbsenceChanged, canManageGameDayHost, onGameDayHostApplied }: Props) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
   const navigate = useNavigate()
 
   const [editing, setEditing] = useState(false)
@@ -165,7 +169,13 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
 
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md"
+      >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             {type === 'game'
@@ -173,7 +183,7 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               : type === 'training'
               ? <Dumbbell className="w-5 h-5 text-brand-green" />
               : <AbsenceIcon className="w-5 h-5 text-brand-text-muted" />}
-            <h2 className="text-lg font-bold text-brand-text">
+            <h2 id={titleId} className="text-lg font-bold text-brand-text">
               {type === 'game' ? eventTypeLabel
                 : type === 'training' ? (training?.title || 'Training')
                 : editing ? (editType === 'vacation' ? 'Urlaub' : 'Verletzung') + ' bearbeiten'

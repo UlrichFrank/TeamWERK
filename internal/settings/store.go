@@ -14,6 +14,8 @@ import (
 	"log/slog"
 	"sync/atomic"
 	"time"
+
+	"github.com/teamstuttgart/teamwerk/internal/background"
 )
 
 const (
@@ -59,7 +61,7 @@ func NewStore(ctx context.Context, database *sql.DB) *Store {
 		slog.Warn("settings: initial reload failed", "error", err)
 	}
 	if ctx != nil {
-		go s.pollLoop(ctx)
+		background.Go("settings.pollLoop", func() { s.pollLoop(ctx) })
 	}
 	return s
 }

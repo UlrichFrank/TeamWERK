@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"database/sql"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -215,6 +216,37 @@ func TestSend_SchreibtLogFuerAlleEmpfaenger(t *testing.T) {
 	}
 }
 
+// TestSendAsync_SchreibtLogAsynchron (2.1/2.2): SendAsync kehrt sofort zurück
+// und feuert Send über internal/background ab — der Log-Eintrag landet
+// deshalb erst kurz danach in der DB, nicht mehr synchron im Aufrufer.
+func TestSendAsync_SchreibtLogAsynchron(t *testing.T) {
+	// Dateibasierte DB, NICHT newTestDB(":memory:"): eine In-Memory-SQLite gilt pro
+	// Verbindung. SendAsync laeuft in einer Goroutine und zieht aus dem Pool eine
+	// zweite, frische Verbindung -- die kennt keine Tabellen ("no such table:
+	// user_events"). Der Test bestand lokal nur, wenn der Pool zufaellig dieselbe
+	// Verbindung wiederverwendete; im CI fiel er.
+	db := newFileTestDB(t)
+	uid := insertUser(t, db, "u@test.local")
+	cfg := &appconfig.Config{BaseURL: "https://tw.test"}
+	stubMail(t)
+
+	SendAsync(db, cfg, []int{uid}, "duties", "Titel", "Text", "/x")
+
+	// Grosszuegige Frist: auf einem ausgelasteten CI-Runner braucht die Goroutine
+	// (DB-Insert + Praeferenz-Queries) deutlich laenger als lokal; 1 s war flaky.
+	deadline := time.Now().Add(10 * time.Second)
+	var rows []eventlog.Event
+	for time.Now().Before(deadline) {
+		if rows = eventRowsFor(t, db, uid); len(rows) > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d user_events rows nach SendAsync, want 1", len(rows))
+	}
+}
+
 // TestSend_LogUnabhaengigVonPushPraeferenz verifies that a user with
 // push_enabled=0 gets no push, but still gets a user_events row.
 func TestSend_LogUnabhaengigVonPushPraeferenz(t *testing.T) {
@@ -341,6 +373,22 @@ func TestSend_LeereEmpfaengerlisteSchreibtNichts(t *testing.T) {
 
 // newTestDB opens an in-memory SQLite with all migrations applied.
 // Inlined to avoid a notify → testutil → auth → notify import cycle.
+// newFileTestDB liefert eine temporaere Datei-DB fuer Tests mit Goroutinen (siehe
+// TestSendAsync_SchreibtLogAsynchron): alle Pool-Verbindungen sehen dasselbe Schema.
+func newFileTestDB(t *testing.T) *sql.DB {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "notify-test.db")
+	database, err := sql.Open("sqlite", "file:"+path+"?_pragma=foreign_keys=on&_pragma=busy_timeout=5000")
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	if err := appdb.Migrate(database, appdb.MigrationsFS); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	t.Cleanup(func() { database.Close() })
+	return database
+}
+
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	database, err := sql.Open("sqlite", ":memory:?_pragma=foreign_keys=on")

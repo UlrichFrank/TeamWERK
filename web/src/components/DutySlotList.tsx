@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Trash2, BookOpen } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTimeSpan } from '../lib/duration'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { useWindowedList } from '../hooks/useWindowedList'
 import WindowedTableBody from './WindowedTableBody'
 import PersonChip from './PersonChip'
@@ -70,6 +71,14 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
   const [claimDialog, setClaimDialog] = useState<{ slotId: number; selectedUserId: number | null } | null>(null)
   const [claimLoading, setClaimLoading] = useState(false)
   const [noInstructionOpen, setNoInstructionOpen] = useState(false)
+  // Drei echte modale Dialoge in dieser Liste (dialog-accessibility): je eigener
+  // Ref, damit Fokus-Trap und -Rückgabe pro Dialog greifen.
+  const noInstructionRef = useRef<HTMLDivElement>(null)
+  const deleteConfirmRef = useRef<HTMLDivElement>(null)
+  const claimDialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(noInstructionRef, noInstructionOpen)
+  useDialogA11y(deleteConfirmRef, deleteConfirm !== null)
+  useDialogA11y(claimDialogRef, claimDialog !== null)
 
   useEscapeKey(
     deleteConfirm !== null ? () => closeDeleteConfirm()
@@ -258,8 +267,14 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
 
       {noInstructionOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4">
-            <h2 className="text-lg font-bold mb-2 text-brand-text">Keine Anleitung</h2>
+          <div
+            ref={noInstructionRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="duty-no-instruction-title"
+            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4"
+          >
+            <h2 id="duty-no-instruction-title" className="text-lg font-bold mb-2 text-brand-text">Keine Anleitung</h2>
             <p className="text-sm text-brand-text-muted mb-4">
               Für diesen Dienst gibt es noch keine Anleitung.
             </p>
@@ -277,8 +292,14 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
 
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4">
-            <h2 className="text-lg font-bold mb-2 text-brand-text">Slot löschen?</h2>
+          <div
+            ref={deleteConfirmRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="duty-delete-confirm-title"
+            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4"
+          >
+            <h2 id="duty-delete-confirm-title" className="text-lg font-bold mb-2 text-brand-text">Slot löschen?</h2>
             <p className="text-sm text-brand-text-muted mb-4">
               Dieser Slot hat bereits Zuteilungen. Alle Zuteilungen werden ebenfalls gelöscht.
             </p>
@@ -309,8 +330,14 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
 
       {claimDialog !== null && user && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4">
-            <h2 className="text-lg font-bold mb-3 text-brand-text">Dienst übernehmen für…</h2>
+          <div
+            ref={claimDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="duty-claim-dialog-title"
+            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4"
+          >
+            <h2 id="duty-claim-dialog-title" className="text-lg font-bold mb-3 text-brand-text">Dienst übernehmen für…</h2>
             <div className="space-y-2 mb-4">
               <label className="flex items-center gap-3 p-2.5 rounded-lg border border-brand-border-subtle cursor-pointer hover:bg-brand-surface-card transition-colors">
                 <input

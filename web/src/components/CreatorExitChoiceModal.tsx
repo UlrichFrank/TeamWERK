@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { X, LogOut, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
 
@@ -18,7 +19,10 @@ interface Props {
 }
 
 export default function CreatorExitChoiceModal({ convId, ownerId, members, onClose, onDone }: Props) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
 
   const candidates = members.filter(m => m.id !== ownerId)
   const [choice, setChoice] = useState<Choice>(candidates.length > 0 ? 'transfer' : 'delete')
@@ -54,9 +58,15 @@ export default function CreatorExitChoiceModal({ convId, ownerId, members, onClo
 
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">Gruppe verlassen</h2>
+          <h2 id={titleId} className="text-lg font-bold text-brand-text">Gruppe verlassen</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>

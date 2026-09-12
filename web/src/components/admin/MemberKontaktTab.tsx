@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { ExternalLink, Trash2, AlertTriangle } from 'lucide-react'
@@ -6,6 +6,7 @@ import { api } from '../../lib/api'
 import { errorMessage } from '../../lib/errors'
 import { useAuth } from '../../contexts/AuthContext'
 import { useVault } from '../../contexts/VaultContext'
+import { useDialogA11y } from '../../lib/useDialogA11y'
 import { encryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL } from '../../lib/buttonStyles'
 
@@ -84,6 +85,9 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
   const [sepaUploadError, setSepaUploadError] = useState('')
   const [deleteError, setDeleteError] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const deleteTitleId = useId()
+  const deleteDialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(deleteDialogRef, confirmDelete)
 
   const canDeleteSepa = hasCapability('manage_members') || user?.isParent === true
   const MAX_SEPA_BYTES = 2 * 1024 * 1024
@@ -404,8 +408,14 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
       {/* Delete confirmation modal */}
       {confirmDelete && createPortal(
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm">
-            <h2 className="font-semibold text-brand-text mb-2">Dokument löschen</h2>
+          <div
+            ref={deleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={deleteTitleId}
+            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm"
+          >
+            <h2 id={deleteTitleId} className="font-semibold text-brand-text mb-2">Dokument löschen</h2>
             <p className="text-sm text-brand-text-muted mb-4">Das SEPA-Mandat-Dokument wirklich löschen?</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmDelete(false)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
