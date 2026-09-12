@@ -9,6 +9,60 @@ make migrate-remote-up                               # Migrationen auf VPS
 make create-admin-remote EMAIL=… PASSWORD=… NAME=…   # Admin anlegen
 ```
 
+## Smoke-Test und Rollback
+
+`make deploy` sichert vor dem Binary-Austausch das laufende `/usr/local/bin/teamwerk` als
+`teamwerk.prev` (`cp`, kein `mv` — ein allererster Deploy ohne Vorgänger-Binary lässt diesen
+Schritt per `2>/dev/null || true` einfach durchlaufen). Nach `systemctl restart` pollt der
+Server sich selbst bis zu 30 s lang (alle 2 s) auf `curl -fsS http://127.0.0.1:$PORT/api/healthz`
+(`PORT` aus `/etc/teamwerk/env`, Default `8080`; `-f` behandelt sowohl den 200er der gesunden
+DB als auch den 503er von `health.Handler.Healthz`, internal/health/health.go, korrekt als
+Erfolg/Fehlschlag). Antwortet der Prozess nicht rechtzeitig, gibt `make deploy`
+`systemctl status teamwerk --no-pager | tail -20` aus, bricht mit
+„Deploy fehlgeschlagen: Prozess antwortet nicht — make deploy-rollback" ab (`exit 1`) und
+schreibt **kein** `.deployed-hash` — der lokale Stand markiert den Deploy damit weiterhin als
+offen.
+
+`make deploy-rollback` tauscht zurück: prüft zuerst, dass `teamwerk.prev` existiert (sonst
+Abbruch mit Fehlermeldung — kein Rollback ohne vorherigen erfolgreichen `make deploy`-Lauf),
+verschiebt das aktuelle Binary nach `teamwerk.failed` (bleibt zur Analyse liegen), spielt
+`teamwerk.prev` als `teamwerk` zurück, startet neu und prüft mit demselben Smoke-Test-Loop.
+
+**Keine Migration rückwärts.** Migrationen in `internal/db/migrations/` sind additiv (neue
+Tabellen/Spalten/Indizes, kein Drop von Bestandsdaten) — die DB bleibt deshalb mit dem
+vorherigen Binary kompatibel, ein `migrate down` ist bewusst kein Teil des Rollback-Ablaufs.
+Das gilt so lange, wie diese Konvention eingehalten wird; eine Migration, die eine Spalte
+löscht oder umbenennt, würde den Rückweg brechen.
+
+## Serverseitiges Backup
+
+Zusätzlich zum externen Pull-Backup vom Mittwald-Host (`deploy/backup-teamwerk.sh`,
+`make backup`/`make backup-files`) läuft **auf dem VPS selbst** ein täglicher Cron
+(`30 3 * * *`, Skript `deploy/backup-cron.sh` → installiert als
+`/usr/local/bin/teamwerk-backup.sh`), der:
+
+1. mit `sqlite3 "$DB_PATH" ".backup ..."` einen konsistenten DB-Snapshot zieht (WAL-safe,
+   anders als ein rohes `cp`),
+2. die Storage-Pfade aus `/etc/teamwerk/env` (`UPLOAD_DIR`, `FILES_DIR`, `MEDIA_DIR`,
+   `BEITRAGSLAUF_DIR`, `TRAINING_DIARY_DIR`, `MATCH_REPORT_IMAGE_DIR` — **ohne** Videos,
+   GB-Bereich, dafür `make backup-videos`) zu einem gemeinsamen `storage.tar.gz` packt,
+3. beides unter `/var/backups/teamwerk/<YYYY-MM-DD>/` ablegt (Verzeichnis `chmod 700`),
+4. Verzeichnisse älter als **14 Tage** löscht (`find … -mtime +14 -exec rm -rf`).
+
+Log unter `/var/log/teamwerk-backup.log` (Logrotate `weekly`/4 Generationen, analog zum
+Scheduler-Log). Installiert/aktualisiert von `deploy/setup-vps.sh` (Ersteinrichtung,
+Cron-Eintrag idempotent) **und** von jedem `make deploy` (rsynct das jeweils aktuelle Skript
+nach `/tmp/teamwerk-backup.sh`, verschiebt es nach `/usr/local/bin/teamwerk-backup.sh`,
+ergänzt den Cron-Eintrag idempotent über `sudo crontab -l`/`sudo crontab -` — root-Crontab,
+weil `setup-vps.sh` als root läuft). Das serverseitige Backup ist **kein Ersatz** für das
+externe Pull-Backup — beide Wege bleiben aktiv (Betriebs-Redundanz: ein kompromittierter oder
+nicht mehr erreichbarer VPS nimmt sonst auch sein eigenes Backup mit).
+
+Restore-Kurzform: `systemctl stop teamwerk`, `teamwerk.db` aus dem gewünschten
+`/var/backups/teamwerk/<datum>/` zurückkopieren (`-wal`/`-shm` vorher löschen),
+`tar -xzf .../storage.tar.gz -C /`, `chown -R www-data:www-data /var/lib/teamwerk`,
+`systemctl start teamwerk`.
+
 ## Server-Umzug (VPS-Wechsel)
 
 Wiederkehrender Ablauf zum Umzug einer TeamWERK-Instanz auf einen anderen VPS steckt in drei Makefile-Targets: `make server-bootstrap NEW_REMOTE=<alias>` (initialer Aufbau + Daten-Klon), `make server-sync-data NEW_REMOTE=<alias>` (beliebig oft wiederholbarer DB-/Storage-Sync während der Testphase), `make server-cutover NEW_REMOTE=<alias>` (Alt-Host auf 301-Redirect umschalten). Voraussetzungen (`REMOTE_NEW`, `REMOTE_NEW_DIR`, `BASE_URL_NEW` in `.env`) und alle manuellen Schritte (DNS, Certbot, Better-Stack-Umhängen, User-Kommunikation, PWA-Neuinstallation, Rollback) stehen in `deploy/server-migration-runbook.md`.
