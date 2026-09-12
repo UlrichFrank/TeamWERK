@@ -1462,6 +1462,6 @@ func (h *Handler) dispatchRegenNotifications(summary RegenSummary) {
 			body = fmt.Sprintf("Dein Dienst zum %s am %s wurde aufgrund einer Spielplanänderung entfernt.",
 				n.EventName, formatDateDMY(n.EventDate))
 		}
-		go notify.Send(h.db, h.cfg, []int{n.UserID}, "duties", "Dienst angepasst", body, "/dienste")
+		notify.SendAsync(h.db, h.cfg, []int{n.UserID}, "duties", "Dienst angepasst", body, "/dienste")
 	}
 }

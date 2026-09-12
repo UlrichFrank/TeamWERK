@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/background"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
 )
 
@@ -295,7 +296,9 @@ func (wk *Worker) notifyReady(id int) {
 	url := "/videos/" + strconv.Itoa(id)
 	// Vorfilterung entfällt — notify.Send übernimmt Log-Fan-out sowie Push-/
 	// Email-Präferenz (Kategorie "sonstiges").
-	go wk.cfg.notifySend(allUids, "sonstiges", "Neues Video", body, url)
+	background.Go("videos.notifyReady", func() {
+		wk.cfg.notifySend(allUids, "sonstiges", "Neues Video", body, url)
+	})
 }
 
 // pushRecipients liefert die distinkten User-IDs für die Ready-Push (4.8):

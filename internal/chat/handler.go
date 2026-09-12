@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/background"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/push"
@@ -1034,7 +1035,9 @@ func (h *Handler) broadcastNewMessage(r *http.Request, convID, senderID int, con
 			slog.Error("chat compute unread failed", "user", uid, "error", err)
 			badge = 0
 		}
-		go h.pushFn(h.db, h.cfg, uid, title, preview, fmt.Sprintf("/chat?conv=%d", convID), badge)
+		background.Go("chat.pushFn", func() {
+			h.pushFn(h.db, h.cfg, uid, title, preview, fmt.Sprintf("/chat?conv=%d", convID), badge)
+		})
 	}
 }
 
@@ -1439,7 +1442,9 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 			slog.Error("chat compute unread failed", "user", uid, "error", err)
 			badge = 0
 		}
-		go h.pushFn(h.db, h.cfg, uid, title, preview, "/chat?tab=broadcasts", badge)
+		background.Go("chat.pushFn", func() {
+			h.pushFn(h.db, h.cfg, uid, title, preview, "/chat?tab=broadcasts", badge)
+		})
 	}
 
 	// Der Empfängerzähler macht den Fan-out sichtbar. Ohne ihn sieht eine

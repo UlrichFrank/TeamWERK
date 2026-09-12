@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"github.com/teamstuttgart/teamwerk/internal/background"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/eventlog"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
@@ -85,8 +86,20 @@ var Send = func(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, titl
 		return
 	}
 	for _, uid := range filterByEmailPref(db, userIDs, category) {
-		go sendCategoryEmail(db, cfg, uid, title, body, url)
+		background.Go("notify.sendCategoryEmail", func() { sendCategoryEmail(db, cfg, uid, title, body, url) })
 	}
+}
+
+// SendAsync ist die asynchrone Fassade über Send (2.1/2.2): sie feuert den
+// kompletten Fan-out (Event-Log, Push, Mail) in einer über internal/background
+// panic-sicher gestarteten Goroutine ab und kehrt sofort zurück. Für Aufrufer
+// im HTTP-Pfad, die den Versand bewusst fire-and-forget betreiben, aber dabei
+// nicht mehr — wie vor diesem Change — einen unbehandelten Panic riskieren
+// dürfen, der den ganzen Prozess mitreißt.
+func SendAsync(db *sql.DB, cfg *appconfig.Config, userIDs []int, category, title, body, url string, opts ...Option) {
+	background.Go("notify.Send", func() {
+		Send(db, cfg, userIDs, category, title, body, url, opts...)
+	})
 }
 
 // FilterByEmailPref returns the subset of userIDs that have email_enabled=1

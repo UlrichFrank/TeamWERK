@@ -155,6 +155,7 @@ func TestMetrics_ExposesSignals(t *testing.T) {
 		"teamwerk_disk_free_ratio",
 		"teamwerk_scheduler_age_seconds",
 		"teamwerk_panics_total",
+		"teamwerk_background_panics_total",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("metrics body missing %q\n---\n%s", want, body)

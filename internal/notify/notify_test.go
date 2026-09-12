@@ -215,6 +215,30 @@ func TestSend_SchreibtLogFuerAlleEmpfaenger(t *testing.T) {
 	}
 }
 
+// TestSendAsync_SchreibtLogAsynchron (2.1/2.2): SendAsync kehrt sofort zurück
+// und feuert Send über internal/background ab — der Log-Eintrag landet
+// deshalb erst kurz danach in der DB, nicht mehr synchron im Aufrufer.
+func TestSendAsync_SchreibtLogAsynchron(t *testing.T) {
+	db := newTestDB(t)
+	uid := insertUser(t, db, "u@test.local")
+	cfg := &appconfig.Config{BaseURL: "https://tw.test"}
+	stubMail(t)
+
+	SendAsync(db, cfg, []int{uid}, "duties", "Titel", "Text", "/x")
+
+	deadline := time.Now().Add(1 * time.Second)
+	var rows []eventlog.Event
+	for time.Now().Before(deadline) {
+		if rows = eventRowsFor(t, db, uid); len(rows) > 0 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("got %d user_events rows nach SendAsync, want 1", len(rows))
+	}
+}
+
 // TestSend_LogUnabhaengigVonPushPraeferenz verifies that a user with
 // push_enabled=0 gets no push, but still gets a user_events row.
 func TestSend_LogUnabhaengigVonPushPraeferenz(t *testing.T) {
