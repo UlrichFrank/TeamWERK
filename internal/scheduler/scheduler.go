@@ -64,6 +64,7 @@ func (s *Scheduler) Run() {
 	s.sendAttendanceReminders()
 	s.sendMatchReportReviewReminders()
 	s.purgeEventLog()
+	s.walCheckpoint()
 	s.recordHeartbeat()
 }
 
