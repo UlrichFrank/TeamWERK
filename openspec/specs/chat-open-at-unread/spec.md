@@ -67,7 +67,12 @@ Scroll-Inhalts unverändert lassen; die Re-Verankerung darf für solche Bilder n
 werden. Das gilt in jedem Container-Kontext, in dem Chat-Bilder gerendert werden,
 insbesondere in einer Sprechblase, deren Breite sich an ihrem Inhalt bemisst
 (shrink-to-fit) — ein Platzhalter, der dort keine eigene Breite einbringt, erfüllt diese
-Anforderung nicht. Für Bilder **ohne** bekannte Dimensionen bleibt ein einmaliger
+Anforderung nicht. Dieselbe Layout-Box MUST auch das Bild-Element selbst einnehmen, **bevor**
+seine Bilddaten eingetroffen sind: die Box eines Bildes mit bekannten Dimensionen darf zu
+keinem Zeitpunkt — Platzhalter, eingefügtes Bild ohne Daten, dekodiertes Bild — von der
+Zielgröße abweichen. Ein Bild-Element, das seine Größe erst aus den geladenen Daten bezieht,
+erfüllt diese Anforderung nicht (es misst bis zum Eintreffen 0 px und wächst danach ohne
+DOM-Änderung). Für Bilder **ohne** bekannte Dimensionen bleibt ein einmaliger
 Höhenwechsel zulässig; dort trägt die Re-Verankerung die Position.
 
 #### Scenario: Divider bleibt oben, nachdem Bilder darüber decoden (ohne Browser-scroll-anchoring)
@@ -106,6 +111,13 @@ Höhenwechsel zulässig; dort trägt die Re-Verankerung die Position.
 - **WHEN** die Nachricht gerendert wird, bevor das Bild geladen ist
 - **THEN** hat die Sprechblase bereits die Breite, die sie mit dem fertigen Bild haben wird (natürliche Bildbreite, gedeckelt auf die maximale Blasenbreite)
 - **AND** der Platzhalter hat die aus Breite und Seitenverhältnis folgende Höhe (nicht 0 px, nicht nur das Blasen-Padding)
+
+#### Scenario: Eingefügtes Bild-Element hat vor dem Eintreffen der Daten schon seine Zielgröße
+
+- **GIVEN** eine Bild-Nachricht mit bekannten Dimensionen, deren Platzhalter gerade durch das Bild-Element ersetzt wird, und die Bilddaten sind noch nicht eingetroffen (Element nicht `complete`, natürliche Breite 0)
+- **WHEN** die Layout-Box des Bild-Elements in genau diesem Moment gemessen wird
+- **THEN** hat sie dieselbe Höhe und Breite wie der Platzhalter zuvor (nicht 0 px)
+- **AND** die Gesamthöhe des Scroll-Inhalts ist in diesem Moment unverändert gegenüber dem Zustand mit Platzhalter
 
 #### Scenario: Bild ohne bekannte Dimensionen bleibt tolerierter Einzelfall
 
