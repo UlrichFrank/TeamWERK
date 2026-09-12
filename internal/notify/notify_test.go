@@ -226,13 +226,15 @@ func TestSendAsync_SchreibtLogAsynchron(t *testing.T) {
 
 	SendAsync(db, cfg, []int{uid}, "duties", "Titel", "Text", "/x")
 
-	deadline := time.Now().Add(1 * time.Second)
+	// Grosszuegige Frist: auf einem ausgelasteten CI-Runner braucht die Goroutine
+	// (DB-Insert + Praeferenz-Queries) deutlich laenger als lokal; 1 s war flaky.
+	deadline := time.Now().Add(10 * time.Second)
 	var rows []eventlog.Event
 	for time.Now().Before(deadline) {
 		if rows = eventRowsFor(t, db, uid); len(rows) > 0 {
 			break
 		}
-		time.Sleep(2 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 	if len(rows) != 1 {
 		t.Fatalf("got %d user_events rows nach SendAsync, want 1", len(rows))
