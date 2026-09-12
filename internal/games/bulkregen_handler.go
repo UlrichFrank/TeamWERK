@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 	"github.com/teamstuttgart/teamwerk/internal/settings"
 )
 
@@ -133,10 +134,10 @@ func bulkRegenErr(status int, code string) *bulkRegenAPIError {
 func (h *Handler) PreviewBulkRegen(w http.ResponseWriter, r *http.Request) {
 	resp, _, _, apiErr := h.runBulkRegen(r.Context(), r, false)
 	if apiErr != nil {
-		writeJSON(w, apiErr.status, map[string]string{"error": apiErr.code})
+		httpx.WriteError(w, r, apiErr.status, apiErr.code, nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 // POST /api/duty-slots/bulk-regen/apply
@@ -145,7 +146,7 @@ func (h *Handler) PreviewBulkRegen(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ApplyBulkRegen(w http.ResponseWriter, r *http.Request) {
 	resp, summary, notify, apiErr := h.runBulkRegen(r.Context(), r, true)
 	if apiErr != nil {
-		writeJSON(w, apiErr.status, map[string]string{"error": apiErr.code})
+		httpx.WriteError(w, r, apiErr.status, apiErr.code, nil)
 		return
 	}
 	resp.Applied = true
@@ -156,7 +157,7 @@ func (h *Handler) ApplyBulkRegen(w http.ResponseWriter, r *http.Request) {
 	if notify {
 		h.dispatchRegenNotifications(summary)
 	}
-	writeJSON(w, http.StatusOK, resp)
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 // --- Shared plan/apply core ---------------------------------------------------------
@@ -174,7 +175,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 	defer tx.Rollback()
 
@@ -230,7 +231,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 
 	games, err := h.loadBulkRangeGames(ctx, tx, seasonID, from, to)
 	if err != nil {
-		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 
 	type plannedGame struct {
@@ -255,7 +256,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 		}
 		autoBefore, customBefore, err := countGameSlots(ctx, tx, g.ID)
 		if err != nil {
-			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 		}
 		planned = append(planned, plannedGame{
 			g: g, action: action, templateID: templateID, excluded: excluded[g.ID],
@@ -278,7 +279,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 	// unterscheidbar, was schon dastand und was dieser Lauf gerade geschrieben hat.
 	storedHosts, err := loadStoredHosts(ctx, tx, seasonID, dateSet)
 	if err != nil {
-		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 
 	var updatedBy any
@@ -294,7 +295,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 				updated_at    = CURRENT_TIMESTAMP,
 				updated_by    = excluded.updated_by`,
 			date, seasonID, ausrichterID, updatedBy); err != nil {
-			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 		}
 	}
 
@@ -313,12 +314,12 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 			newTemplate = *pg.templateID
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE games SET template_id=? WHERE id=?`, newTemplate, pg.g.ID); err != nil {
-			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 		}
 		if pg.action == "purge" {
 			pg.deletedCustomNow = pg.before.Custom
 			if _, err := tx.ExecContext(ctx, `DELETE FROM duty_slots WHERE game_id=?`, pg.g.ID); err != nil {
-				return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+				return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 			}
 		}
 	}
@@ -331,7 +332,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 
 	summary, err := h.runAutoRegen(ctx, tx, dates, seasonID, skip)
 	if err != nil {
-		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+		return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 
 	perGame := map[int]GameDelta{}
@@ -364,7 +365,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 		} else {
 			autoAfter, customAfter, err := countGameSlots(ctx, tx, pg.g.ID)
 			if err != nil {
-				return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+				return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 			}
 			row.SlotsAfter = bulkRegenSlotCount{Auto: autoAfter, Custom: customAfter}
 			if delta, ok := perGame[pg.g.ID]; ok {
@@ -398,7 +399,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 	for _, date := range dates {
 		effective, explicit, err := settings.ResolveAusrichterForDayDetailed(ctx, tx, date, seasonID)
 		if err != nil {
-			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 		}
 		day := bulkRegenDay{Date: date, EffectiveAusrichterID: effective, IsExplicit: explicit}
 		if stored, ok := storedHosts[date]; ok {
@@ -418,7 +419,7 @@ func (h *Handler) runBulkRegen(ctx context.Context, r *http.Request, apply bool)
 
 	if apply {
 		if err := tx.Commit(); err != nil {
-			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+			return bulkRegenResponse{}, RegenSummary{}, notify, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 		}
 	}
 	// Preview: defer tx.Rollback() above runs on return — no write survives.
@@ -468,7 +469,7 @@ func validateHostOverrides(ctx context.Context, tx *sql.Tx, overrides []bulkRege
 			return nil, bulkRegenErr(http.StatusBadRequest, "unknown_ausrichter")
 		}
 		if err != nil {
-			return nil, bulkRegenErr(http.StatusInternalServerError, "internal_error")
+			return nil, bulkRegenErr(http.StatusInternalServerError, httpx.CodeInternal)
 		}
 		// Gleiche Regel wie im Einzeltag-Handler: ein ausgemusterter Verein ist
 		// kein gültiges Ziel, sonst zeigte ein Spieltag auf einen Eintrag, den die

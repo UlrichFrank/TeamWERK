@@ -13,6 +13,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/h4aimport"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 )
 
 // h4aFetcher ist die testbare Teilmenge von *h4aimport.Client. In Tests wird eine
@@ -105,7 +106,7 @@ type h4aPreviewResponse struct {
 // POST /api/games/import/h4a/preview
 func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 	if !h.canImportH4A(r) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	var req struct {
@@ -114,7 +115,7 @@ func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 		PeriodID string `json:"period_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.User == "" || req.Pw == "" {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 
@@ -126,7 +127,7 @@ func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 		// nicht einmal an der Response-Länge unterscheidbar). Die Fehlerwerte
 		// des Clients enthalten nur URL/Netzinfo, keine Zugangsdaten.
 		logH4AFailure("login", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_login_failed"})
+		httpx.WriteError(w, r, http.StatusBadGateway, "h4a_login_failed", nil)
 		return
 	}
 	// Fehler beim Abmelden sind für den Import folgenlos: die H4A-Session läuft
@@ -137,33 +138,33 @@ func (h *Handler) PreviewH4AImport(w http.ResponseWriter, r *http.Request) {
 		periods, err := client.FetchPeriods(r.Context())
 		if err != nil {
 			logH4AFailure("fetch-periods", err)
-			writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_fetch_failed"})
+			httpx.WriteError(w, r, http.StatusBadGateway, "h4a_fetch_failed", nil)
 			return
 		}
-		writeJSON(w, http.StatusOK, h4aPreviewResponse{NeedsPeriod: true, Periods: periods})
+		httpx.WriteJSON(w, http.StatusOK, h4aPreviewResponse{NeedsPeriod: true, Periods: periods})
 		return
 	}
 
 	htmlStr, err := client.FetchGamesHTML(r.Context(), req.PeriodID)
 	if err != nil {
 		logH4AFailure("fetch-games", err)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_fetch_failed"})
+		httpx.WriteError(w, r, http.StatusBadGateway, "h4a_fetch_failed", nil)
 		return
 	}
 	games, err := h4aimport.ParseGames(htmlStr)
 	if err != nil {
 		logH4AFailure("parse", err)
 		fmt.Fprintf(h4aLogOut, "h4a-import parse: %d Bytes empfangen, Anfang: %.200q\n", len(htmlStr), htmlStr)
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "h4a_parse_failed"})
+		httpx.WriteError(w, r, http.StatusBadGateway, "h4a_parse_failed", nil)
 		return
 	}
 
 	resp, err := h.buildH4APlan(r.Context(), games)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 // buildH4APlan bildet jede Roh-Zeile auf Mannschaft/Venue ab und ordnet sie via
@@ -369,27 +370,27 @@ type h4aApplyResponse struct {
 // POST /api/games/import/h4a/apply
 func (h *Handler) ApplyH4AImport(w http.ResponseWriter, r *http.Request) {
 	if !h.canImportH4A(r) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 	var req struct {
 		Decisions []h4aApplyDecision `json:"decisions"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 
 	var seasonID int
 	if err := h.db.QueryRowContext(r.Context(),
 		`SELECT id FROM seasons WHERE is_active = 1 LIMIT 1`).Scan(&seasonID); err != nil {
-		http.Error(w, "keine aktive Saison", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "no_active_season", nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -471,13 +472,13 @@ func (h *Handler) ApplyH4AImport(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(dates)
 	summary, err := h.runAutoRegen(r.Context(), tx, dates, seasonID, nil)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	result.RegenSummary = summary
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -486,7 +487,7 @@ func (h *Handler) ApplyH4AImport(w http.ResponseWriter, r *http.Request) {
 		h.hub.Broadcast("games")
 	}
 	h.dispatchRegenNotifications(summary)
-	writeJSON(w, http.StatusOK, result)
+	httpx.WriteJSON(w, http.StatusOK, result)
 }
 
 // h4aLogOut ist die Senke der Import-Diagnose. Als Variable, damit der Test
@@ -536,10 +537,4 @@ func validTemplate(ctx context.Context, tx *sql.Tx, templateID *int) (interface{
 		return nil, false
 	}
 	return *templateID, true
-}
-
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
 }

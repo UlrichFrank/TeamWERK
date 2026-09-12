@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { X, Pencil, Search, UserMinus, Crown } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 
 interface ConvMember { id: number; name: string }
@@ -22,7 +23,10 @@ export default function ConversationParticipantsModal({
 }: Props) {
   const { user } = useAuth()
   const isOwner = user?.id === createdBy
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
 
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(initialName ?? '')
@@ -100,9 +104,15 @@ export default function ConversationParticipantsModal({
 
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] flex flex-col"
+      >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h2 className="text-lg font-bold text-brand-text">
+          <h2 id={titleId} className="text-lg font-bold text-brand-text">
             {editing ? 'Teilnehmer bearbeiten' : 'Teilnehmer'}
           </h2>
           <div className="flex items-center gap-1">

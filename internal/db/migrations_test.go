@@ -74,6 +74,17 @@ func tableExists(t *testing.T, sqlDB *sql.DB, table string) bool {
 	return n > 0
 }
 
+func indexExists(t *testing.T, sqlDB *sql.DB, index string) bool {
+	t.Helper()
+	var n int
+	err := sqlDB.QueryRow(
+		`SELECT count(*) FROM sqlite_master WHERE type='index' AND name=?`, index).Scan(&n)
+	if err != nil {
+		t.Fatalf("sqlite_master: %v", err)
+	}
+	return n > 0
+}
+
 func TestMigration011_Up_AddsColumnsAndQueue(t *testing.T) {
 	sqlDB, m := newMigrator(t)
 	if err := m.Migrate(11); err != nil && err != migrate.ErrNoChange {
@@ -876,5 +887,56 @@ func TestMigration060_AdminCategoryRoundtrip(t *testing.T) {
 	// erneut hoch: der Rebuild muss wiederholbar sein.
 	if err := m.Migrate(60); err != nil && err != migrate.ErrNoChange {
 		t.Fatalf("migrate up to 60 (erneut): %v", err)
+	}
+}
+
+// TestMigration061_HotIndexesRoundtrip prüft die Hot-Path-Indizes
+// (Betriebshärtung Welle 2, design.md Entscheidung 4): up legt alle vier an,
+// down entfernt sie wieder rückstandslos, und beides ist wiederholbar
+// (CREATE/DROP … IF EXISTS).
+func TestMigration061_HotIndexesRoundtrip(t *testing.T) {
+	sqlDB, m := newMigrator(t)
+	if err := m.Migrate(60); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 60: %v", err)
+	}
+
+	wantIndexes := []string{
+		"idx_duty_slots_game",
+		"idx_duty_slots_date_season",
+		"idx_family_links_member",
+		"idx_duty_assignments_user",
+	}
+	for _, idx := range wantIndexes {
+		if indexExists(t, sqlDB, idx) {
+			t.Errorf("Index %q existiert schon vor 061 up", idx)
+		}
+	}
+
+	if err := m.Migrate(61); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 61: %v", err)
+	}
+	for _, idx := range wantIndexes {
+		if !indexExists(t, sqlDB, idx) {
+			t.Errorf("Index %q fehlt nach 061 up", idx)
+		}
+	}
+
+	if err := m.Migrate(60); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate down to 60: %v", err)
+	}
+	for _, idx := range wantIndexes {
+		if indexExists(t, sqlDB, idx) {
+			t.Errorf("Index %q existiert noch nach 061 down", idx)
+		}
+	}
+
+	// erneut hoch: der Lauf muss wiederholbar sein (IF NOT EXISTS).
+	if err := m.Migrate(61); err != nil && err != migrate.ErrNoChange {
+		t.Fatalf("migrate up to 61 (erneut): %v", err)
+	}
+	for _, idx := range wantIndexes {
+		if !indexExists(t, sqlDB, idx) {
+			t.Errorf("Index %q fehlt nach erneutem 061 up", idx)
+		}
 	}
 }

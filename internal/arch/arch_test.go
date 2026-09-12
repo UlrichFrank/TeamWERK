@@ -36,6 +36,14 @@ var foundation = map[string]bool{
 	"sepa": true, "upload": true, "files": true, "scheduler": true, "permissions": true,
 	"health": true, "metrics": true, "crypto": true, "timez": true, "httpcache": true,
 	"settings": true, "h4aimport": true, "eventlog": true,
+	// background: Panic-sicherer Goroutine-Start (Betriebshärtung Welle 2,
+	// design.md Entscheidung 2). health importiert es für
+	// teamwerk_background_panics_total; notify für die SendAsync-Fassade.
+	"background": true,
+	// httpx: einheitliche HTTP-Antworten (JSON-Fehlercode, slog-Spur bei 5xx,
+	// Paginierungs-Deckel; Betriebshärtung Welle 2, design.md Entscheidung 1).
+	// Importiert nur stdlib + auth (Nutzer-ID aus den Claims für die Log-Zeile).
+	"httpx": true,
 	// dutyfairness: Dienst-Bilanz je Kind; Foundation, weil dashboard (Domain)
 	// dieselbe Berechnung wiederverwendet, statt sie zu duplizieren.
 	"dutyfairness": true,

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/background"
 )
 
 type submitResp struct {
@@ -111,8 +112,10 @@ func (h *Handler) SubmitForReview(w http.ResponseWriter, r *http.Request) {
 
 	// Push an alle Freigeber (fire-and-forget).
 	body := fmt.Sprintf("Spielbericht %s wartet auf Freigabe", opponent)
-	go notifyReviewers(h.db, h.cfg, "Neuer Spielbericht zur Prüfung", body,
-		fmt.Sprintf("/spielberichte/%d", id))
+	background.Go("matchreports.notifyReviewers", func() {
+		notifyReviewers(h.db, h.cfg, "Neuer Spielbericht zur Prüfung", body,
+			fmt.Sprintf("/spielberichte/%d", id))
+	})
 
 	writeJSON(w, http.StatusOK, submitResp{
 		State:       StatePendingReview,

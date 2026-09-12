@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 
 interface Entry {
   type: 'feat' | 'fix'
@@ -44,7 +45,10 @@ export default function ChangelogModal({ onClose }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
 
   useEffect(() => {
     fetch('/CHANGELOG.md')
@@ -59,9 +63,15 @@ export default function ChangelogModal({ onClose }: Props) {
 
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
-      <div className="bg-white rounded-t-xl sm:rounded-xl shadow-xl border-t-4 border-brand-yellow w-full sm:max-w-lg max-h-[80vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-t-xl sm:rounded-xl shadow-xl border-t-4 border-brand-yellow w-full sm:max-w-lg max-h-[80vh] flex flex-col"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle shrink-0">
-          <h2 className="text-base font-bold text-brand-text">Versionshistorie</h2>
+          <h2 id={titleId} className="text-base font-bold text-brand-text">Versionshistorie</h2>
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-brand-border-subtle transition-colors"

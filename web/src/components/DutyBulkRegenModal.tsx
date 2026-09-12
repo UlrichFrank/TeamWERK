@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import { AlertTriangle, Check, Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { errorData, errorMessage } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { useAusrichterOptions } from './GameDayHostPicker'
 import { BTN_DANGER, BTN_PRIMARY } from '../lib/buttonStyles'
 
@@ -161,8 +162,11 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
   const [applyError, setApplyError] = useState<string | null>(null)
 
   const requestSeq = useRef(0)
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
 
   useEscapeKey(isOpen && !applying ? onClose : null)
+  useDialogA11y(dialogRef, isOpen)
 
   useEffect(() => {
     if (!isOpen) return
@@ -250,9 +254,15 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/40" onClick={applying ? undefined : onClose} />
-      <div className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow max-w-4xl mx-4 w-full max-h-[90vh] flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow max-w-4xl mx-4 w-full max-h-[90vh] flex flex-col"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-          <h2 className="text-lg font-bold text-brand-text">Dienste aktualisieren</h2>
+          <h2 id={titleId} className="text-lg font-bold text-brand-text">Dienste aktualisieren</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

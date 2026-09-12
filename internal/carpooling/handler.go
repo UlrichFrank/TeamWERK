@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/background"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
@@ -430,12 +431,14 @@ func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	}
 	senderTyp := body.Typ
 	gameID := body.GameID
-	go func() {
+	background.Go("carpooling.notifyOpposite", func() {
 		h.notifyOpposite(gameID, userID, actorName, senderTyp, oppositeTyp)
-	}()
+	})
 
 	if isNewEntry && body.Typ == "suche" {
-		go h.notifyTeamForNewSuche(gameID, userID, actorName)
+		background.Go("carpooling.notifyTeamForNewSuche", func() {
+			h.notifyTeamForNewSuche(gameID, userID, actorName)
+		})
 	}
 }
 
@@ -532,7 +535,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 
 	if len(pushUserIDs) > 0 {
-		go func() {
+		background.Go("carpooling.notifyWithdrawal", func() {
 			opponent, date := h.gameInfo(gameID)
 			var body string
 			if typ == "biete" {
@@ -542,7 +545,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 			}
 			notify.Send(h.db, h.cfg, pushUserIDs,
 				"carpooling", "Mitfahrgelegenheit", body, "/mitfahrgelegenheiten")
-		}()
+		})
 	}
 }
 

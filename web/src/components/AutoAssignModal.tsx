@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 interface Kader {
@@ -20,7 +21,10 @@ interface Props {
 const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
 
 export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
   const [kader, setKader] = useState<Kader[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -70,9 +74,15 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-2xl border-t-4 border-brand-yellow w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-xl shadow-2xl border-t-4 border-brand-yellow w-full max-w-lg max-h-[90vh] overflow-y-auto"
+      >
         <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-          <h2 className="font-semibold text-base text-brand-text">Auto-Assign</h2>
+          <h2 id={titleId} className="font-semibold text-base text-brand-text">Auto-Assign</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

@@ -13,7 +13,10 @@ set -euo pipefail
 apt-get update
 # ffmpeg: Spielvideo-Transcode (HLS 720p+360p). Version >= 4.x — Ubuntu 24.04
 # liefert 6.x; ein Check (ffmpeg -version) gehört ins Setup-Runbook.
-apt-get install -y nginx openssl curl ca-certificates gnupg logrotate ffmpeg cron rsync
+# sqlite3: CLI für konsistente `.backup`-Snapshots (make backup, server-Umzug,
+# teamwerk-backup.sh) — der App-Binary selbst braucht sie nicht (modernc.org/sqlite,
+# reiner Go-Treiber ohne CGo), aber jeder Backup-/Umzugs-Pfad ruft das CLI-Tool auf.
+apt-get install -y nginx openssl curl ca-certificates gnupg logrotate ffmpeg cron rsync sqlite3
 
 # ---------------------------------------------------------------------------
 # 2. Verzeichnisse
@@ -164,7 +167,37 @@ cat > /etc/logrotate.d/teamwerk <<'EOF'
 EOF
 
 # ---------------------------------------------------------------------------
-# 10. Vector (Log-Shipper für Better Stack Logs) — optional
+# 10. Serverseitiges tägliches Backup (DB + Storage, 14 Tage Retention)
+# ---------------------------------------------------------------------------
+# Ergänzt den externen Pull-Weg vom Mittwald-Host (deploy/backup-teamwerk.sh,
+# `make backup`/`make backup-files`) um einen lokalen Snapshot direkt auf dem
+# VPS — design.md Decision 6. Kein Ersatz für Offsite-Backups, beide Wege
+# bleiben aktiv. Skript-Quelle: deploy/backup-cron.sh (liegt per rsync neben
+# diesem Setup-Skript unter /tmp/teamwerk-deploy/, siehe Makefile `setup-vps`).
+mkdir -p /var/backups/teamwerk
+cp backup-cron.sh /usr/local/bin/teamwerk-backup.sh
+chmod +x /usr/local/bin/teamwerk-backup.sh
+
+BACKUP_CRONJOB="30 3 * * * /usr/local/bin/teamwerk-backup.sh >> /var/log/teamwerk-backup.log 2>&1"
+EXISTING_BACKUP_CRON="$(crontab -l 2>/dev/null || echo "")"
+if ! echo "$EXISTING_BACKUP_CRON" | grep -qF "/usr/local/bin/teamwerk-backup.sh"; then
+    { echo "$EXISTING_BACKUP_CRON"; echo "$BACKUP_CRONJOB"; } | crontab -
+fi
+
+cat > /etc/logrotate.d/teamwerk-backup <<'EOF'
+/var/log/teamwerk-backup.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+EOF
+
+# ---------------------------------------------------------------------------
+# 11. Vector (Log-Shipper für Better Stack Logs) — optional
 # ---------------------------------------------------------------------------
 if ! command -v vector >/dev/null 2>&1; then
     curl -1sLf 'https://setup.vector.dev' | bash

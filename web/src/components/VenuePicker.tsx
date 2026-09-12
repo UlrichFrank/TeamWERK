@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ChevronDown, MapPin, Plus, X } from 'lucide-react'
 import { api } from '../lib/api'
+import { useDialogA11y } from '../lib/useDialogA11y'
 
 export interface Venue {
   id: number
@@ -38,6 +39,9 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
+  const newVenueTitleId = useId()
+  const newVenueDialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(newVenueDialogRef, showModal)
 
   useEffect(() => {
     api.get<Venue[]>('/venues').then(r => setVenues(r.data)).catch(() => {})
@@ -162,8 +166,14 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-brand-text mb-4">Neuen Ort anlegen</h2>
+          <div
+            ref={newVenueDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={newVenueTitleId}
+            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md"
+          >
+            <h2 id={newVenueTitleId} className="text-lg font-semibold text-brand-text mb-4">Neuen Ort anlegen</h2>
             {error && (
               <p className="mb-3 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</p>
             )}

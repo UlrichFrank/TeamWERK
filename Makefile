@@ -41,7 +41,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
+.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -94,9 +94,10 @@ setup-vps: ## VPS einmalig einrichten (Nginx, Certbot, systemd)
 	rsync -az deploy/ $(REMOTE):/tmp/teamwerk-deploy/
 	ssh $(REMOTE) "cd /tmp/teamwerk-deploy && sudo bash setup-vps.sh"
 
-deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
+deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart, Smoke-Test)
 	rsync -az $(BUILD_DIR)/$(BINARY) $(REMOTE):/tmp/$(BINARY).new
 	rsync -az deploy/teamwerk.service $(REMOTE):/tmp/teamwerk.service
+	rsync -az deploy/backup-cron.sh $(REMOTE):/tmp/teamwerk-backup.sh
 	ssh $(REMOTE) "[ -f /etc/teamwerk/env ]" 2>/dev/null || \
 		grep -E '^(PORT|DB_PATH|JWT_SECRET|BASE_URL|SMTP_HOST|SMTP_PORT|SMTP_USER|SMTP_PASS|SMTP_FROM)=' .env | \
 		sed 's|DB_PATH=.*|DB_PATH=/var/lib/teamwerk/teamwerk.db|; s|BASE_URL=.*|BASE_URL=https://teamwerk.team-stuttgart.org|' | \
@@ -134,17 +135,79 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart)
 			echo "JWT_SECRET in /etc/teamwerk/env fehlt oder ist kuerzer als 32 Byte - Deploy abgebrochen (kein Restart)." >&2; \
 			exit 1; \
 		fi' || exit 1
+	@# Serverseitigen Backup-Cron installieren/aktualisieren (idempotent) — das
+	@# Skript selbst darf sich mit jedem Deploy ändern, der Cron-Eintrag wird
+	@# nur einmal ergänzt. Analog zum Scheduler-Cron in deploy/setup-vps.sh.
+	ssh $(REMOTE) "sudo mkdir -p /var/backups/teamwerk && \
+		sudo mv /tmp/teamwerk-backup.sh /usr/local/bin/teamwerk-backup.sh && \
+		sudo chmod +x /usr/local/bin/teamwerk-backup.sh && \
+		if ! sudo crontab -l 2>/dev/null | grep -qF '/usr/local/bin/teamwerk-backup.sh'; then \
+			( sudo crontab -l 2>/dev/null; echo '30 3 * * * /usr/local/bin/teamwerk-backup.sh >> /var/log/teamwerk-backup.log 2>&1' ) | sudo crontab -; \
+			echo '  Backup-Cron ergaenzt'; \
+		fi"
+	@# Vor dem Austausch das laufende Binary als .prev sichern (Rückweg für
+	@# `make deploy-rollback`, falls der Smoke-Test unten fehlschlägt). Auf dem
+	@# allerersten Deploy existiert noch kein Binary am Zielpfad — die
+	@# `|| true` macht das harmlos statt den Deploy abzubrechen.
 	ssh $(REMOTE) "sudo mkdir -p $(dir $(DB_PATH)) && \
 		if ! [ -f /etc/systemd/system/teamwerk.service ]; then \
 			sudo mv /tmp/teamwerk.service /etc/systemd/system/teamwerk.service && \
 			sudo systemctl daemon-reload && sudo systemctl enable teamwerk; \
 		fi && \
+		sudo cp $(REMOTE_DIR)/$(BINARY) $(REMOTE_DIR)/$(BINARY).prev 2>/dev/null || true; \
 		sudo mv /tmp/$(BINARY).new $(REMOTE_DIR)/$(BINARY) && \
 		$(REMOTE_DIR)/$(BINARY) migrate up --db $(DB_PATH) && \
 		sudo chown www-data:www-data $(DB_PATH) $(DB_PATH)-shm $(DB_PATH)-wal 2>/dev/null; \
 		sudo systemctl restart teamwerk"
+	@# Smoke-Test: bis zu 30s auf /api/healthz warten (health.Handler.Healthz,
+	@# internal/health/health.go — 200 bei gesunder DB, sonst 503; `curl -f`
+	@# behandelt beides korrekt als Erfolg/Fehlschlag). Schlägt das fehl, bricht
+	@# der Deploy ab BEVOR .deployed-hash geschrieben wird (siehe unten) — der
+	@# Hinweis zeigt auf `make deploy-rollback`.
+	@echo "Smoke-Test: warte auf /api/healthz (bis 30s)..."
+	ssh $(REMOTE) 'PORT=$$(sudo grep -E "^PORT=" /etc/teamwerk/env | cut -d= -f2-); PORT=$${PORT:-8080}; \
+		ok=0; \
+		for i in $$(seq 1 15); do \
+			if curl -fsS "http://127.0.0.1:$$PORT/api/healthz" > /dev/null 2>&1; then ok=1; break; fi; \
+			sleep 2; \
+		done; \
+		if [ "$$ok" != "1" ]; then \
+			echo "systemctl status teamwerk:" >&2; \
+			sudo systemctl status teamwerk --no-pager | tail -20 >&2; \
+			echo "Deploy fehlgeschlagen: Prozess antwortet nicht - make deploy-rollback" >&2; \
+			exit 1; \
+		fi; \
+		echo "Smoke-Test OK (Port $$PORT)."' || exit 1
 	@echo "Deployed successfully."
 	@git rev-parse --short HEAD > .deployed-hash
+
+deploy-rollback: ## Vorheriges Binary zurückspielen (Notfall, wenn der Smoke-Test in `make deploy` fehlschlägt)
+	@echo "Prüfe $(REMOTE_DIR)/$(BINARY).prev auf $(REMOTE)..."
+	@ssh $(REMOTE) "test -f $(REMOTE_DIR)/$(BINARY).prev" \
+		|| { echo "Fehler: kein $(REMOTE_DIR)/$(BINARY).prev vorhanden - kein Rollback moeglich (setzt einen vorherigen 'make deploy' voraus)."; exit 1; }
+	@# Kein Rückwärts-Migrieren: Migrationen sind additiv (siehe
+	@# docs/agent/10-deployment.md „Smoke-Test und Rollback") — die aktuelle
+	@# DB bleibt mit dem vorherigen Binary kompatibel, ein `migrate down` ist
+	@# hier bewusst nicht Teil des Ablaufs.
+	ssh $(REMOTE) "sudo mv $(REMOTE_DIR)/$(BINARY) $(REMOTE_DIR)/$(BINARY).failed && \
+		sudo mv $(REMOTE_DIR)/$(BINARY).prev $(REMOTE_DIR)/$(BINARY) && \
+		sudo systemctl restart teamwerk"
+	@echo "Smoke-Test: warte auf /api/healthz (bis 30s)..."
+	ssh $(REMOTE) 'PORT=$$(sudo grep -E "^PORT=" /etc/teamwerk/env | cut -d= -f2-); PORT=$${PORT:-8080}; \
+		ok=0; \
+		for i in $$(seq 1 15); do \
+			if curl -fsS "http://127.0.0.1:$$PORT/api/healthz" > /dev/null 2>&1; then ok=1; break; fi; \
+			sleep 2; \
+		done; \
+		if [ "$$ok" != "1" ]; then \
+			echo "systemctl status teamwerk:" >&2; \
+			sudo systemctl status teamwerk --no-pager | tail -20 >&2; \
+			echo "Rollback-Smoke-Test fehlgeschlagen - Prozess antwortet weiterhin nicht." >&2; \
+			exit 1; \
+		fi; \
+		echo "Smoke-Test OK (Port $$PORT)."' || exit 1
+	@echo "Rollback abgeschlossen — $(REMOTE_DIR)/$(BINARY) ist wieder die vorherige Version."
+	@echo "Das fehlgeschlagene Binary liegt als $(REMOTE_DIR)/$(BINARY).failed zur Analyse bereit."
 
 deploy-new: _check-new-remote ## Build + Deploy auf Umzugs-Zielhost (NEW_REMOTE=<alias> oder REMOTE_NEW aus .env)
 	$(MAKE) deploy REMOTE=$(NEW_REMOTE_RESOLVED) REMOTE_DIR=$(NEW_REMOTE_DIR_RESOLVED)

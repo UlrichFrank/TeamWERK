@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTeamList } from '../lib/teamName'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorStatus } from '../lib/errors'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import DutySlotList, { BoardSlot } from './DutySlotList'
@@ -104,6 +105,26 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
     showAddSlot ? () => setShowAddSlot(false) :
     onClose
   )
+
+  const mainTitleId = useId()
+  const mainDialogRef = useRef<HTMLDivElement>(null)
+  const addSlotTitleId = useId()
+  const addSlotDialogRef = useRef<HTMLDivElement>(null)
+  const editSlotTitleId = useId()
+  const editSlotDialogRef = useRef<HTMLDivElement>(null)
+  const deleteSlotTitleId = useId()
+  const deleteSlotDialogRef = useRef<HTMLDivElement>(null)
+  const deleteGameTitleId = useId()
+  const deleteGameDialogRef = useRef<HTMLDivElement>(null)
+  // Fünf potenziell gestapelte Dialoge in einer Datei (Haupt-Modal + vier
+  // Bestätigungs-/Formular-Overlays) — jeder bekommt einen eigenen Hook-Aufruf,
+  // weil jeder ein eigener Container mit eigenem Fokus-Kreis ist. Nur einer ist
+  // je Zustand tatsächlich sichtbar (siehe useEscapeKey-Priorität oben).
+  useDialogA11y(mainDialogRef, true)
+  useDialogA11y(addSlotDialogRef, showAddSlot)
+  useDialogA11y(editSlotDialogRef, editSlot !== null)
+  useDialogA11y(deleteSlotDialogRef, deleteSlotId !== null)
+  useDialogA11y(deleteGameDialogRef, showDeleteGame)
 
   const loadGame = async (): Promise<GameDetail | null> => {
     try {
@@ -239,16 +260,22 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div
+        ref={mainDialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={mainTitleId}
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-start justify-between mb-4">
           <div className="min-w-0">
             {loading ? (
-              <h2 className="text-lg font-bold text-brand-text">Laden…</h2>
+              <h2 id={mainTitleId} className="text-lg font-bold text-brand-text">Laden…</h2>
             ) : notFound ? (
-              <h2 className="text-lg font-bold text-brand-text">Spiel nicht gefunden</h2>
+              <h2 id={mainTitleId} className="text-lg font-bold text-brand-text">Spiel nicht gefunden</h2>
             ) : game ? (
               <>
-                <h2 className="text-lg font-bold text-brand-text truncate">
+                <h2 id={mainTitleId} className="text-lg font-bold text-brand-text truncate">
                   {game.event_type === 'generisch' ? (game.opponent || '(kein Name)') : `Team vs ${game.opponent || '(kein Gegner)'}`}
                 </h2>
                 <p className="text-brand-text-muted text-sm mt-0.5">{game.team_display_long_csv || (game.teams ? formatTeamList(game.teams, 'long') : '')}</p>
@@ -299,8 +326,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         {/* Add slot modal */}
         {showAddSlot && (
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
-            <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
-              <h3 className="font-bold mb-4 text-brand-text">Dienst hinzufügen</h3>
+            <div
+              ref={addSlotDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={addSlotTitleId}
+              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl"
+            >
+              <h3 id={addSlotTitleId} className="font-bold mb-4 text-brand-text">Dienst hinzufügen</h3>
               <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-brand-text-muted mb-1">Diensttyp *</label>
@@ -383,8 +416,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         {/* Edit slot modal */}
         {editSlot && (
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
-            <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
-              <h3 className="font-bold mb-4 text-brand-text">Dienst bearbeiten</h3>
+            <div
+              ref={editSlotDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={editSlotTitleId}
+              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl"
+            >
+              <h3 id={editSlotTitleId} className="font-bold mb-4 text-brand-text">Dienst bearbeiten</h3>
               <p className="text-sm text-brand-text-muted mb-3 font-medium">{editSlot.duty_type_name}</p>
               <div className="space-y-3">
                 <div>
@@ -437,8 +476,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         {/* Delete slot confirmation */}
         {deleteSlotId !== null && (
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
-            <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
-              <h3 className="font-bold mb-2 text-brand-text">Dienst löschen?</h3>
+            <div
+              ref={deleteSlotDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={deleteSlotTitleId}
+              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl"
+            >
+              <h3 id={deleteSlotTitleId} className="font-bold mb-2 text-brand-text">Dienst löschen?</h3>
               <p className="text-sm text-brand-text-muted mb-4">Dieser Dienst wird endgültig gelöscht.</p>
               <DeleteReasonFields
                 idPrefix="slot-delete"
@@ -461,8 +506,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         {/* Delete game confirmation */}
         {showDeleteGame && game && (
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
-            <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl">
-              <h3 className="font-bold mb-2 text-brand-text">Spiel löschen?</h3>
+            <div
+              ref={deleteGameDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={deleteGameTitleId}
+              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm shadow-2xl"
+            >
+              <h3 id={deleteGameTitleId} className="font-bold mb-2 text-brand-text">Spiel löschen?</h3>
               <p className="text-sm text-brand-text-muted mb-1">
                 <strong>{game.event_type === 'generisch' ? (game.opponent || '(kein Name)') : `Team vs ${game.opponent || '(kein Gegner)'}`}</strong> ({dateFormatted})
               </p>

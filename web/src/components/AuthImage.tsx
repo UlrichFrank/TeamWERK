@@ -89,26 +89,39 @@ export default function AuthImage({
   }
 
   const dims = serverDims ?? probedDims;
+  // Bei bekannten Dimensionen bekommen Platzhalter UND <img> dieselbe explizite
+  // Breite plus aspect-ratio — die Layout-Box hängt dann ausschließlich an CSS,
+  // nicht am Ladezustand der Bilddaten. Zwei Gründe, beide gemessen:
+  //
+  // 1. Platzhalter: Die Chat-Sprechblase ist ein Flex-Kind mit items-start/-end
+  //    (shrink-to-fit), ihre Breite ist die max-content-Breite ihrer Kinder. Ein
+  //    leerer div trägt dazu 0 bei — die Blase kollabiert aufs Padding, und
+  //    aspect-ratio auf 0 px Breite ist 0 px Höhe (24×16 px statt 344×262 px, in
+  //    Chromium UND WebKit).
+  // 2. <img>: Ohne explizite Breite bemisst sich der <img> an seiner intrinsischen
+  //    Größe — und die ist bei einer frisch gesetzten Blob-URL noch NICHT bekannt:
+  //    die Daten kommen erst in einem späteren Task (`complete=false`,
+  //    naturalWidth=0, gemessen synchron im Einfüge-Moment in Chromium und
+  //    WebKit). Der <img> ist deshalb im ersten Layout 0×0, die Blase schrumpft um
+  //    die volle Bildhöhe und wächst beim Eintreffen der Daten ohne DOM-Mutation
+  //    wieder. Unter iOS Safari (kein CSS scroll-anchoring, `load` feuert erst nach
+  //    dem nächsten Paint) ist genau dieses Wachsen oberhalb des Sichtbereichs ein
+  //    sichtbarer Sprung pro Bild — der Öffnungs-Anker korrigiert erst einen Frame
+  //    später. Mit width + aspect-ratio ist die Box vor, während und nach dem
+  //    Laden identisch.
+  //
+  // Das `max-w-full` (bzw. `max-w-xs`) aus der className deckelt Platzhalter und
+  // Bild identisch auf die Blasenbreite; `min-width` taugt dafür nicht (gewinnt in
+  // CSS über `max-width`, die Blase liefe über).
   const style = dims
-    ? { aspectRatio: `${dims.w} / ${dims.h}` }
+    ? { aspectRatio: `${dims.w} / ${dims.h}`, width: `${dims.w}px` }
     : { minHeight: "6rem" };
 
   if (!src) {
-    // Der Platzhalter braucht zusätzlich zur aspect-ratio eine EXPLIZITE Breite:
-    // Die Chat-Sprechblase ist ein Flex-Kind mit items-start/-end (shrink-to-fit),
-    // ihre Breite ist die max-content-Breite ihrer Kinder. Ein leerer div trägt
-    // dazu 0 bei — die Blase kollabiert aufs Padding, und aspect-ratio auf 0 px
-    // Breite ist 0 px Höhe (gemessen: 24×16 px statt 344×262 px, in Chromium UND
-    // WebKit). Mit width = natürliche Bildbreite bringt der Platzhalter dieselbe
-    // intrinsische Breite ein wie später das <img>; das `max-w-full` aus der
-    // className deckelt beide identisch auf die Blasenbreite. Ohne diese Zeile
-    // wächst jede Blase erst beim Blob-Load — unter iOS Safari (kein CSS
-    // scroll-anchoring) pro Bild ein sichtbarer Sprung.
-    const placeholderStyle = dims ? { ...style, width: `${dims.w}px` } : style;
     return (
       <div
         className={`${className ?? ""} bg-brand-surface-card animate-pulse`}
-        style={placeholderStyle}
+        style={style}
         aria-busy="true"
       />
     );

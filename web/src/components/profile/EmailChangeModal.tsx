@@ -1,6 +1,7 @@
-import { useState, FormEvent } from 'react'
+import { useId, useRef, useState, FormEvent } from 'react'
 import { api } from '../../lib/api'
 import { useEscapeKey } from '../../lib/useEscapeKey'
+import { useDialogA11y } from '../../lib/useDialogA11y'
 import { errorStatus } from '../../lib/errors'
 
 interface Props {
@@ -8,7 +9,10 @@ interface Props {
 }
 
 export default function EmailChangeModal({ onClose }: Props) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
   const [emailNew, setEmailNew] = useState('')
   const [emailPw, setEmailPw] = useState('')
   const [error, setError] = useState('')
@@ -40,9 +44,15 @@ export default function EmailChangeModal({ onClose }: Props) {
       <div className="fixed inset-0 bg-black/50" onClick={onClose}></div>
 
       {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative bg-white rounded-lg shadow-lg max-w-md w-full mx-4"
+      >
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold">E-Mail-Adresse ändern</h2>
+          <h2 id={titleId} className="text-lg font-semibold">E-Mail-Adresse ändern</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             ×
           </button>

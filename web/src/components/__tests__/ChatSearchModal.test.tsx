@@ -98,6 +98,17 @@ describe('ChatSearchModal', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  test('Fokus-Trap: Tab vom letzten Element (Schließen) zurück zum Suchfeld', () => {
+    render(<ChatSearchModal onClose={() => {}} onSelect={() => {}} />)
+
+    expect(screen.getByLabelText('Suchbegriff')).toHaveFocus()
+
+    screen.getByLabelText('Schließen').focus()
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Tab' })
+
+    expect(screen.getByLabelText('Suchbegriff')).toHaveFocus()
+  })
+
   test('highlight hebt Treffer case-insensitiv hervor', () => {
     const nodes = highlight('Die Hallenadresse', 'hallen')
     render(<>{nodes}</>)

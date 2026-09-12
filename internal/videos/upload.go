@@ -19,6 +19,7 @@ import (
 	tusd "github.com/tus/tusd/v2/pkg/handler"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/background"
 )
 
 // maxUploadSize ist das 15-GB-Hard-Limit pro Datei (tusd Config.MaxSize).
@@ -231,7 +232,9 @@ func (h *Handler) NewTusHandler(ctx context.Context) (http.Handler, error) {
 		return nil, err
 	}
 
-	go h.consumeCompletedUploads(ctx, th.CompleteUploads)
+	background.Go("videos.consumeCompletedUploads", func() {
+		h.consumeCompletedUploads(ctx, th.CompleteUploads)
+	})
 
 	return th, nil
 }
