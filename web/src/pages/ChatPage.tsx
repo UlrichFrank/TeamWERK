@@ -2602,6 +2602,28 @@ function MobileMessageActionOverlay({
 }) {
   const { message: msg, isOwn } = overlay;
 
+  // Textselektion erst NACH dem öffnenden Long-Press freigeben. Das Overlay
+  // erscheint nach 500 ms, während der Finger noch aufliegt — iOS wertet seine
+  // eigene Long-Press-Geste für die Textauswahl aber gegen das Element, das in
+  // diesem Moment unter dem Finger liegt: die frisch gemountete Blase. Trägt
+  // sie schon `select-text`, markiert iOS das Wort unter dem Finger und zeigt
+  // die native Leiste („Kopieren / Nachschlagen") über unser Menü. Deshalb ist
+  // die Blase bis zum ersten touchend `select-none` (+ ohne Touch-Callout) und
+  // wird erst dann selektierbar — ein ZWEITER Long-Press auf den Text markiert
+  // wie gewohnt. Ein neuer touchstart auf der Blase gibt ebenfalls frei (falls
+  // der Finger exakt beim Mount schon weg war und kein touchend mehr kommt).
+  const [selectable, setSelectable] = useState(false);
+  useEffect(() => {
+    if (selectable) return;
+    const release = () => setSelectable(true);
+    window.addEventListener("touchend", release, { once: true });
+    window.addEventListener("touchcancel", release, { once: true });
+    return () => {
+      window.removeEventListener("touchend", release);
+      window.removeEventListener("touchcancel", release);
+    };
+  }, [selectable]);
+
   const copyText = async () => {
     const sel = window.getSelection();
     // Bei gekürzten Nachrichten ohne aktive Selektion den Volltext nachladen.
@@ -2637,9 +2659,18 @@ function MobileMessageActionOverlay({
           ))}
         </div>
 
-        {/* Message bubble — select-text für OS-Textselektion */}
+        {/* Message bubble — select-text für OS-Textselektion, aber erst nach dem
+            öffnenden Touch (s. o.). `max-w-full min-w-0`: die Blase ist ein
+            Flex-Item mit self-end/-start, ihr automatischer Mindestbreiten-
+            Wert ist die min-content-Breite ihrer Kinder — die nowrap-Zitatzeile
+            (`truncate`) ist bis zu 60 Zeichen breit und würde die Blase über
+            die Spaltenbreite hinausschieben (own: nach links aus dem Bild,
+            durch overflow-x-hidden abgeschnitten). Ein max-width deckelt den
+            automatischen Mindestwert und lässt `truncate` wieder greifen. */}
         <div
-          className={`rounded-xl px-3 py-2.5 text-sm select-text shadow-xl ${isOwn ? "bg-brand-yellow text-brand-black self-end" : "bg-white border border-brand-border text-brand-text self-start"}`}
+          data-testid="mobile-overlay-bubble"
+          className={`max-w-full min-w-0 rounded-xl px-3 py-2.5 text-sm shadow-xl ${selectable ? "select-text" : "select-none [-webkit-touch-callout:none]"} ${isOwn ? "bg-brand-yellow text-brand-black self-end" : "bg-white border border-brand-border text-brand-text self-start"}`}
+          onTouchStart={() => setSelectable(true)}
         >
           {msg.replyToId && (
             <div
