@@ -23,18 +23,24 @@ import (
 // `^(index\.m3u8|seg_[0-9]{1,6}\.ts)$`, ServeMaster erwartet `{rendition}/index.m3u8`).
 // Aktuell nur 720p — 360p wurde aus Speichergründen entfernt; kein ABR-Fallback
 // mehr bei schwacher Verbindung (bewusster Trade-Off, siehe video-tv-streaming).
+// Höhe/Bandbreite beschreiben nur noch das Manifest: encodiert (720p, maxrate
+// 2800k) wird im Offline-Encoding-Tool (tools/video-encoder), der Server packt um.
 type rendition struct {
 	name      string // Verzeichnisname, z.B. "720p"
-	height    int    // Skalierungs-Zielhöhe
-	maxrate   string // -maxrate
-	bufsize   string // -bufsize
+	height    int    // EXT-X-STREAM-INF RESOLUTION-Höhe
 	bandwidth int    // EXT-X-STREAM-INF BANDWIDTH (bit/s, grobe Schätzung)
 	width     int    // EXT-X-STREAM-INF RESOLUTION-Breite (16:9-Annahme)
 }
 
 var workerRenditions = []rendition{
-	{name: "720p", height: 720, maxrate: "2800k", bufsize: "5600k", bandwidth: 2_800_000, width: 1280},
+	{name: "720p", height: 720, bandwidth: 2_800_000, width: 1280},
 }
+
+// failureUnsupportedInput ist der failure_reason für Rohdateien, die nicht
+// H.264/yuv420p sind — typischerweise nicht über das Offline-Encoding-Tool
+// erzeugt. Ein Stream-Copy-Remux würde daraus eine kaputte bzw. falsch
+// signalisierte HLS-Ausgabe machen (Symptom wie beim 10-bit-Bug: Ton ohne Bild).
+const failureUnsupportedInput = "unsupported_input_format"
 
 const (
 	// defaultPollInterval ist der Idle-Schlaf, wenn keine Jobs anstehen (4.1).
@@ -56,6 +62,10 @@ const (
 // kommt Ton ohne Bild.
 type transcodeFunc func(ctx context.Context, rawPath, processedDir string) (codecs string, err error)
 
+// probeInputFunc ist die ffprobe-Naht für die Eingangsformat-Prüfung vor dem
+// Remux: liefert Codec und Pixelformat des ersten Video-Streams.
+type probeInputFunc func(ctx context.Context, rawPath string) (codec, pixFmt string, err error)
+
 // Worker zieht serielle (eine Goroutine) Transcode-Jobs aus der DB.
 type Worker struct {
 	db  *sql.DB
@@ -64,6 +74,8 @@ type Worker struct {
 
 	// transcode ist die ffmpeg-Naht; in NewWorker auf realFFmpegTranscode gesetzt.
 	transcode transcodeFunc
+	// probeInput ist die ffprobe-Naht; in NewWorker auf probeInputFormat gesetzt.
+	probeInput probeInputFunc
 
 	// pollInterval / diskRetryInterval sind für Tests injizierbar.
 	pollInterval      time.Duration
@@ -100,6 +112,7 @@ func NewWorker(h *Handler) *Worker {
 		hub:               h.hub,
 		cfg:               handlerWorkerConfig{h},
 		transcode:         realFFmpegTranscode,
+		probeInput:        probeInputFormat,
 		pollInterval:      defaultPollInterval,
 		diskRetryInterval: defaultDiskRetryInterval,
 		now:               time.Now,
@@ -214,12 +227,31 @@ func (wk *Worker) process(ctx context.Context, id int) {
 	rawPath := RawPath(root, id)
 	processedDir := ProcessedDir(root, id)
 
+	// Eingangsformat prüfen, bevor umgepackt wird: seit dem Wegfall des
+	// Browser-Uploads garantiert nur noch das Tool das Format — der Server
+	// vertraut dem nicht blind (Defense in Depth).
+	codec, pixFmt, err := wk.probeInput(ctx, rawPath)
+	if err != nil {
+		if ctx.Err() != nil {
+			wk.requeue(id)
+			return
+		}
+		wk.fail(id, "probe input format: "+err.Error())
+		return
+	}
+	if codec != "h264" || pixFmt != "yuv420p" {
+		slog.Warn("video worker: unsupported input format",
+			"video_id", id, "codec", codec, "pix_fmt", pixFmt)
+		wk.fail(id, failureUnsupportedInput)
+		return
+	}
+
 	codecs, err := wk.transcode(ctx, rawPath, processedDir)
 	if err != nil {
 		// Abbruch durch Shutdown ist kein Failure: zurück auf 'queued', damit der
 		// nächste Prozess-Start es erneut versucht.
 		if ctx.Err() != nil {
-			_, _ = wk.db.Exec(`UPDATE videos SET status='queued' WHERE id=? AND status='processing'`, id)
+			wk.requeue(id)
 			return
 		}
 		wk.fail(id, err.Error())
@@ -227,6 +259,11 @@ func (wk *Worker) process(ctx context.Context, id int) {
 	}
 
 	wk.succeed(id, codecs)
+}
+
+// requeue setzt ein wegen Shutdown abgebrochenes Video zurück auf 'queued'.
+func (wk *Worker) requeue(id int) {
+	_, _ = wk.db.Exec(`UPDATE videos SET status='queued' WHERE id=? AND status='processing'`, id)
 }
 
 // estimateNeeded schätzt den nötigen freien Platz für den Transcode (4.3):
@@ -370,34 +407,31 @@ func (wk *Worker) pushRecipients(id int) ([]int, error) {
 	return uids, rows.Err()
 }
 
-// realFFmpegTranscode ist die Produktions-Naht (4.4/4.5): erzeugt pro Rendition
-// serielle ein HLS-Set via `nice -n 19 ffmpeg` und schreibt danach die
-// master.m3u8. CRF 26, preset medium, H.264 (yuv420p erzwungen für 10-bit-Quellen);
-// Audio `-c:a copy` wenn Quelle AAC, sonst `-c:a aac -b:a 128k`. Nach dem 720p-Lauf
-// probet die Funktion `seg_001.ts` per ffprobe und leitet den CODECS-String
-// (`avc1.PPCCLL,mp4a.40.X`) ab, den `writeMasterManifest` in die STREAM-INF-Zeile
-// hängt — Pflicht für AirPlay/tvOS.
+// realFFmpegTranscode ist die Produktions-Naht (4.4/4.5): packt die Rohdatei pro
+// Rendition seriell per `nice -n 19 ffmpeg` in ein HLS-Set um (Stream-Copy, kein
+// Re-Encode — die Datei ist vom Offline-Encoding-Tool bereits H.264/yuv420p,
+// 720p, 4-s-Keyframes, AAC; der Worker hat Codec/Pixelformat vorher geprüft) und
+// schreibt danach die master.m3u8. Nach dem 720p-Lauf probet die Funktion
+// `seg_001.ts` per ffprobe und leitet den CODECS-String (`avc1.PPCCLL,mp4a.40.X`)
+// ab, den `writeMasterManifest` in die STREAM-INF-Zeile hängt — Pflicht für
+// AirPlay/tvOS.
 func realFFmpegTranscode(ctx context.Context, rawPath, processedDir string) (string, error) {
 	if err := os.MkdirAll(processedDir, 0o755); err != nil {
 		return "", err
-	}
-	aacSource, err := sourceIsAAC(ctx, rawPath)
-	if err != nil {
-		return "", fmt.Errorf("ffprobe audio codec: %w", err)
 	}
 	for _, rd := range workerRenditions {
 		dir := filepath.Join(processedDir, rd.name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return "", err
 		}
-		if err := runFFmpegRendition(ctx, rawPath, dir, rd, aacSource); err != nil {
+		if err := runFFmpegRendition(ctx, rawPath, dir); err != nil {
 			return "", fmt.Errorf("ffmpeg %s: %w", rd.name, err)
 		}
 	}
-	// CODECS aus dem tatsächlich produzierten 720p-Segment ableiten — auf die
-	// Encoder-Defaults zu verlassen ist brüchig, weil `-c:a copy` je nach Quelle
-	// HE-AAC statt LC durchreicht. Ein falscher CODECS-String hätte denselben
-	// Symptomkreis wie das ursprüngliche Bug (Ton ohne Bild).
+	// CODECS aus dem tatsächlich produzierten 720p-Segment ableiten — auf
+	// Annahmen über die Quelle zu verlassen ist brüchig, weil `-c:a copy` je nach
+	// Tool-Version/Quelle HE-AAC statt LC durchreicht. Ein falscher CODECS-String
+	// hätte denselben Symptomkreis wie das ursprüngliche Bug (Ton ohne Bild).
 	codecs, err := probeSegmentCodecs(ctx, filepath.Join(processedDir, "720p", "seg_001.ts"))
 	if err != nil {
 		return "", fmt.Errorf("probe codecs: %w", err)
@@ -410,8 +444,8 @@ func realFFmpegTranscode(ctx context.Context, rawPath, processedDir string) (str
 
 // runFFmpegRendition führt einen einzelnen ffmpeg-Lauf für eine Rendition aus.
 // Segmente: seg_%03d.ts, Manifest: index.m3u8 (MUSS zur Streaming-Schicht passen).
-func runFFmpegRendition(ctx context.Context, rawPath, dir string, rd rendition, aacSource bool) error {
-	args := buildFFmpegRenditionArgs(rawPath, dir, rd, aacSource)
+func runFFmpegRendition(ctx context.Context, rawPath, dir string) error {
+	args := buildFFmpegRenditionArgs(rawPath, dir)
 	cmd := exec.CommandContext(ctx, "nice", args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: %s", err, lastLines(string(out), 5))
@@ -421,58 +455,60 @@ func runFFmpegRendition(ctx context.Context, rawPath, dir string, rd rendition, 
 
 // buildFFmpegRenditionArgs baut die Argumentliste für einen Rendition-Lauf.
 // Reine Funktion (keine Prozess-Ausführung), damit Tests das exakte Arg-Layout
-// prüfen können — insbesondere `-pix_fmt yuv420p`, dessen Fehlen bei 10-bit-
-// Quellen zu einem yuv420p10-Output führt, den tvOS nicht dekodiert.
-func buildFFmpegRenditionArgs(rawPath, dir string, rd rendition, aacSource bool) []string {
-	args := []string{
+// prüfen können. Stream-Copy für Video UND Audio: der CPU-intensive Encode
+// (Skalierung, `-pix_fmt yuv420p`, CRF, 4-s-Keyframes) läuft im
+// Offline-Encoding-Tool auf dem Rechner der Filmenden, nicht auf dem 1-GB-VPS.
+// `-hls_time 4` passt zu den vom Tool alle 4 s erzwungenen Keyframes — beim
+// Stream-Copy kann ffmpeg nur an vorhandenen Keyframes schneiden.
+func buildFFmpegRenditionArgs(rawPath, dir string) []string {
+	return []string{
 		"-n", "19", "ffmpeg",
 		"-y",
 		"-i", rawPath,
-		"-vf", fmt.Sprintf("scale=-2:%d", rd.height),
-		// `-pix_fmt yuv420p` erzwingt 8-bit-Ausgabe. Ohne diesen Zwang würde
-		// libx264 bei 10-bit-Quellen (moderne iPhone-Aufnahmen) yuv420p10
-		// produzieren, das tvOS/AppleTV nicht dekodiert → Ton ohne Bild.
-		"-pix_fmt", "yuv420p",
-		"-c:v", "libx264",
-		"-preset", "medium",
-		"-crf", "26",
-		"-maxrate", rd.maxrate,
-		"-bufsize", rd.bufsize,
-		// Keyframes alle 4s erzwingen, damit HLS an einer Keyframe-Grenze
-		// schneiden kann. Ohne -force_key_frames wächst die GOP-Länge mit
-		// dem Sport-Content auf 16+ s, ffmpeg schneidet erst dort → Segmente
-		// werden 3–4 MB groß, mobile Clients laufen in Buffer-Underrun.
-		"-force_key_frames", "expr:gte(t,n_forced*4)",
-	}
-	if aacSource {
-		args = append(args, "-c:a", "copy")
-	} else {
-		args = append(args, "-c:a", "aac", "-b:a", "128k")
-	}
-	args = append(args,
+		"-c:v", "copy",
+		"-c:a", "copy",
 		"-f", "hls",
 		"-hls_time", "4",
 		"-hls_list_size", "0",
 		"-hls_segment_filename", filepath.Join(dir, "seg_%03d.ts"),
 		filepath.Join(dir, "index.m3u8"),
-	)
-	return args
+	}
 }
 
-// sourceIsAAC probet den Audio-Codec der Quelle. Liefert true, wenn der erste
-// Audio-Stream AAC ist (dann `-c:a copy`).
-func sourceIsAAC(ctx context.Context, rawPath string) (bool, error) {
+// probeInputFormat liest per ffprobe (ohne Decode) Codec und Pixelformat des
+// ersten Video-Streams. Eine Datei ohne Video-Stream liefert zwei leere Strings
+// und keinen Fehler — der Aufrufer wertet das als nicht unterstütztes Format.
+func probeInputFormat(ctx context.Context, rawPath string) (codec, pixFmt string, err error) {
 	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "error",
-		"-select_streams", "a:0",
-		"-show_entries", "stream=codec_name",
-		"-of", "default=noprint_wrappers=1:nokey=1",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=codec_name,pix_fmt",
+		"-of", "default=noprint_wrappers=1",
 		rawPath)
 	out, err := cmd.Output()
 	if err != nil {
-		return false, err
+		return "", "", err
 	}
-	return strings.EqualFold(strings.TrimSpace(string(out)), "aac"), nil
+	codec, pixFmt = parseProbeInputFormat(string(out))
+	return codec, pixFmt, nil
+}
+
+// parseProbeInputFormat liest `codec_name=…`/`pix_fmt=…`-Zeilen aus der
+// ffprobe-Ausgabe (Reihenfolge nicht garantiert).
+func parseProbeInputFormat(out string) (codec, pixFmt string) {
+	for _, line := range strings.Split(out, "\n") {
+		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
+		if !ok {
+			continue
+		}
+		switch k {
+		case "codec_name":
+			codec = strings.ToLower(v)
+		case "pix_fmt":
+			pixFmt = strings.ToLower(v)
+		}
+	}
+	return codec, pixFmt
 }
 
 // writeMasterManifest schreibt die master.m3u8 mit allen konfigurierten

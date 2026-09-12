@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -90,12 +91,18 @@ func newTestWorker(t *testing.T, db *sql.DB, transcode transcodeFunc) (*Worker, 
 		hub:               bc,
 		cfg:               cfg,
 		transcode:         transcode,
+		probeInput:        fakeProbeInput("h264", "yuv420p"),
 		pollInterval:      time.Millisecond,
 		diskRetryInterval: time.Millisecond,
 		now:               time.Now,
 		sleep:             ctxSleep,
 	}
 	return wk, bc, cfg
+}
+
+// fakeProbeInput ersetzt ffprobe in der Eingangsformat-Prüfung durch feste Werte.
+func fakeProbeInput(codec, pixFmt string) probeInputFunc {
+	return func(context.Context, string) (string, string, error) { return codec, pixFmt, nil }
 }
 
 // writeRaw legt eine Dummy-Rohdatei für ein Video an.
@@ -269,21 +276,197 @@ func splitLines(s string) []string {
 	return out
 }
 
-// TestBuildFFmpegRenditionArgs_ContainsPixFmt: `-pix_fmt yuv420p` MUSS in der
-// Arg-Liste stehen — sonst produziert libx264 bei 10-bit-Quellen yuv420p10, das
-// AppleTV/tvOS nicht dekodiert (Ton ohne Bild).
-func TestBuildFFmpegRenditionArgs_ContainsPixFmt(t *testing.T) {
-	rd := workerRenditions[0]
-	for _, aacSource := range []bool{true, false} {
-		args := buildFFmpegRenditionArgs("/raw/1.mp4", "/dir", rd, aacSource)
-		if !hasArgSequence(args, "-pix_fmt", "yuv420p") {
-			t.Fatalf("aacSource=%v: -pix_fmt yuv420p missing in %v", aacSource, args)
+// TestBuildFFmpegRenditionArgs_Remux: der Server encodiert nicht mehr, er packt
+// per Stream-Copy um. Ein zurückkehrendes `-c:v libx264`/`-crf` hieße, dass der
+// 1-GB-VPS wieder ganze Spielaufnahmen encodiert.
+func TestBuildFFmpegRenditionArgs_Remux(t *testing.T) {
+	args := buildFFmpegRenditionArgs("/raw/1.mp4", "/dir")
+	for _, seq := range [][2]string{{"-c:v", "copy"}, {"-c:a", "copy"}, {"-f", "hls"}, {"-hls_time", "4"}} {
+		if !hasArgSequence(args, seq[0], seq[1]) {
+			t.Fatalf("%s %s missing in %v", seq[0], seq[1], args)
 		}
-		// Reihenfolge: -pix_fmt vor -c:v libx264, damit ffmpeg das Ausgabeformat
-		// vor der Codec-Wahl anwendet.
-		if idxOf(args, "-pix_fmt") > idxOf(args, "-c:v") {
-			t.Fatalf("aacSource=%v: -pix_fmt must come before -c:v in %v", aacSource, args)
+	}
+	for _, forbidden := range []string{"libx264", "-crf", "-preset", "-vf", "-pix_fmt"} {
+		if idxOf(args, forbidden) >= 0 {
+			t.Fatalf("remux args must not contain %q (re-encode): %v", forbidden, args)
 		}
+	}
+	// nice -n 19 bleibt, auch wenn der Remux billig ist (Spec HLS-Transcode-Format).
+	if !hasArgSequence(args, "-n", "19") || args[2] != "ffmpeg" {
+		t.Fatalf("expected `nice -n 19 ffmpeg …`, got %v", args)
+	}
+	if got := args[len(args)-1]; got != filepath.Join("/dir", "index.m3u8") {
+		t.Fatalf("last arg must be the rendition manifest, got %q", got)
+	}
+}
+
+// TestProcess_UnsupportedInputFormat_MarksFailed: eine Rohdatei, die nicht
+// H.264/yuv420p ist, wird nie umgepackt — status=failed mit festem Grund, Rohdatei
+// bleibt zur Analyse liegen.
+func TestProcess_UnsupportedInputFormat_MarksFailed(t *testing.T) {
+	cases := []struct{ codec, pixFmt string }{
+		{"hevc", "yuv420p"},     // HEVC-Handyaufnahme
+		{"h264", "yuv420p10le"}, // 10-bit-H.264 — tvOS dekodiert es nicht
+		{"", ""},                // kein Video-Stream
+	}
+	for _, c := range cases {
+		t.Run(c.codec+"/"+c.pixFmt, func(t *testing.T) {
+			db := testutil.NewDB(t)
+			user := testutil.CreateUser(t, db, "standard")
+			team := testutil.CreateTeam(t, db, "D1")
+			season := testutil.CreateSeason(t, db, "2025/26")
+			v := testutil.CreateVideo(t, db, team, season, user, "queued")
+
+			called := false
+			wk, bc, cfg := newTestWorker(t, db, func(context.Context, string, string) (string, error) {
+				called = true
+				return fakeCodecs, nil
+			})
+			wk.probeInput = fakeProbeInput(c.codec, c.pixFmt)
+			rawPath := writeRaw(t, cfg.root, v)
+
+			wk.process(context.Background(), v)
+
+			if called {
+				t.Fatal("remux must not run for an unsupported input format")
+			}
+			var status string
+			var reason sql.NullString
+			if err := db.QueryRow(`SELECT status, failure_reason FROM videos WHERE id=?`, v).Scan(&status, &reason); err != nil {
+				t.Fatal(err)
+			}
+			if status != "failed" || reason.String != "unsupported_input_format" {
+				t.Fatalf("expected failed/unsupported_input_format, got %q/%q", status, reason.String)
+			}
+			if _, err := os.Stat(rawPath); err != nil {
+				t.Fatalf("expected raw kept after failure, stat err=%v", err)
+			}
+			if bc.count("video-ready") != 0 {
+				t.Fatal("expected no video-ready broadcast")
+			}
+		})
+	}
+}
+
+// TestProcess_SupportedInputFormat_Remuxes: H.264/yuv420p läuft wie bisher bis
+// 'ready' durch.
+func TestProcess_SupportedInputFormat_Remuxes(t *testing.T) {
+	db := testutil.NewDB(t)
+	user := testutil.CreateUser(t, db, "standard")
+	team := testutil.CreateTeam(t, db, "D1")
+	season := testutil.CreateSeason(t, db, "2025/26")
+	v := testutil.CreateVideo(t, db, team, season, user, "queued")
+
+	var probedPath string
+	wk, bc, cfg := newTestWorker(t, db, fakeHLSTranscode)
+	wk.probeInput = func(_ context.Context, rawPath string) (string, string, error) {
+		probedPath = rawPath
+		return "h264", "yuv420p", nil
+	}
+	writeRaw(t, cfg.root, v)
+
+	wk.process(context.Background(), v)
+
+	if got := statusOf(t, db, v); got != "ready" {
+		t.Fatalf("expected status=ready, got %q", got)
+	}
+	if probedPath != RawPath(cfg.root, v) {
+		t.Fatalf("probe must inspect the raw file, got %q", probedPath)
+	}
+	if bc.count("video-ready") != 1 {
+		t.Fatalf("expected 1 video-ready broadcast, got %d", bc.count("video-ready"))
+	}
+}
+
+// TestProcess_ProbeError_MarksFailed: scheitert ffprobe selbst (kaputte Datei),
+// wird nicht umgepackt; der Grund trägt den Probe-Fehler statt des Format-Codes.
+func TestProcess_ProbeError_MarksFailed(t *testing.T) {
+	db := testutil.NewDB(t)
+	user := testutil.CreateUser(t, db, "standard")
+	team := testutil.CreateTeam(t, db, "D1")
+	season := testutil.CreateSeason(t, db, "2025/26")
+	v := testutil.CreateVideo(t, db, team, season, user, "queued")
+
+	called := false
+	wk, _, cfg := newTestWorker(t, db, func(context.Context, string, string) (string, error) {
+		called = true
+		return fakeCodecs, nil
+	})
+	wk.probeInput = func(context.Context, string) (string, string, error) {
+		return "", "", errors.New("moov atom not found")
+	}
+	writeRaw(t, cfg.root, v)
+
+	wk.process(context.Background(), v)
+
+	if called {
+		t.Fatal("remux must not run when the input probe fails")
+	}
+	var reason sql.NullString
+	if err := db.QueryRow(`SELECT failure_reason FROM videos WHERE id=?`, v).Scan(&reason); err != nil {
+		t.Fatal(err)
+	}
+	if statusOf(t, db, v) != "failed" || !strings.Contains(reason.String, "moov atom not found") {
+		t.Fatalf("expected failed with probe error, got %q/%q", statusOf(t, db, v), reason.String)
+	}
+}
+
+func TestParseProbeInputFormat(t *testing.T) {
+	codec, pixFmt := parseProbeInputFormat("pix_fmt=yuv420p\ncodec_name=H264\n")
+	if codec != "h264" || pixFmt != "yuv420p" {
+		t.Fatalf("got %q/%q", codec, pixFmt)
+	}
+	if codec, pixFmt := parseProbeInputFormat(""); codec != "" || pixFmt != "" {
+		t.Fatalf("empty output must yield empty values, got %q/%q", codec, pixFmt)
+	}
+}
+
+// TestRealFFmpegTranscode_Remux_PreservesCodecs ist ein Integrationstest mit
+// echtem ffmpeg: eine Tool-konforme Datei (H.264/yuv420p, 4-s-Keyframes, AAC)
+// wird umgepackt; die CODECS-Ermittlung aus seg_001.ts muss danach weiter
+// greifen (AirPlay-Signalisierung). Ohne ffmpeg/ffprobe/libx264 im PATH (CI)
+// wird er übersprungen.
+func TestRealFFmpegTranscode_Remux_PreservesCodecs(t *testing.T) {
+	for _, bin := range []string{"ffmpeg", "ffprobe", "nice"} {
+		if _, err := exec.LookPath(bin); err != nil {
+			t.Skipf("%s not in PATH", bin)
+		}
+	}
+	dir := t.TempDir()
+	src := filepath.Join(dir, "src.mp4")
+	gen := exec.Command("ffmpeg", "-v", "error", "-y",
+		"-f", "lavfi", "-i", "testsrc=size=320x180:rate=25:duration=9",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=9",
+		"-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "ultrafast",
+		"-force_key_frames", "expr:gte(t,n_forced*4)",
+		"-c:a", "aac", "-b:a", "64k", "-shortest", src)
+	if out, err := gen.CombinedOutput(); err != nil {
+		t.Skipf("cannot generate test input (libx264 missing?): %v: %s", err, out)
+	}
+
+	codec, pixFmt, err := probeInputFormat(context.Background(), src)
+	if err != nil || codec != "h264" || pixFmt != "yuv420p" {
+		t.Fatalf("probeInputFormat = %q/%q/%v, want h264/yuv420p", codec, pixFmt, err)
+	}
+
+	processed := filepath.Join(dir, "processed")
+	codecs, err := realFFmpegTranscode(context.Background(), src, processed)
+	if err != nil {
+		t.Fatalf("realFFmpegTranscode: %v", err)
+	}
+	if !strings.HasPrefix(codecs, "avc1.") || !strings.Contains(codecs, "mp4a.40.") {
+		t.Fatalf("unexpected CODECS %q", codecs)
+	}
+	master, err := os.ReadFile(filepath.Join(processed, "master.m3u8"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(master), `CODECS="`+codecs+`"`) {
+		t.Fatalf("master.m3u8 missing CODECS attribute:\n%s", master)
+	}
+	// 9 s Quelle, Keyframes alle 4 s → mehr als ein Segment (Schnitt an den Keyframes).
+	if _, err := os.Stat(filepath.Join(processed, "720p", "seg_001.ts")); err != nil {
+		t.Fatalf("expected at least two segments: %v", err)
 	}
 }
 
