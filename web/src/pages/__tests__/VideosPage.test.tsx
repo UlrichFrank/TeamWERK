@@ -78,6 +78,29 @@ describe('VideosPage — Rendering und Mehr laden', () => {
     expect(screen.getByRole('button', { name: /Video hochladen/i })).toBeInTheDocument()
   })
 
+  test('Upload-Dropdown verlinkt die Tool-Downloads des neuesten Releases', async () => {
+    renderAsPersona(<VideosPage />, 'trainer', {
+      mocks: [
+        { url: /\/teams/, data: [] },
+        { url: /\/videos\?/, data: { items: [], total: 0 } },
+      ],
+    })
+    await flushAsync()
+    expect(screen.queryByRole('menu')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /Video hochladen/i }))
+
+    const win = screen.getByRole('menuitem', { name: /Tool für Windows herunterladen/i })
+    const mac = screen.getByRole('menuitem', { name: /Tool für macOS herunterladen/i })
+    // latest/download zeigt immer aufs neueste Release — keine Versionsnummer im Link.
+    expect(win.getAttribute('href')).toMatch(/\/releases\/latest\/download\/teamwerk-video-encoder-windows-amd64\.exe$/)
+    expect(mac.getAttribute('href')).toMatch(/\/releases\/latest\/download\/teamwerk-video-encoder-macos\.dmg$/)
+
+    // Escape schließt das Menü wieder.
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
   test('kein Upload-Button für Spieler', async () => {
     renderAsPersona(<VideosPage />, 'spieler', {
       mocks: [

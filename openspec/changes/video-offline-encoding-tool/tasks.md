@@ -1,16 +1,16 @@
 ## 1. Server: Worker von Encode auf Remux umstellen
 
-- [ ] 1.1 `internal/videos/worker.go`: `buildFFmpegRenditionArgs` von `-c:v libx264 -preset medium -crf 26 ...` auf `-c:v copy -c:a copy -f hls ...` umstellen (Stream-Copy, kein Re-Encode); `-hls_time` bleibt 4
-- [ ] 1.2 `internal/videos/worker.go`: neue Funktion `probeInputFormat(ctx, rawPath) (codec, pixFmt string, err error)` (ffprobe auf ersten Video-Stream), aufgerufen VOR `runFFmpegRendition` in `realFFmpegTranscode`
-- [ ] 1.3 `internal/videos/worker.go`: bei `codec != "h264"` oder `pixFmt != "yuv420p"` → `wk.fail(id, "unsupported_input_format")` statt ffmpeg-Aufruf; Rohdatei bleibt erhalten (bestehendes Verhalten von `fail`)
-- [ ] 1.4 Kommentare in `buildFFmpegRenditionArgs`/`realFFmpegTranscode` aktualisieren (die bisherigen Kommentare beschreiben einen echten Encode, jetzt falsch)
+- [x] 1.1 `internal/videos/worker.go`: `buildFFmpegRenditionArgs` von `-c:v libx264 -preset medium -crf 26 ...` auf `-c:v copy -c:a copy -f hls ...` umstellen (Stream-Copy, kein Re-Encode); `-hls_time` bleibt 4
+- [x] 1.2 `internal/videos/worker.go`: neue Funktion `probeInputFormat(ctx, rawPath) (codec, pixFmt string, err error)` (ffprobe auf ersten Video-Stream), aufgerufen VOR `runFFmpegRendition` in `realFFmpegTranscode`
+- [x] 1.3 `internal/videos/worker.go`: bei `codec != "h264"` oder `pixFmt != "yuv420p"` → `wk.fail(id, "unsupported_input_format")` statt ffmpeg-Aufruf; Rohdatei bleibt erhalten (bestehendes Verhalten von `fail`)
+- [x] 1.4 Kommentare in `buildFFmpegRenditionArgs`/`realFFmpegTranscode` aktualisieren (die bisherigen Kommentare beschreiben einen echten Encode, jetzt falsch)
 
 ## 2. Server: Tests für den Remux-Pfad
 
-- [ ] 2.1 `internal/videos/worker_test.go`: `TestBuildFFmpegRenditionArgs_Remux` — Arg-Liste enthält `-c:v copy`/`-c:a copy`, NICHT `-c:v libx264`/`-crf`
-- [ ] 2.2 `internal/videos/worker_test.go`: `TestProcess_UnsupportedInputFormat_MarksFailed` (Fake-`probeInputFormat`-Naht liefert nicht-H.264) → `status='failed'`, `failure_reason='unsupported_input_format'`, kein ffmpeg-Aufruf
-- [ ] 2.3 `internal/videos/worker_test.go`: `TestProcess_SupportedInputFormat_Remuxes` (Fake liefert H.264/yuv420p) → Happy Path bleibt grün, `status='ready'`
-- [ ] 2.4 Bestehende `worker_test.go`-Fälle, die den alten Encode-Argumentsatz assertieren, an die neue Remux-Arg-Liste anpassen
+- [x] 2.1 `internal/videos/worker_test.go`: `TestBuildFFmpegRenditionArgs_Remux` — Arg-Liste enthält `-c:v copy`/`-c:a copy`, NICHT `-c:v libx264`/`-crf`
+- [x] 2.2 `internal/videos/worker_test.go`: `TestProcess_UnsupportedInputFormat_MarksFailed` (Fake-`probeInputFormat`-Naht liefert nicht-H.264) → `status='failed'`, `failure_reason='unsupported_input_format'`, kein ffmpeg-Aufruf
+- [x] 2.3 `internal/videos/worker_test.go`: `TestProcess_SupportedInputFormat_Remuxes` (Fake liefert H.264/yuv420p) → Happy Path bleibt grün, `status='ready'`
+- [x] 2.4 Bestehende `worker_test.go`-Fälle, die den alten Encode-Argumentsatz assertieren, an die neue Remux-Arg-Liste anpassen
 
 ## 3. Tool: Go-Modul-Grundgerüst
 
@@ -47,14 +47,14 @@
 
 ## 8. Frontend: Browser-Upload entfernen, Download-Dropdown ergänzen
 
-- [ ] 8.1 `web/src/pages/VideoUploadPage.tsx` und zugehörige Route in `App.tsx` entfernen
-- [ ] 8.2 `web/src/pages/VideosPage.tsx`: Split-Button/Dropdown „Video hochladen ▾" analog zum „+ Neu"-Muster in `web/src/pages/AdminUsersPage.tsx` (Zeilen ~426-452) mit Einträgen „Tool für Windows herunterladen" / „Tool für macOS herunterladen", verlinkt auf die GitHub-Release-Asset-URLs des jeweils neuesten Releases
-- [ ] 8.3 Verwaiste Frontend-Tests (`VideoUploadPage.test.tsx`) entfernen; neue Tests für den Dropdown-Button in `VideosPage.test.tsx` (sofern vorhanden) ergänzen
+- [x] 8.1 `web/src/pages/VideoUploadPage.tsx` und zugehörige Route in `App.tsx` entfernen
+- [x] 8.2 `web/src/pages/VideosPage.tsx`: Split-Button/Dropdown „Video hochladen ▾" analog zum „+ Neu"-Muster in `web/src/pages/AdminUsersPage.tsx` (Zeilen ~426-452) mit Einträgen „Tool für Windows herunterladen" / „Tool für macOS herunterladen", verlinkt auf die GitHub-Release-Asset-URLs des jeweils neuesten Releases
+- [x] 8.3 Verwaiste Frontend-Tests (`VideoUploadPage.test.tsx`) entfernen; neue Tests für den Dropdown-Button in `VideosPage.test.tsx` (sofern vorhanden) ergänzen
 
 ## 9. Frontend: AirPlay-Fix
 
-- [ ] 9.1 `web/src/pages/VideoDetailPage.tsx`: Prüfreihenfolge umdrehen — zuerst `video.canPlayType('application/vnd.apple.mpegurl')`, bei nicht-leerem Ergebnis `video.src` direkt setzen und `hls.js` NICHT laden/initialisieren; nur im Else-Zweig wie bisher `hls.js` dynamisch importieren
-- [ ] 9.2 Tests in `VideoDetailPage.test.tsx` (sofern vorhanden) ergänzen: native Wiedergabe bei nicht-leerem `canPlayType`, hls.js-Fallback bei leerem `canPlayType`
+- [x] 9.1 `web/src/pages/VideoDetailPage.tsx`: Prüfreihenfolge umdrehen — zuerst `video.canPlayType('application/vnd.apple.mpegurl')`, bei nicht-leerem Ergebnis `video.src` direkt setzen und `hls.js` NICHT laden/initialisieren; nur im Else-Zweig wie bisher `hls.js` dynamisch importieren
+- [x] 9.2 Tests in `VideoDetailPage.test.tsx` (sofern vorhanden) ergänzen: native Wiedergabe bei nicht-leerem `canPlayType`, hls.js-Fallback bei leerem `canPlayType`
 - [ ] 9.3 Manueller Rauchtest auf echtem Safari/iOS gegen ein Apple TV (native Browser-/AirPlay-APIs sind in jsdom nicht sinnvoll testbar, siehe `docs/agent/07-testing.md`)
 
 ## 10. Migration/Rollout

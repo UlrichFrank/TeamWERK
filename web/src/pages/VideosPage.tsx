@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, Video, ArrowUp } from 'lucide-react'
+import { Upload, Video, ArrowUp, ChevronDown, Download } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useMediaQuery } from '../lib/useMediaQuery'
+import { useEscapeKey } from '../lib/useEscapeKey'
+import { VIDEO_ENCODER_DOWNLOADS } from '../lib/videoEncoderDownloads'
 import MobileCard from '../components/MobileCard'
 import VideoStatusPill from '../components/VideoStatusPill'
 import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
@@ -73,6 +75,20 @@ export default function VideosPage() {
   const [error, setError] = useState('')
   // Anzahl neuer, noch nicht geladener Videos (via video-queued) → „N neue"-Chip.
   const [newCount, setNewCount] = useState(0)
+
+  // „Video hochladen"-Dropdown mit den Tool-Downloads (kein Browser-Upload mehr).
+  const [showUploadMenu, setShowUploadMenu] = useState(false)
+  const uploadMenuRef = useRef<HTMLDivElement>(null)
+  useEscapeKey(showUploadMenu && (() => setShowUploadMenu(false)))
+  useEffect(() => {
+    if (!showUploadMenu) return
+    const handler = (e: MouseEvent) => {
+      if (uploadMenuRef.current && !uploadMenuRef.current.contains(e.target as Node))
+        setShowUploadMenu(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showUploadMenu])
 
   // Spiegel des aktuell geladenen Bestands für den (String-only) SSE-Handler,
   // damit er ohne Stale-Closure die geladene Spanne kennt.
@@ -198,13 +214,37 @@ export default function VideosPage() {
               ))}
             </select>
             {canUpload && (
-              <button
-                onClick={() => navigate('/videos/upload')}
-                className={`${HEADER_CTRL} ${HEADER_PRIMARY} w-full sm:w-auto`}
-              >
-                <Upload className="w-3.5 h-3.5" />
-                Video hochladen
-              </button>
+              <div ref={uploadMenuRef} className="relative w-full sm:w-auto">
+                <button
+                  onClick={() => setShowUploadMenu(v => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={showUploadMenu}
+                  className={`${HEADER_CTRL} ${HEADER_PRIMARY} w-full sm:w-auto`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Video hochladen
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+                {showUploadMenu && (
+                  <div role="menu" className="absolute right-0 mt-1 w-64 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                    <p className="px-4 pt-2.5 pb-1.5 text-xs text-brand-text-muted">
+                      Videos werden mit dem TeamWERK-Video-Encoder auf deinem Rechner umgewandelt und hochgeladen.
+                    </p>
+                    {VIDEO_ENCODER_DOWNLOADS.map(d => (
+                      <a
+                        key={d.platform}
+                        role="menuitem"
+                        href={d.url}
+                        onClick={() => setShowUploadMenu(false)}
+                        className="w-full text-left px-4 py-2.5 text-xs text-brand-text hover:bg-brand-surface-card transition-colors flex items-center gap-2"
+                      >
+                        <Download className="w-3.5 h-3.5 text-brand-text-muted" />
+                        {d.label}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

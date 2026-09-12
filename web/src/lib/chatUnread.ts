@@ -7,7 +7,7 @@
 // Aufschreiber nicht zuverlässig.
 //
 // Reine Funktion ohne React und ohne Netzwerk, damit sie ohne Component-Render
-// testbar ist (analog `createThrottledProgress` in VideoUploadPage.tsx).
+// testbar ist (analog `nextBackoffMs` in hooks/useEventStream.ts).
 
 // Bewusst schmale Strukturtypen: die Aufrufstellen behalten ihre eigenen,
 // vollständigen Interfaces und passen ohne Cast hier hinein.
