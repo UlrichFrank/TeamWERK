@@ -12,6 +12,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
@@ -237,20 +238,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 	kaderCan := policy.CanFlags{Edit: policy.CanEditKader(p), Delete: policy.CanEditKader(p)}
 
 	seasonID := r.URL.Query().Get("season_id")
-	limit := 50
-	if l := r.URL.Query().Get("limit"); l != "" {
-		fmt.Sscanf(l, "%d", &limit)
-	}
-	if limit < 1 {
-		limit = 50
-	}
-	offset := 0
-	if o := r.URL.Query().Get("offset"); o != "" {
-		fmt.Sscanf(o, "%d", &offset)
-	}
-	if offset < 0 {
-		offset = 0
-	}
+	limit, offset := httpx.Paging(r, 50, 200)
 
 	// kind='team': Übungsgruppen haben weder Altersklasse noch Geschlecht (beide
 	// NULL) und gehören nicht in die Kader-Maske — sie haben eine eigene Route.
@@ -264,7 +252,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 	// total mit denselben WHERE-Bedingungen wie die Items (Sichtbarkeit invariant).
 	var total int
 	if err := h.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM kader k`+where, args...).Scan(&total); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -273,14 +261,14 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer rows.Close()
 
 	trainingGroups, err := trainingGroupCategorySet(r.Context(), h.db)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -288,7 +276,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		k, seasonStartYear, err := scanKaderRow(rows)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		members, _ := h.loadMembers(r.Context(), k.ID)
@@ -307,8 +295,7 @@ func (h *Handler) ListKader(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"items": result, "total": total})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": result, "total": total})
 }
 
 // GET /api/admin/kader/{id}
@@ -317,11 +304,11 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 	k, seasonStartYear, err := scanKaderRow(h.db.QueryRowContext(r.Context(),
 		kaderSelectSQL+` WHERE k.id=? AND k.kind='team'`, id))
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -332,12 +319,11 @@ func (h *Handler) GetKader(w http.ResponseWriter, r *http.Request) {
 	extended, _ := h.loadExtendedMembers(r.Context(), k.ID)
 	isTrainingGroup, err := isTrainingGroupCategory(r.Context(), h.db, k.AgeClass)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	bys, bkys := computeBirthYears(k, seasonStartYear, isTrainingGroup)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(kaderDetail{
+	httpx.WriteJSON(w, http.StatusOK, kaderDetail{
 		kaderRow:        k,
 		BirthYears:      bys,
 		BracketYears:    bkys,
@@ -364,7 +350,7 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 		ExtendedMembersRemove []int   `json:"extended_members_remove"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 
@@ -376,16 +362,14 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 		var kind string
 		if err := h.db.QueryRowContext(r.Context(), `SELECT kind FROM kader WHERE id=?`, id).Scan(&kind); err != nil {
 			if err == sql.ErrNoRows {
-				http.Error(w, "not found", http.StatusNotFound)
+				httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			}
 			return
 		}
 		if kind == "practice" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]any{
+			httpx.WriteJSON(w, http.StatusConflict, map[string]any{
 				"error": "Übungsgruppen haben keinen erweiterten Kader",
 			})
 			return
@@ -400,7 +384,7 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -412,37 +396,37 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 
 	for _, memberID := range req.MembersAdd {
 		if err := execTx(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?,?)`, id, memberID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 	for _, memberID := range req.MembersRemove {
 		if err := execTx(`DELETE FROM kader_members WHERE kader_id=? AND member_id=?`, id, memberID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 	for _, memberID := range req.TrainersAdd {
 		if err := execTx(`INSERT OR IGNORE INTO kader_trainers (kader_id, member_id) VALUES (?,?)`, id, memberID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 	for _, memberID := range req.TrainersRemove {
 		if err := execTx(`DELETE FROM kader_trainers WHERE kader_id=? AND member_id=?`, id, memberID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 	for _, memberID := range req.ExtendedMembersAdd {
 		if err := execTx(`INSERT OR IGNORE INTO kader_extended_members (kader_id, member_id) VALUES (?,?)`, id, memberID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 	for _, memberID := range req.ExtendedMembersRemove {
 		if err := execTx(`DELETE FROM kader_extended_members WHERE kader_id=? AND member_id=?`, id, memberID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
@@ -450,13 +434,13 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	if req.DedicatedBirthYear != nil {
 		if err := execTx(`UPDATE kader SET dedicated_birth_year=?, updated_at=? WHERE id=?`,
 			*req.DedicatedBirthYear, time.Now(), id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	} else if req.SetDedicatedBirthYear {
 		if err := execTx(`UPDATE kader SET dedicated_birth_year=NULL, updated_at=? WHERE id=?`,
 			time.Now(), id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
@@ -467,26 +451,26 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 		if err := tx.QueryRowContext(r.Context(), `SELECT gender, team_number FROM kader WHERE id=?`, id).
 			Scan(&gender, &teamNumber); err != nil {
 			if err == sql.ErrNoRows {
-				http.Error(w, "kader not found", http.StatusNotFound)
+				httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 			} else {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			}
 			return
 		}
 		newTeamID, err := ensureTeam(r.Context(), tx, *req.AgeClass, gender, teamNumber)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		if err := execTx(`UPDATE kader SET age_class=?, team_id=?, updated_at=? WHERE id=?`,
 			*req.AgeClass, newTeamID, time.Now(), id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -521,11 +505,11 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 		 WHERE k.id=? AND k.kind='team'`, id).
 		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &seasonStartYear)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	if dedicatedBirthYear.Valid {
@@ -535,12 +519,11 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 
 	suggestions, err := suggestMembers(r.Context(), h.db, k.ID, k.AgeClass, k.Gender, seasonStartYear, k.DedicatedBirthYear, search, filterByBracket)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"suggestions": suggestions})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"suggestions": suggestions})
 }
 
 // POST /api/admin/kader — initialize standard kader OR create a single new kader
@@ -553,7 +536,7 @@ func (h *Handler) InitializeKader(w http.ResponseWriter, r *http.Request) {
 		DedicatedBirthYear *int   `json:"dedicated_birth_year"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.SeasonID == 0 {
-		http.Error(w, "season_id required", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "season_id_required", nil)
 		return
 	}
 
@@ -601,7 +584,7 @@ func isTrainingGroupCategory(ctx context.Context, q dbq, ageClass string) (bool,
 func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seasonID int, ageClass, gender string, teamNumber int, dedicatedBirthYear *int) {
 	isTrainingGroup, err := isTrainingGroupCategory(r.Context(), h.db, ageClass)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
@@ -613,7 +596,7 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 	if isTrainingGroup {
 		newID, err := h.createTrainingGroupKader(r.Context(), seasonID, ageClass, gender, dedicatedBirthYear)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		h.writeCreatedKader(w, r, newID)
@@ -622,7 +605,7 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 
 	teamID, err := ensureTeam(r.Context(), h.db, ageClass, gender, teamNumber)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	res, err := h.db.ExecContext(r.Context(),
@@ -630,10 +613,10 @@ func (h *Handler) createSingleKader(w http.ResponseWriter, r *http.Request, seas
 		seasonID, ageClass, gender, teamNumber, dedicatedBirthYear, teamID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
-			http.Error(w, `{"error":"Kader existiert bereits"}`, http.StatusConflict)
+			httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, nil)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	newID, _ := res.LastInsertId()
@@ -734,19 +717,17 @@ func (h *Handler) writeCreatedKader(w http.ResponseWriter, r *http.Request, newI
 	k, seasonStartYear, err := scanKaderRow(h.db.QueryRowContext(r.Context(),
 		kaderSelectSQL+` WHERE k.id=?`, newID))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	isTrainingGroup, err := isTrainingGroupCategory(r.Context(), h.db, k.AgeClass)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	bys, bkys := computeBirthYears(k, seasonStartYear, isTrainingGroup)
 	h.broadcastKaderTeams(r.Context(), []int{int(k.TeamID)})
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(kaderDetail{
+	httpx.WriteJSON(w, http.StatusCreated, kaderDetail{
 		kaderRow:        k,
 		BirthYears:      bys,
 		BracketYears:    bkys,
@@ -766,9 +747,7 @@ func (h *Handler) DeleteKader(w http.ResponseWriter, r *http.Request) {
 		`SELECT COUNT(*) FROM kader_members WHERE kader_id=?`, id).Scan(&memberCount)
 
 	if memberCount > 0 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]any{
+		httpx.WriteJSON(w, http.StatusConflict, map[string]any{
 			"error":        "Kader hat noch Mitglieder",
 			"member_count": memberCount,
 		})
@@ -781,11 +760,11 @@ func (h *Handler) DeleteKader(w http.ResponseWriter, r *http.Request) {
 	// ON DELETE RESTRICT; ohne diese Guard käme statt 409 ein 500.
 	kaderID, err := strconv.Atoi(id)
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	if n, err := policy.KaderTrainingCount(r.Context(), h.db, kaderID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	} else if n > 0 {
 		policy.WriteKaderTrainingConflict(w, n)
@@ -797,7 +776,7 @@ func (h *Handler) DeleteKader(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.db.ExecContext(r.Context(), `DELETE FROM kader WHERE id=?`, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	h.broadcastKaderTeams(r.Context(), teamIDs)
@@ -812,11 +791,11 @@ func (h *Handler) CopyFromSeason(w http.ResponseWriter, r *http.Request) {
 		Assignments  []CopyAssignment `json:"assignments"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.FromSeasonID == 0 || req.ToSeasonID == 0 {
-		http.Error(w, "from_season_id and to_season_id required", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "season_ids_required", nil)
 		return
 	}
 
@@ -825,21 +804,19 @@ func (h *Handler) CopyFromSeason(w http.ResponseWriter, r *http.Request) {
 		`SELECT CAST(strftime('%Y', start_date) AS INTEGER) FROM seasons WHERE id=?`, req.ToSeasonID).
 		Scan(&targetStartYear)
 	if err != nil {
-		http.Error(w, "target season not found", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "target_season_not_found", nil)
 		return
 	}
 
 	created, err := copyKader(r.Context(), h.db, req.FromSeasonID, req.ToSeasonID, targetStartYear, req.Assignments)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	// Kopiert mehrere Kader saisonuebergreifend → bewusst global.
 	h.hub.Broadcast("kader")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{"created": created})
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"created": created})
 }
 
 // POST /api/admin/kader/auto-assign — auto-assign members to multiple kader by age/gender bracket
@@ -848,13 +825,13 @@ func (h *Handler) AutoAssign(w http.ResponseWriter, r *http.Request) {
 		KaderIDs []int `json:"kader_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.KaderIDs) == 0 {
-		http.Error(w, "kader_ids required", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "kader_ids_required", nil)
 		return
 	}
 
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer tx.Rollback()
@@ -873,7 +850,7 @@ func (h *Handler) AutoAssign(w http.ResponseWriter, r *http.Request) {
 			if err == sql.ErrNoRows {
 				continue
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		if dedicatedBirthYear.Valid {
@@ -883,21 +860,19 @@ func (h *Handler) AutoAssign(w http.ResponseWriter, r *http.Request) {
 
 		_, err = autoAssignMembers(r.Context(), tx, k.ID, k.AgeClass, k.Gender, seasonStartYear, k.DedicatedBirthYear)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 
 	// Bulk-Zuordnung über mehrere Kader (req.KaderIDs) → bewusst global.
 	h.hub.Broadcast("kader")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]any{"success": true})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
 // PATCH /api/admin/kader/{id}/games-per-season
@@ -907,18 +882,18 @@ func (h *Handler) PatchGamesPerSeason(w http.ResponseWriter, r *http.Request) {
 		GamesPerSeason int `json:"games_per_season"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.GamesPerSeason < 0 {
-		http.Error(w, "games_per_season must be >= 0", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 		return
 	}
 	_, err := h.db.ExecContext(r.Context(),
 		`UPDATE kader SET games_per_season=?, updated_at=? WHERE id=?`,
 		req.GamesPerSeason, time.Now(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	h.broadcastKader(r.Context(), id)
@@ -1021,7 +996,7 @@ func (h *Handler) ExtendedMemberSuggestions(w http.ResponseWriter, r *http.Reque
 
 	var kaderID int
 	if err := h.db.QueryRowContext(r.Context(), `SELECT id FROM kader WHERE id=?`, id).Scan(&kaderID); err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 
@@ -1038,7 +1013,7 @@ func (h *Handler) ExtendedMemberSuggestions(w http.ResponseWriter, r *http.Reque
 		 LIMIT 20`,
 		kaderID, search, "%"+search+"%")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	defer rows.Close()
@@ -1059,6 +1034,5 @@ func (h *Handler) ExtendedMemberSuggestions(w http.ResponseWriter, r *http.Reque
 		result = append(result, s)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"suggestions": result})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"suggestions": result})
 }

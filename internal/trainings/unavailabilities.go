@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 )
 
 // unavailInfo ist der pro Mitglied ausgewiesene Serien-Abmelde-Status.
@@ -141,21 +141,21 @@ func (h *Handler) ListSeriesUnavailabilities(w http.ResponseWriter, r *http.Requ
 	claims := auth.ClaimsFromCtx(r.Context())
 	seriesID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	kaderID, err := h.seriesKaderID(r.Context(), seriesID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -167,8 +167,7 @@ func (h *Handler) ListSeriesUnavailabilities(w http.ResponseWriter, r *http.Requ
 		WHERE msu.training_series_id = ?
 		ORDER BY m.last_name, m.first_name, msu.start_date`, seriesID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListSeriesUnavailabilities: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListSeriesUnavailabilities: %w", err))
 		return
 	}
 	defer rows.Close()
@@ -178,7 +177,7 @@ func (h *Handler) ListSeriesUnavailabilities(w http.ResponseWriter, r *http.Requ
 		var it seriesUnavailability
 		var start, end sql.NullString
 		if err := rows.Scan(&it.ID, &it.MemberID, &it.MemberName, &start, &end, &it.Reason, &it.CreatedAt); err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
 		if start.Valid {
@@ -189,8 +188,7 @@ func (h *Handler) ListSeriesUnavailabilities(w http.ResponseWriter, r *http.Requ
 		}
 		items = append(items, it)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"items": items})
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 // POST /api/training-series/{id}/unavailabilities
@@ -198,7 +196,7 @@ func (h *Handler) CreateSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 	claims := auth.ClaimsFromCtx(r.Context())
 	seriesID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	var req struct {
@@ -208,32 +206,32 @@ func (h *Handler) CreateSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		Reason    string  `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
 		return
 	}
 	if req.MemberID <= 0 {
-		http.Error(w, "member_id required", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, "member_id_required", nil)
 		return
 	}
 	start := normalizeDatePtr(req.StartDate)
 	end := normalizeDatePtr(req.EndDate)
 	if start != nil && end != nil && *start > *end {
-		http.Error(w, "start_date must not be after end_date", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeValidation, nil)
 		return
 	}
 
 	kaderID, err := h.seriesKaderID(r.Context(), seriesID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -244,22 +242,19 @@ func (h *Handler) CreateSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		req.MemberID, seriesID, start, end, strings.TrimSpace(req.Reason), claims.UserID)
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
-			http.Error(w, "already exists", http.StatusConflict)
+			httpx.WriteError(w, r, http.StatusConflict, httpx.CodeConflict, nil)
 			return
 		}
 		if strings.Contains(err.Error(), "FOREIGN KEY") {
-			http.Error(w, "unknown member", http.StatusBadRequest)
+			httpx.WriteError(w, r, http.StatusBadRequest, "unknown_member", nil)
 			return
 		}
-		fmt.Fprintf(os.Stderr, "CreateSeriesUnavailability: %v\n", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("CreateSeriesUnavailability: %w", err))
 		return
 	}
 	id, _ := res.LastInsertId()
 	h.broadcastKader(r.Context(), []int{kaderID}, "training-unavailability-changed")
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]any{"id": id})
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{"id": id})
 }
 
 // DELETE /api/training-series/{id}/unavailabilities/{uid}
@@ -267,26 +262,26 @@ func (h *Handler) DeleteSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 	claims := auth.ClaimsFromCtx(r.Context())
 	seriesID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(w, "invalid id", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	uid, err := strconv.Atoi(r.PathValue("uid"))
 	if err != nil {
-		http.Error(w, "invalid uid", http.StatusBadRequest)
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
 		return
 	}
 	kaderID, err := h.seriesKaderID(r.Context(), seriesID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	ok, err := h.hasKaderAccess(r.Context(), claims, kaderID)
 	if err != nil || !ok {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
 
@@ -294,12 +289,12 @@ func (h *Handler) DeleteSeriesUnavailability(w http.ResponseWriter, r *http.Requ
 		`DELETE FROM member_series_unavailabilities WHERE id = ? AND training_series_id = ?`,
 		uid, seriesID)
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		http.Error(w, "not found", http.StatusNotFound)
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
 	}
 	h.broadcastKader(r.Context(), []int{kaderID}, "training-unavailability-changed")

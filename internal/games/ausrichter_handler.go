@@ -19,11 +19,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 	"github.com/teamstuttgart/teamwerk/internal/settings"
 )
 
@@ -78,7 +79,7 @@ func hostErr(status int, code string) *hostAPIError {
 func (h *Handler) GetGameDayHost(w http.ResponseWriter, r *http.Request) {
 	date := dayKey(r.PathValue("date"))
 	if _, err := time.Parse("2006-01-02", date); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_date"})
+		httpx.WriteError(w, r, http.StatusBadRequest, "invalid_date", nil)
 		return
 	}
 	ctx := r.Context()
@@ -86,7 +87,7 @@ func (h *Handler) GetGameDayHost(w http.ResponseWriter, r *http.Request) {
 	var seasonID int
 	if err := h.db.QueryRowContext(ctx,
 		`SELECT id FROM seasons WHERE is_active=1 LIMIT 1`).Scan(&seasonID); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no_active_season"})
+		httpx.WriteError(w, r, http.StatusBadRequest, "no_active_season", nil)
 		return
 	}
 
@@ -95,17 +96,17 @@ func (h *Handler) GetGameDayHost(w http.ResponseWriter, r *http.Request) {
 		// ErrNoDefaultAusrichter ist ein Datenfehler, kein Betriebszustand
 		// (Migration 048 legt die Default-Zeile idempotent an) — deshalb 500
 		// statt eines erfundenen Ersatzwerts.
-		slog.Error("games: resolve ausrichter for day failed", "date", date, "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "no_default_ausrichter"})
+		httpx.WriteError(w, r, http.StatusInternalServerError, "no_default_ausrichter",
+			fmt.Errorf("resolve ausrichter for day %s: %w", date, err))
 		return
 	}
 	resolved, err := settings.GetAusrichter(ctx, h.db, id)
 	if err != nil {
-		slog.Error("games: load ausrichter failed", "id", id, "error", err)
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal_error"})
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal,
+			fmt.Errorf("load ausrichter %d: %w", id, err))
 		return
 	}
-	writeJSON(w, http.StatusOK, gameDayHostResponse{
+	httpx.WriteJSON(w, http.StatusOK, gameDayHostResponse{
 		Date: date, AusrichterID: id, AusrichterName: resolved.Name, IsExplicit: explicit,
 	})
 }
@@ -117,10 +118,10 @@ func (h *Handler) GetGameDayHost(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) PreviewGameDayHost(w http.ResponseWriter, r *http.Request) {
 	resp, _, apiErr := h.runGameDayHost(r.Context(), r, false)
 	if apiErr != nil {
-		writeJSON(w, apiErr.status, map[string]string{"error": apiErr.code})
+		httpx.WriteError(w, r, apiErr.status, apiErr.code, nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 // POST /api/game-days/host/apply
@@ -131,7 +132,7 @@ func (h *Handler) PreviewGameDayHost(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ApplyGameDayHost(w http.ResponseWriter, r *http.Request) {
 	resp, summary, apiErr := h.runGameDayHost(r.Context(), r, true)
 	if apiErr != nil {
-		writeJSON(w, apiErr.status, map[string]string{"error": apiErr.code})
+		httpx.WriteError(w, r, apiErr.status, apiErr.code, nil)
 		return
 	}
 	resp.Applied = true
@@ -143,7 +144,7 @@ func (h *Handler) ApplyGameDayHost(w http.ResponseWriter, r *http.Request) {
 	// anderen Regen-Pfad auch. Erst nach dem Commit, sonst benachrichtigt ein
 	// zurückgerollter Lauf ins Leere.
 	h.dispatchRegenNotifications(summary)
-	writeJSON(w, http.StatusOK, resp)
+	httpx.WriteJSON(w, http.StatusOK, resp)
 }
 
 // --- Gemeinsamer Kern ------------------------------------------------------------------
@@ -177,7 +178,7 @@ func (h *Handler) runGameDayHost(ctx context.Context, r *http.Request, apply boo
 
 	tx, err := h.db.BeginTx(ctx, nil)
 	if err != nil {
-		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, "internal_error")
+		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 	defer tx.Rollback() //nolint:errcheck // No-Op nach erfolgreichem Commit
 
@@ -196,7 +197,7 @@ func (h *Handler) runGameDayHost(ctx context.Context, r *http.Request, apply boo
 		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusBadRequest, "unknown_ausrichter")
 	}
 	if err != nil {
-		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, "internal_error")
+		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 	if !target.Aktiv {
 		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusBadRequest, "inactive_ausrichter")
@@ -204,7 +205,7 @@ func (h *Handler) runGameDayHost(ctx context.Context, r *http.Request, apply boo
 
 	slotsBefore, assignmentsBefore, err := countDayDuties(ctx, tx, seasonID, date)
 	if err != nil {
-		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, "internal_error")
+		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 
 	if _, err := tx.ExecContext(ctx, `
@@ -215,17 +216,17 @@ func (h *Handler) runGameDayHost(ctx context.Context, r *http.Request, apply boo
 			updated_at    = CURRENT_TIMESTAMP,
 			updated_by    = excluded.updated_by`,
 		date, seasonID, target.ID, updatedBy); err != nil {
-		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, "internal_error")
+		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 
 	summary, err := h.runAutoRegen(ctx, tx, []string{date}, seasonID, nil)
 	if err != nil {
-		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, "internal_error")
+		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 
 	slotsAfter, assignmentsAfter, err := countDayDuties(ctx, tx, seasonID, date)
 	if err != nil {
-		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, "internal_error")
+		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 
 	balance := gameDayHostBalance{
@@ -250,7 +251,7 @@ func (h *Handler) runGameDayHost(ctx context.Context, r *http.Request, apply boo
 	// zurück, obwohl gerade explizit geschrieben wurde.
 	resolvedID, explicit, err := settings.ResolveAusrichterForDayDetailed(ctx, tx, date, seasonID)
 	if err != nil {
-		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, "internal_error")
+		return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, httpx.CodeInternal)
 	}
 
 	resp := gameDayHostResponse{
@@ -263,7 +264,7 @@ func (h *Handler) runGameDayHost(ctx context.Context, r *http.Request, apply boo
 
 	if apply {
 		if err := tx.Commit(); err != nil {
-			return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, "internal_error")
+			return gameDayHostResponse{}, RegenSummary{}, hostErr(http.StatusInternalServerError, httpx.CodeInternal)
 		}
 	}
 	// Preview: das defer tx.Rollback() oben läuft beim Return — kein Schreibvorgang überlebt.
