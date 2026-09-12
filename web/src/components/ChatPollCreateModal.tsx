@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
 
@@ -21,7 +22,10 @@ interface Props {
 // sind. Leere Felder werden beim Senden verworfen statt als leere Optionen
 // mitgeschickt.
 export default function ChatPollCreateModal({ convId, onClose, onCreated }: Props) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
   const [question, setQuestion] = useState('')
   const [options, setOptions] = useState<string[]>(['', ''])
   const [allowMultiple, setAllowMultiple] = useState(false)
@@ -76,11 +80,15 @@ export default function ChatPollCreateModal({ convId, onClose, onCreated }: Prop
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h2 className="text-lg font-bold text-brand-text">Umfrage erstellen</h2>
+          <h2 id={titleId} className="text-lg font-bold text-brand-text">Umfrage erstellen</h2>
           <button
             onClick={onClose}
             aria-label="Schließen"

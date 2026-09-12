@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 import { errorStatus } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import VenuePicker from './VenuePicker'
 import RsvpDefaultsEditor, { type RsvpDefault } from './RsvpDefaultsEditor'
 import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
@@ -88,7 +89,10 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   const [deleteReason, setDeleteReason] = useState('')
   const [deleteSilent, setDeleteSilent] = useState(false)
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(onClose)
+  useDialogA11y(dialogRef, true)
 
   useEffect(() => {
     api.get<AvailableTeam[]>('/teams')
@@ -159,9 +163,15 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
 
   return (
     <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">
+          <h2 id={titleId} className="text-lg font-bold text-brand-text">
             {isGeneric ? 'Event bearbeiten' : 'Spieltag bearbeiten'}
           </h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">

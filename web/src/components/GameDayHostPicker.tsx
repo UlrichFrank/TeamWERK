@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { AlertTriangle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { errorData, errorMessage } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
 
@@ -153,15 +154,24 @@ export function GameDayHostPreviewDialog({ preview, targetName, busy, error, onC
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
   useEscapeKey(busy ? null : onCancel)
+  useDialogA11y(dialogRef, true)
   const b = preview.balance
   const destructive = (b?.assignments_lost ?? 0) > 0
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-brand-black/50" onClick={busy ? undefined : onCancel} />
-      <div className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">Ausrichter wechseln?</h2>
+          <h2 id={titleId} className="text-lg font-bold text-brand-text">Ausrichter wechseln?</h2>
           <button onClick={onCancel} disabled={busy} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

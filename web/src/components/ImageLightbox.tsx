@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import AuthImage from './AuthImage'
 
 // Vollbild-Overlay für ein JWT-geschütztes Bild. Klick auf den Hintergrund, der
@@ -19,6 +20,9 @@ export default function ImageLightbox({
   alt?: string
   onClose: () => void
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, true)
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
@@ -29,6 +33,7 @@ export default function ImageLightbox({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={alt ?? 'Bild'}

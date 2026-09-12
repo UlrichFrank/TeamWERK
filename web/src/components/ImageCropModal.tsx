@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { X, ZoomIn } from 'lucide-react'
+import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 const CANVAS_SIZE = 320
@@ -223,12 +224,22 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
     ec.toBlob(blob => { if (blob) onConfirm(blob) }, 'image/jpeg', 0.85)
   }
 
+  const titleId = useId()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  useDialogA11y(dialogRef, !!file)
+
   if (!file) return null
 
   if (loadError) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-        <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4">
+        <div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Bildausschnitt wählen"
+          className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4"
+        >
           <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger mb-4">
             Bild konnte nicht geladen werden.
           </p>
@@ -246,12 +257,16 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full"
         style={{ maxWidth: `${CANVAS_SIZE + 48}px` }}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-brand-text">Bildausschnitt wählen</h2>
+          <h2 id={titleId} className="font-semibold text-brand-text">Bildausschnitt wählen</h2>
           <button onClick={onCancel} className="text-brand-text-muted hover:text-brand-text" aria-label="Schließen">
             <X className="w-5 h-5" />
           </button>
