@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTeamList } from '../lib/teamName'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -92,6 +92,11 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
   const [deleteSaving, setDeleteSaving] = useState(false)
   const [slotDeleteReason, setSlotDeleteReason] = useState('')
   const [slotDeleteSilent, setSlotDeleteSilent] = useState(false)
+  const closeDeleteSlot = () => {
+    setDeleteSlotId(null)
+    setSlotDeleteReason('')
+    setSlotDeleteSilent(false)
+  }
 
   const [showDeleteGame, setShowDeleteGame] = useState(false)
   const [deletingGame, setDeletingGame] = useState(false)
@@ -100,7 +105,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
   useEscapeKey(
     showDeleteGame ? () => setShowDeleteGame(false) :
-    deleteSlotId !== null ? () => setDeleteSlotId(null) :
+    deleteSlotId !== null ? closeDeleteSlot :
     editSlot ? () => setEditSlot(null) :
     showAddSlot ? () => setShowAddSlot(false) :
     onClose
@@ -234,9 +239,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
     try {
       await api.delete(`/duty-slots/${deleteSlotId}`, { data: deletionPayload(slotDeleteReason, slotDeleteSilent) })
       await reloadAfterMutation()
-      setDeleteSlotId(null)
-      setSlotDeleteReason('')
-      setSlotDeleteSilent(false)
+      closeDeleteSlot()
     } finally {
       setDeleteSaving(false)
     }
@@ -462,6 +465,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                   Termin- oder Vorlagen-Änderungen nicht mehr nach.
                 </p>
                 <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setDeleteSlotId(editSlot.id); setEditSlot(null) }}
+                    className="p-2 text-brand-text-muted hover:text-brand-danger hover:bg-brand-danger-light rounded-md transition-colors"
+                    aria-label="Dienst löschen"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                   <button onClick={() => setEditSlot(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                   <button onClick={handleEditSlot} disabled={editSaving}
                     className={`${BTN_PRIMARY} flex-1`}>
@@ -493,7 +504,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 onSilentChange={setSlotDeleteSilent}
               />
               <div className="flex gap-2">
-                <button onClick={() => setDeleteSlotId(null)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
+                <button onClick={closeDeleteSlot} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                 <button onClick={handleDeleteSlot} disabled={deleteSaving}
                   className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-50">
                   {deleteSaving ? 'Löschen…' : 'Löschen'}

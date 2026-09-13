@@ -1,7 +1,12 @@
 import { describe, test, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import DutySlotList, { type BoardSlot } from './DutySlotList'
+
+function LocationDisplay() {
+  const location = useLocation()
+  return <div data-testid="location">{location.pathname}</div>
+}
 
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 1, name: 'Alice', role: 'standard' } }),
@@ -99,5 +104,60 @@ describe('DutySlotList — Anleitung link', () => {
     )
     const link = screen.getByRole('link', { name: 'Anleitung ansehen' })
     expect(() => fireEvent.click(link)).not.toThrow()
+  })
+
+  // Drei-Punkte-Menü (Mobile ActionMenu) trägt seit diesem Change zusätzlich
+  // einen "Anleitung"-Eintrag — Löschen wurde hier entfernt (nur noch über das
+  // Kalender-Modal), "Anleitung" sorgt dafür, dass das Menü weiterhin einen
+  // nützlichen Sprung bietet.
+  test('ActionMenu bietet "Anleitung" und navigiert zur Anleitungsseite', () => {
+    render(
+      <MemoryRouter initialEntries={['/dienste']}>
+        <LocationDisplay />
+        <DutySlotList
+          slots={[baseSlot({ id: 200, has_instruction: true, duty_type_id: 3 })]}
+          isPast={false}
+          canEdit={false}
+          onReload={() => {}}
+        />
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByLabelText('Aktionen'))
+    fireEvent.click(screen.getByRole('button', { name: 'Anleitung' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/dienste/anleitung/3')
+  })
+
+  test('ActionMenu ruft onFocusSlot vor der Navigation auf', () => {
+    const onFocusSlot = vi.fn()
+    render(
+      <MemoryRouter initialEntries={['/dienste']}>
+        <LocationDisplay />
+        <DutySlotList
+          slots={[baseSlot({ id: 201, has_instruction: true, duty_type_id: 3 })]}
+          isPast={false}
+          canEdit={false}
+          onReload={() => {}}
+          onFocusSlot={onFocusSlot}
+        />
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByLabelText('Aktionen'))
+    fireEvent.click(screen.getByRole('button', { name: 'Anleitung' }))
+    expect(onFocusSlot).toHaveBeenCalledWith(201)
+  })
+
+  test('ohne Anleitung fehlt der "Anleitung"-Eintrag im ActionMenu', () => {
+    render(
+      <MemoryRouter>
+        <DutySlotList
+          slots={[baseSlot({ has_instruction: false })]}
+          isPast={false}
+          canEdit={false}
+          onReload={() => {}}
+        />
+      </MemoryRouter>,
+    )
+    fireEvent.click(screen.getByLabelText('Aktionen'))
+    expect(screen.queryByRole('button', { name: 'Anleitung' })).toBeNull()
   })
 })

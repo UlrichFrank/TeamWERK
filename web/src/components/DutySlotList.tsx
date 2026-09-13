@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Trash2, BookOpen } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { BookOpen } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTimeSpan } from '../lib/duration'
 import { useAuth } from '../contexts/AuthContext'
@@ -10,7 +10,6 @@ import { useWindowedList } from '../hooks/useWindowedList'
 import WindowedTableBody from './WindowedTableBody'
 import PersonChip from './PersonChip'
 import ActionMenu from './ActionMenu'
-import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
@@ -44,7 +43,6 @@ interface DutySlotListProps {
   isPast: boolean
   canEdit: boolean
   onReload: () => void
-  onSlotDeleted?: (id: number) => void
   onEdit?: (slotId: number) => void
   proxyChildren?: ProxyChild[]
   hideClaimActions?: boolean
@@ -59,30 +57,26 @@ interface DutySlotListProps {
   onFocusSlot?: (slotId: number) => void
 }
 
-export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotDeleted, onEdit, proxyChildren = [], hideClaimActions = false, onFocusSlot }: DutySlotListProps) {
+export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit, proxyChildren = [], hideClaimActions = false, onFocusSlot }: DutySlotListProps) {
   const { user } = useAuth()
+  const navigate = useNavigate()
   // Windowing der Slot-Zeilen: bei sehr vielen Slots nur sichtbare im DOM.
   // Scroll-Quelle ist die Seite (Duty-Board scrollt als Ganzes).
   const { containerRef: slotContainerRef, start: slotStart, end: slotEnd, padTop: slotPadTop, padBottom: slotPadBottom } =
     useWindowedList({ count: slots.length, estimatedRowHeight: 52, scroll: 'window' })
-  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null)
-  const [deleteReason, setDeleteReason] = useState('')
-  const [deleteSilent, setDeleteSilent] = useState(false)
   const [claimDialog, setClaimDialog] = useState<{ slotId: number; selectedUserId: number | null } | null>(null)
   const [claimLoading, setClaimLoading] = useState(false)
   const [noInstructionOpen, setNoInstructionOpen] = useState(false)
-  // Drei echte modale Dialoge in dieser Liste (dialog-accessibility): je eigener
-  // Ref, damit Fokus-Trap und -Rückgabe pro Dialog greifen.
+  // Zwei echte modale Dialoge in dieser Liste (dialog-accessibility): je eigener
+  // Ref, damit Fokus-Trap und -Rückgabe pro Dialog greifen. Löschen ist bewusst
+  // kein Dialog mehr hier — siehe „Anleitung ins Aktionsmenü" unten.
   const noInstructionRef = useRef<HTMLDivElement>(null)
-  const deleteConfirmRef = useRef<HTMLDivElement>(null)
   const claimDialogRef = useRef<HTMLDivElement>(null)
   useDialogA11y(noInstructionRef, noInstructionOpen)
-  useDialogA11y(deleteConfirmRef, deleteConfirm !== null)
   useDialogA11y(claimDialogRef, claimDialog !== null)
 
   useEscapeKey(
-    deleteConfirm !== null ? () => closeDeleteConfirm()
-      : claimDialog !== null ? () => setClaimDialog(null)
+    claimDialog !== null ? () => setClaimDialog(null)
       : noInstructionOpen ? () => setNoInstructionOpen(false)
       : null,
   )
@@ -118,35 +112,6 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
       onReload()
     } catch {
       alert('Austragen fehlgeschlagen.')
-    }
-  }
-
-  // withReason=false ist der Direktlöschpfad für unbesetzte Slots: dort gibt es
-  // niemanden zu benachrichtigen, also auch keinen Grund zu erfassen.
-  const deleteSlot = async (slotId: number, withReason: boolean) => {
-    try {
-      await api.delete(`/duty-slots/${slotId}`,
-        withReason ? { data: deletionPayload(deleteReason, deleteSilent) } : undefined)
-      onSlotDeleted?.(slotId)
-      onReload()
-    } catch {
-      alert('Löschen fehlgeschlagen.')
-    }
-    closeDeleteConfirm()
-  }
-
-  const closeDeleteConfirm = () => {
-    setDeleteConfirm(null)
-    setDeleteReason('')
-    setDeleteSilent(false)
-  }
-
-  const handleDeleteClick = (slot: BoardSlot) => {
-    const slotsFilled = slot.slots_total - slot.vacancies
-    if (slotsFilled > 0) {
-      setDeleteConfirm(slot.id)
-    } else {
-      deleteSlot(slot.id, false)
     }
   }
 
@@ -240,20 +205,18 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
                         Bearbeiten
                       </button>
                     )}
-                    {canEdit && (
-                      <button onClick={() => handleDeleteClick(s)} className="text-brand-text-subtle hover:text-brand-danger transition-colors p-1" aria-label="Slot löschen">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
                   </div>
-                  {/* Mobile ActionMenu */}
+                  {/* Mobile ActionMenu. Löschen ist hier bewusst kein Eintrag —
+                      Dienste werden ausschließlich über das Kalender-Modal
+                      (Bearbeiten-Dialog) gelöscht, nie versehentlich aus dieser
+                      Liste heraus. */}
                   <div className="sm:hidden">
                     {(() => {
                       const actions = [
                         ...(!hideClaimActions && !s.claimed_by_me && s.vacancies > 0 && !isPast ? [{ label: 'Eintragen', onClick: () => claim(s.id) }] : []),
                         ...(!hideClaimActions && s.claimed_by_me && !isPast ? [{ label: 'Austragen', onClick: () => unclaim(s.id), variant: 'danger' as const }] : []),
                         ...(canEdit && onEdit ? [{ label: 'Bearbeiten', onClick: () => onEdit(s.id) }] : []),
-                        ...(canEdit ? [{ label: 'Löschen', onClick: () => handleDeleteClick(s), variant: 'danger' as const }] : []),
+                        ...(s.has_instruction ? [{ label: 'Anleitung', onClick: () => { onFocusSlot?.(s.id); navigate(`/dienste/anleitung/${s.duty_type_id}`) } }] : []),
                       ]
                       return actions.length > 0 ? <ActionMenu actions={actions} /> : null
                     })()}
@@ -284,44 +247,6 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onSlotD
                 className="text-sm px-4 py-2 rounded bg-brand-yellow text-brand-black font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
               >
                 OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {deleteConfirm !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div
-            ref={deleteConfirmRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="duty-delete-confirm-title"
-            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-sm w-full mx-4"
-          >
-            <h2 id="duty-delete-confirm-title" className="text-lg font-bold mb-2 text-brand-text">Slot löschen?</h2>
-            <p className="text-sm text-brand-text-muted mb-4">
-              Dieser Slot hat bereits Zuteilungen. Alle Zuteilungen werden ebenfalls gelöscht.
-            </p>
-            <DeleteReasonFields
-              reason={deleteReason}
-              onReasonChange={setDeleteReason}
-              silent={deleteSilent}
-              onSilentChange={setDeleteSilent}
-              idPrefix="duty-slot-delete"
-            />
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={closeDeleteConfirm}
-                className="text-sm px-4 py-2 rounded border border-brand-border text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
-              >
-                Abbrechen
-              </button>
-              <button
-                onClick={() => deleteSlot(deleteConfirm, true)}
-                className="text-sm px-4 py-2 rounded bg-brand-danger text-white font-medium hover:bg-brand-danger/90 transition-colors"
-              >
-                Löschen
               </button>
             </div>
           </div>

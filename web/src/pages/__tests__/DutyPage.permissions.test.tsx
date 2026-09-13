@@ -1,11 +1,10 @@
 /**
- * DutyPage Slot-Verwaltung: canManageDuties = manage_duties-Capability
- * (admin || vorstand || trainer || sportliche_leitung).
- * Steuert den Löschen-Button (Trash2-Icon) auf Duty-Slots.
+ * Dienst-Slots werden ausschließlich über das Kalender-Modal (SpieltagDetailModal,
+ * "Dienst bearbeiten"-Dialog) gelöscht — /dienste bietet absichtlich KEINEN
+ * Löschen-Button mehr, damit hier nicht versehentlich gelöscht werden kann
+ * (unabhängig von der manage_duties-Capability). DutySlotList selbst trägt
+ * seit diesem Change keinen Löschpfad mehr.
  * Quelle: openspec/specs/me-capabilities/spec.md (Capability-Vokabular)
- *
- * Das frühere Designloch (vorstand sah keine Slot-Mutations) ist behoben:
- * vorstand ist jetzt — wie im Backend-Gate der duty-slots-Routen — eingeschlossen.
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
@@ -40,19 +39,8 @@ const DUTY_BOARD_FIXTURE = [
   },
 ]
 
-// manage_duties = admin || vorstand || trainer || sportliche_leitung (inkl. Elternteil-Varianten)
-const CAN_MANAGE_DUTIES_IDS = [
-  'admin',
-  'vorstand',
-  'vorstand_elternteil',
-  'trainer',
-  'trainer_elternteil',
-  'sportliche_leitung',
-  'sportliche_leitung_elternteil',
-]
-
-describe('DutyPage — manage_duties-Gate: Slot-Löschen-Button', () => {
-  test.each(PERSONAS)('Persona $id', async (persona) => {
+describe('DutyPage — kein Löschen-Button (Löschen läuft nur über den Kalender)', () => {
+  test.each(PERSONAS)('Persona $id sieht keinen Slot-Löschen-Button', async (persona) => {
     renderAsPersona(<DutyPage />, persona.id, {
       mocks: [
         { url: /duty-board/, data: DUTY_BOARD_FIXTURE },
@@ -61,21 +49,9 @@ describe('DutyPage — manage_duties-Gate: Slot-Löschen-Button', () => {
       ],
     })
 
-    // Wait for slot data to load (duty_type renders as table cell text)
     await screen.findByText('Einlass')
 
-    // "Slot löschen" aria-label ist nur gerendert wenn canEdit=true
-    const deleteBtn = screen.queryByLabelText('Slot löschen')
-    if (CAN_MANAGE_DUTIES_IDS.includes(persona.id)) {
-      expect(
-        deleteBtn,
-        `Persona ${persona.id} (manage_duties): Löschen-Button muss vorhanden sein`,
-      ).not.toBeNull()
-    } else {
-      expect(
-        deleteBtn,
-        `Persona ${persona.id} (kein manage_duties): kein Löschen-Button erwartet`,
-      ).toBeNull()
-    }
+    expect(screen.queryByLabelText('Slot löschen')).toBeNull()
+    expect(screen.queryByText('Löschen')).toBeNull()
   })
 })
