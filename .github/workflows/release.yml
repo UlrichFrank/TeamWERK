@@ -141,6 +141,102 @@ jobs:
           BODY: ${{ steps.changelog.outputs.body }}
         run: gh release create "$VERSION" --title "$VERSION" --notes "$BODY"
 
+  # Offline-Encoding-Tool (tools/video-encoder) an JEDES Release hängen, nicht
+  # nur an solche mit Tool-Änderungen: die Download-Links auf /videos zeigen auf
+  # releases/latest/download/… (web/src/lib/videoEncoderDownloads.ts) und
+  # liefen sonst nach dem nächsten Server-Release ins Leere. Asset-Namen dort
+  # und hier gleich halten.
+  #
+  # Nativ pro Plattform statt Cross-Compile: Fyne braucht CGo gegen das
+  # jeweilige Fenstersystem (design.md, Entscheidung 3). Der macOS-Runner baut
+  # beide Architekturen (clang kann das ohne Zusatz-Toolchain) und fügt sie per
+  # lipo zu einer Universal-Binary zusammen; jede Hälfte bettet ihr eigenes
+  # ffmpeg ein.
+  video-encoder:
+    needs: tag
+    if: needs.tag.outputs.created == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: tools/video-encoder
+    env:
+      VERSION: ${{ needs.tag.outputs.version }}
+      FYNE_CLI: fyne.io/tools/cmd/fyne@v1.7.2
+      APP_NAME: TeamWERK Video-Encoder
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.tag.outputs.version }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: tools/video-encoder/go.mod
+          cache-dependency-path: tools/video-encoder/go.sum
+
+      - name: Tests (ohne GUI)
+        run: go test ./internal/...
+
+      - name: C-Compiler für CGo sicherstellen
+        if: matrix.platform == 'windows'
+        run: |
+          if command -v gcc >/dev/null 2>&1; then gcc --version | head -n1; exit 0; fi
+          choco install mingw --no-progress -y
+          echo 'C:\ProgramData\mingw64\mingw64\bin' >> "$GITHUB_PATH"
+
+      - name: Windows bauen
+        if: matrix.platform == 'windows'
+        run: |
+          set -euo pipefail
+          scripts/fetch-ffmpeg.sh win32-x64
+          # --release: GUI-Subsystem (kein Konsolenfenster), Icon + Version aus FyneApp.toml/Flags.
+          go run "$FYNE_CLI" package --os windows --release --name "$APP_NAME" \
+            --app-version "${VERSION#v}" --app-build "${{ github.run_number }}"
+          mkdir -p dist/licenses
+          mv "$APP_NAME.exe" dist/teamwerk-video-encoder-windows-amd64.exe
+          cp internal/ffmpegbin/bin/ffmpeg.LICENSE internal/ffmpegbin/bin/ffmpeg.README internal/ffmpegbin/bin/ffmpeg.SOURCE dist/licenses/
+          (cd dist/licenses && 7z a -tzip ../teamwerk-video-encoder-ffmpeg-licenses-windows.zip . >/dev/null)
+          rm -rf dist/licenses
+
+      - name: macOS bauen (Universal)
+        if: matrix.platform == 'macos'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '12.0'
+        run: |
+          set -euo pipefail
+          mkdir -p build dist/licenses
+          for arch in arm64 amd64; do
+            case "$arch" in arm64) ff=darwin-arm64 ;; amd64) ff=darwin-x64 ;; esac
+            scripts/fetch-ffmpeg.sh "$ff"
+            CGO_ENABLED=1 GOOS=darwin GOARCH="$arch" go build -trimpath \
+              -ldflags "-s -w -X main.version=${VERSION#v}" -o "build/encoder-$arch" .
+            mkdir -p "dist/licenses/$ff"
+            cp internal/ffmpegbin/bin/ffmpeg.LICENSE internal/ffmpegbin/bin/ffmpeg.README internal/ffmpegbin/bin/ffmpeg.SOURCE "dist/licenses/$ff/"
+          done
+          lipo -create -output build/encoder build/encoder-arm64 build/encoder-amd64
+          go run "$FYNE_CLI" package --os darwin --exe build/encoder --name "$APP_NAME" \
+            --app-version "${VERSION#v}" --app-build "${{ github.run_number }}"
+          # DMG mit App + Lizenztexten; Lizenzen zusätzlich als eigenes Asset.
+          mkdir -p build/dmg
+          mv "$APP_NAME.app" build/dmg/
+          cp -R dist/licenses "build/dmg/ffmpeg-Lizenzen"
+          hdiutil create -volname "$APP_NAME" -srcfolder build/dmg -ov -format UDZO dist/teamwerk-video-encoder-macos.dmg
+          (cd dist/licenses && zip -qr ../teamwerk-video-encoder-ffmpeg-licenses-macos.zip .)
+          rm -rf dist/licenses
+
+      - name: Assets ans Release hängen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$VERSION" dist/* --clobber
+
   deploy:
     needs: tag
     if: github.event_name == 'workflow_dispatch' && inputs.deploy == true && needs.tag.outputs.created == 'true'

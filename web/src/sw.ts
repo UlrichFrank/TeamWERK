@@ -149,8 +149,8 @@ self.addEventListener('message', (event) => {
 // design.md §3): `?? '/'` greift nur bei null/undefined, NICHT beim leeren String —
 // ein naives `navigate('')` löst relativ gegen die Client-URL auf und lädt die
 // gerade offene Seite neu. Die Zielauflösung steckt deshalb in einer exportierten,
-// reinen Funktion, testbar ohne Service-Worker-Laufzeit (analog zur exportierten
-// Factory in VideoUploadPage.tsx).
+// reinen Funktion, testbar ohne Service-Worker-Laufzeit (analog zu `nextBackoffMs`
+// in hooks/useEventStream.ts).
 export function resolveClickTarget(data: unknown): { navigate: boolean; url: string } {
   if (typeof data !== 'object' || data === null) return { navigate: false, url: '/' }
   const url = (data as { url?: unknown }).url

@@ -50,6 +50,15 @@ function fmtGameOption(g: Game): string {
   return `${datePart} · ${g.opponent || 'Spiel'}`
 }
 
+// Bekannte failure_reason-Codes des Workers in Klartext; alles andere (ffmpeg-
+// Fehlerzeilen) bleibt roh stehen, weil es für die Analyse gebraucht wird.
+function failureReasonText(reason: string): string {
+  if (reason === 'unsupported_input_format') {
+    return 'Das Videoformat wird nicht unterstützt. Bitte das Video mit dem TeamWERK-Video-Encoder hochladen (Download auf der Videos-Seite).'
+  }
+  return reason
+}
+
 function VideoPlayer({ id }: { id: number }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState('')
@@ -60,7 +69,8 @@ function VideoPlayer({ id }: { id: number }) {
 
   useEffect(() => {
     let cancelled = false
-    // hls.js wird dynamisch geladen, damit es nur auf der Detailseite ins Bundle kommt.
+    // hls.js wird dynamisch geladen, damit es nur auf der Detailseite ins Bundle
+    // kommt — und nur dort, wo der Browser kein natives HLS kann.
     let destroy: (() => void) | undefined
 
     async function setup() {
@@ -75,9 +85,6 @@ function VideoPlayer({ id }: { id: number }) {
       const video = videoRef.current
       if (!video || cancelled) return
 
-      const { default: Hls } = await import('hls.js')
-      if (cancelled) return
-
       // StreamTokenMiddleware verlangt ?st=<token> auf der Master-Playlist und
       // jeder Rendition-Anfrage. master_url kommt vom Backend ohne Query —
       // Token clientseitig anhängen; ServeMaster setzt ihn auf die referenzierten
@@ -88,6 +95,24 @@ function VideoPlayer({ id }: { id: number }) {
       // Absolute URL für Cast — der Receiver muss den Origin kennen. Backend
       // liefert `/api/videos/…` (Pfad); CastButton kombiniert mit window.location.
       setMasterURL(new URL(url, window.location.origin).toString())
+
+      // Natives HLS ZUERST prüfen: auf Safari/WebKit (macOS + iOS) liefert auch
+      // Hls.isSupported() true (MediaSource ist vorhanden). Eine MSE-gepufferte
+      // Wiedergabe kann AirPlay aber nicht als Ganzes ans Apple TV übergeben —
+      // dort kam nur der Ton an. hls.js ist deshalb nur noch der Fallback für
+      // Browser ohne natives HLS.
+      if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        const onError = () => {
+          if (!cancelled) setError('Das Video konnte nicht abgespielt werden.')
+        }
+        video.addEventListener('error', onError)
+        video.src = masterURL
+        destroy = () => video.removeEventListener('error', onError)
+        return
+      }
+
+      const { default: Hls } = await import('hls.js')
+      if (cancelled) return
 
       if (Hls.isSupported()) {
         // Buffer großzügiger als Default (30 s vorwärts): 60 s Vorlauf verkraftet
@@ -133,9 +158,6 @@ function VideoPlayer({ id }: { id: number }) {
           }
         })
         destroy = () => hls.destroy()
-      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Safari / iOS: natives HLS.
-        video.src = masterURL
       } else {
         if (!cancelled) setUnsupported(true)
       }
@@ -345,7 +367,7 @@ export default function VideoDetailPage() {
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
             <div>
               Die Verarbeitung ist fehlgeschlagen.
-              {video.failure_reason ? <div className="mt-1 text-brand-text-muted">{video.failure_reason}</div> : null}
+              {video.failure_reason ? <div className="mt-1 text-brand-text-muted">{failureReasonText(video.failure_reason)}</div> : null}
             </div>
           </div>
         ) : (

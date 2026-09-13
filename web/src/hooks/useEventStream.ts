@@ -33,7 +33,7 @@ const READY_STATE_CLOSED = 2
  * die Tests verwackeln.
  *
  * Exportiert, damit die Folge ohne Render und ohne Fake-Timer prüfbar ist
- * (dasselbe Muster wie `createThrottledProgress` in VideoUploadPage.tsx).
+ * (dasselbe Muster wie `resolveClickTarget` in sw.ts).
  */
 export function nextBackoffMs(attempt: number): number {
   if (attempt <= 0) return BASE_MS

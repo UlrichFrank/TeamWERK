@@ -1,0 +1,16 @@
+# Die Root-.gitignore schließt jedes bin/ aus. Dieses hier muss mit seiner
+# README.md eingecheckt sein — ohne sie findet `//go:embed bin` in einem
+# frischen Checkout (CI, Release) nichts und der Build bricht ab.
+!/internal/ffmpegbin/bin/
+
+# Vom Release-Build abgelegt (bis 30 MB je Plattform) — nie einchecken,
+# siehe internal/ffmpegbin/bin/README.md.
+/internal/ffmpegbin/bin/ffmpeg.*
+
+# Build-Artefakte
+/build/
+/dist/
+/teamwerk-video-encoder*
+/*.app
+/*.dmg
+/*.exe

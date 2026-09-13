@@ -78,6 +78,31 @@ jobs:
 
       - run: pnpm -C web lint
 
+  # Offline-Encoding-Tool (tools/video-encoder): eigenes Go-Modul, von `go test ./...`
+  # im gate nicht erfasst. Getestet werden nur die internal/-Pakete — reines Go, ohne
+  # Fyne/CGo/Fenstersystem. ffmpeg aus apt, damit die Integrationstests (Zielformat,
+  # Keyframes, Profil/Level) hier wirklich laufen statt zu skippen.
+  video-encoder:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/video-encoder
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: tools/video-encoder/go.mod
+          cache-dependency-path: tools/video-encoder/go.sum
+
+      # Google-Chrome-apt-Quelle wie im gate-Job vorher entfernen (Hash-Mismatch-Risiko).
+      - run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome*
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - run: go vet ./internal/...
+      - run: go test ./internal/...
+
   # Läuft PARALLEL zu gate (kein needs). Eigener Job statt Schritt im Gate: die Datenbanken
   # hinter govulncheck/pnpm audit sind extern (nicht dieses Repo) und können jederzeit einen
   # neuen Alert auf unveränderten Code ziehen — das soll sichtbar rot werden, darf aber
