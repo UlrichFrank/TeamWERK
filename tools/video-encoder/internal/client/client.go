@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,6 +63,10 @@ type Client struct {
 	chunkSize   int64
 	retryDelays []time.Duration
 	sleep       func(ctx context.Context, d time.Duration) error
+
+	// now ist für Tests injizierbar (Default time.Now) — bestimmt, welche Spiele
+	// in Games() als "vergangen" gelten.
+	now func() time.Time
 }
 
 // New baut einen Client für baseURL (z. B. https://teamwerk.team-stuttgart.org).
@@ -89,6 +94,7 @@ func New(baseURL string, hc *http.Client) (*Client, error) {
 		retryDelays: []time.Duration{time.Second, 3 * time.Second, 5 * time.Second, 10 * time.Second,
 			20 * time.Second, 30 * time.Second, 60 * time.Second, 60 * time.Second, 60 * time.Second, 60 * time.Second},
 		sleep: ctxSleep,
+		now:   time.Now,
 	}, nil
 }
 
@@ -317,10 +323,7 @@ type Game struct {
 
 // Label bildet die Auswahl-Beschriftung „DD.MM.YYYY · Gegner" (wie im Web).
 func (g Game) Label() string {
-	d := g.Date
-	if len(d) >= 10 {
-		d = d[:10] // SQLite-DATE kommt als ISO-Timestamp
-	}
+	d := dateOnly(g.Date)
 	if p := strings.SplitN(d, "-", 3); len(p) == 3 {
 		d = p[2] + "." + p[1] + "." + p[0]
 	}
@@ -331,8 +334,21 @@ func (g Game) Label() string {
 	return d + " · " + opp
 }
 
-// Games liefert die Spiele der Saison, an denen teamID beteiligt ist. Die
-// Liste ist serverseitig auf 200 Einträge gedeckelt (httpx.Paging).
+// dateOnly truncated einen SQLite-DATE-Wert von seiner ISO-Timestamp-Form
+// ("2026-03-08T00:00:00Z") auf "2026-03-08" — Vergleichs- und Sortierschlüssel
+// bleiben so lexikographisch korrekt (siehe Gotcha „SQLite DATE-Felder").
+func dateOnly(s string) string {
+	if len(s) >= 10 {
+		return s[:10]
+	}
+	return s
+}
+
+// Games liefert die BEREITS VERGANGENEN Spiele der Saison (Datum ≤ heute, in
+// absteigender Reihenfolge — das jüngste zuerst), an denen teamID beteiligt
+// ist: ein Upload gehört immer zu einem schon gespielten Spiel, ein
+// zukünftiges Spiel in der Auswahl wäre nur Rauschen. Die Liste ist
+// serverseitig auf 200 Einträge gedeckelt (httpx.Paging).
 func (c *Client) Games(ctx context.Context, seasonID, teamID int) ([]Game, error) {
 	var page struct {
 		Items []Game `json:"items"`
@@ -341,8 +357,12 @@ func (c *Client) Games(ctx context.Context, seasonID, teamID int) ([]Game, error
 	if err := c.getJSON(ctx, "Spiele laden", path, &page); err != nil {
 		return nil, err
 	}
+	today := c.now().Format("2006-01-02")
 	var out []Game
 	for _, g := range page.Items {
+		if dateOnly(g.Date) > today {
+			continue
+		}
 		for _, t := range g.Teams {
 			if t.ID == teamID {
 				out = append(out, g)
@@ -350,6 +370,7 @@ func (c *Client) Games(ctx context.Context, seasonID, teamID int) ([]Game, error
 			}
 		}
 	}
+	sort.Slice(out, func(i, j int) bool { return dateOnly(out[i].Date) > dateOnly(out[j].Date) })
 	return out, nil
 }
 

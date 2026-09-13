@@ -24,7 +24,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/tools/video-encoder/internal/progress"
 )
 
-const noGame = "Kein Spiel zuordnen"
+const noGame = "Freier Titel"
 
 var videoExtensions = []string{".mp4", ".mov", ".m4v", ".mkv", ".avi", ".mts", ".m2ts", ".mpg", ".mpeg", ".wmv", ".webm", ".3gp"}
 
@@ -115,7 +115,7 @@ func (u *ui) build() fyne.CanvasObject {
 	u.descEntry = widget.NewMultiLineEntry()
 	u.descEntry.SetPlaceHolder("optional")
 	u.descEntry.SetMinRowsVisible(3)
-	hint := widget.NewLabel("Titel oder Spiel angeben — bei einem Spiel ohne Titel bildet TeamWERK ihn aus Datum und Gegner.")
+	hint := widget.NewLabel("Ein bereits gespieltes Spiel aus der Liste wählen (jüngstes zuerst) oder „Freier Titel“ lassen und unten einen Titel angeben. Bei einem Spiel ohne eigenen Titel bildet TeamWERK ihn aus Datum und Gegner.")
 	hint.Wrapping = fyne.TextWrapWord
 	hint.Importance = widget.LowImportance
 	form := widget.NewForm(
