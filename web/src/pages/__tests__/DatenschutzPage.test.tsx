@@ -56,7 +56,7 @@ describe('DatenschutzPage', () => {
         <MemoryRouter><DatenschutzPage /></MemoryRouter>
       </AuthContext.Provider>,
     )
-    expect(screen.getByText(/Kinder-Accounts/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/Kinder-Accounts/i).length).toBeGreaterThan(0)
   })
 
   test('Route /datenschutz ist ohne Auth erreichbar (kein Redirect auf /login)', () => {
