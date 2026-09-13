@@ -11,7 +11,7 @@ function LocationDisplay() {
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 1, name: 'Alice', role: 'standard' } }),
 }))
-vi.mock('../lib/api', () => ({ api: { post: vi.fn(), delete: vi.fn() } }))
+vi.mock('../lib/api', () => ({ api: { post: vi.fn(), delete: vi.fn(), get: vi.fn().mockResolvedValue({ data: [] }), put: vi.fn() } }))
 
 function baseSlot(overrides: Partial<BoardSlot> = {}): BoardSlot {
   return {
@@ -25,6 +25,7 @@ function baseSlot(overrides: Partial<BoardSlot> = {}): BoardSlot {
     vacancies: 1,
     claimed_by_me: false,
     assignees: [],
+    comment_count: 0,
     ...overrides,
   }
 }
@@ -122,8 +123,11 @@ describe('DutySlotList — Anleitung link', () => {
         />
       </MemoryRouter>,
     )
-    fireEvent.click(screen.getByLabelText('Aktionen'))
-    fireEvent.click(screen.getByRole('button', { name: 'Anleitung' }))
+    // Seit "⋮-Menü auch Desktop" (dienst-kommentare) existieren zwei ActionMenu-
+    // Instanzen im DOM (Desktop `hidden sm:flex` + Mobile `sm:hidden`, jsdom wertet
+    // keine Media Queries aus) — beide tragen denselben "Anleitung"-Eintrag.
+    fireEvent.click(screen.getAllByLabelText('Aktionen')[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Anleitung' })[0])
     expect(screen.getByTestId('location')).toHaveTextContent('/dienste/anleitung/3')
   })
 
@@ -141,8 +145,8 @@ describe('DutySlotList — Anleitung link', () => {
         />
       </MemoryRouter>,
     )
-    fireEvent.click(screen.getByLabelText('Aktionen'))
-    fireEvent.click(screen.getByRole('button', { name: 'Anleitung' }))
+    fireEvent.click(screen.getAllByLabelText('Aktionen')[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Anleitung' })[0])
     expect(onFocusSlot).toHaveBeenCalledWith(201)
   })
 

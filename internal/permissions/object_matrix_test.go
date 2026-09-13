@@ -99,6 +99,7 @@ var openByDesign = map[string]string{
 	"POST /api/duty-board/{slotId}/claim":                "Dienstbörse ist vereinsweit offen — jeder Eingeloggte darf jeden freien Slot übernehmen; das ist der Zweck der Börse, kein Objektrecht.",
 	"GET /api/duty-types/{id}/instruction":               "Dienst-Anleitung ist bewusst für alle Eingeloggten lesbar (das Board verlinkt sie); der Diensttyp ist Vereinsstammdatum ohne Personenbezug.",
 	"GET /api/duty-slots/{id}/assignments":               "Die Dienstbörse zeigt die Belegung eines Slots allen Eingeloggten — sonst wäre nicht erkennbar, ob noch Plätze frei sind.",
+	"GET /api/duty-slots/{id}/comments":                  "Kommentare sind wie die Belegung selbst vereinsweit lesbar (dienst-kommentare) — wer den Slot im Board sieht, sieht auch, was andere zur eigenen Zuteilung notiert haben; universelles Leserecht laut Spec, kein Objektrecht.",
 	"GET /api/ausrichter/{id}/usage":                     "Ausrichter sind Vereinsstammdaten ohne Personenbezug; die Verwendungsliste braucht der Termin-Wizard für alle Eingeloggten.",
 	"GET /api/game-days/{date}/host":                     "Der Ausrichter eines Spieltags ist Vereinsstammdatum; {date} ist kein Objekt-Identifier, sondern ein Datum.",
 	"OPTIONS /api/videos/{id}/hls/master.m3u8":           "CORS-Preflight läuft per Definition ohne Auth (HLSPreflight); die Auslieferung selbst hängt am ?st=-Stream-Token.",
@@ -432,6 +433,20 @@ func objectFixtures() map[string]objFixture {
 			return p("id", assignID)
 		},
 		body:         map[string]any{"amount": 10},
+		noOwnerProbe: true,
+	})
+	add("PUT /api/duty-assignments/{id}/comment", objFixture{
+		params: func(w *objWorld) map[string]string {
+			_, assignID := w.newDutyAssignment()
+			return p("id", assignID)
+		},
+		noOwnerProbe: true,
+	})
+	add("DELETE /api/duty-assignments/{id}/comment", objFixture{
+		params: func(w *objWorld) map[string]string {
+			_, assignID := w.newDutyAssignment()
+			return p("id", assignID)
+		},
 		noOwnerProbe: true,
 	})
 	add("PUT /api/duty-slots/{id}", objFixture{

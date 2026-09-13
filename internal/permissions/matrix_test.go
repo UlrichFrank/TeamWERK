@@ -407,6 +407,11 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/duty-accounts", expected: exAuth},
 	{method: "GET", path: "/api/duty-slots", expected: exAuth},
 	{method: "GET", path: "/api/duty-slots/{id}/assignments", expected: exAuth},
+	// Dienst-Kommentare (dienst-kommentare): Lesen universell, Schreiben/Löschen
+	// prüft der Handler gegen den Zuteilungs-Inhaber (kein Rollen-Gate).
+	{method: "GET", path: "/api/duty-slots/{id}/comments", expected: exAuth},
+	{method: "PUT", path: "/api/duty-assignments/{id}/comment", expected: exAuth},
+	{method: "DELETE", path: "/api/duty-assignments/{id}/comment", expected: exAuth},
 	// Bewirtungsrotation: Spiele-zu-Kuchen-Verhältnis, lesbar für alle Eingeloggten.
 	{method: "GET", path: "/api/settings/bewirtung", expected: exAuth},
 	// Ausrichter-Liste: lesbar für alle Eingeloggten (Kalender/Termin-Wizard); Mutation ist exVorstand (unten).

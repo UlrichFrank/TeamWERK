@@ -300,6 +300,12 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/duty-accounts", h.Duties.Accounts)
 		r.Get("/api/duty-slots", h.Duties.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", h.Duties.ListAssignments)
+		// Dienst-Kommentare (dienst-kommentare): Schreiben/Löschen prüft der
+		// Handler selbst gegen den Zuteilungs-Inhaber (kein Admin-Bypass),
+		// Lesen ist für jeden Eingeloggten mit Board-Zugriff offen.
+		r.Get("/api/duty-slots/{id}/comments", h.Duties.ListSlotComments)
+		r.Put("/api/duty-assignments/{id}/comment", h.Duties.SetAssignmentComment)
+		r.Delete("/api/duty-assignments/{id}/comment", h.Duties.DeleteAssignmentComment)
 		// Bewirtungsrotation: Spiele-zu-Kuchen-Verhältnis, lesbar für alle
 		// Eingeloggten (PUT ist Vorstand/Admin, siehe unten). Settings kann
 		// in Tests nil sein.

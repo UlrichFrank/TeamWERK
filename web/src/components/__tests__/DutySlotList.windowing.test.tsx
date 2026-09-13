@@ -6,7 +6,7 @@ import DutySlotList, { type BoardSlot } from '../DutySlotList'
 vi.mock('../../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 1, name: 'Alice', role: 'standard' } }),
 }))
-vi.mock('../../lib/api', () => ({ api: { post: vi.fn(), delete: vi.fn() } }))
+vi.mock('../../lib/api', () => ({ api: { post: vi.fn(), delete: vi.fn(), get: vi.fn().mockResolvedValue({ data: [] }), put: vi.fn() } }))
 
 // Fenster-Scroll-Modus: die Position des Listen-Wrappers relativ zum Viewport
 // steuert das Windowing. Wir simulieren einen 300px-Viewport und einen
@@ -40,6 +40,7 @@ function makeSlots(n: number): BoardSlot[] {
     vacancies: 0,
     claimed_by_me: false,
     assignees: [],
+    comment_count: 0,
   }))
 }
 

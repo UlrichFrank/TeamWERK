@@ -55,6 +55,27 @@ func (h *Handler) broadcastDutyTeams(ctx context.Context, teamIDs []int, extraUs
 	h.hub.BroadcastToUsers(ids, "duties")
 }
 
+// canActForUser reports whether callerID may act on behalf of targetUserID:
+// either they are the same user, or callerID is a parent (family_links) of a
+// non-login-capable proxy child targetUserID. Shared by Claim and the
+// duty-assignment-comments endpoints — "wer darf für wen handeln" soll nicht
+// zweimal unterschiedlich formuliert werden (design.md).
+func (h *Handler) canActForUser(ctx context.Context, callerID, targetUserID int) bool {
+	if callerID == targetUserID {
+		return true
+	}
+	var allowed bool
+	h.db.QueryRowContext(ctx,
+		`SELECT COUNT(*)>0
+		 FROM family_links fl
+		 JOIN members m ON m.id = fl.member_id
+		 JOIN users u ON u.id = m.user_id
+		 WHERE fl.parent_user_id = ? AND u.id = ? AND u.can_login = 0`,
+		callerID, targetUserID,
+	).Scan(&allowed)
+	return allowed
+}
+
 // placeholders returns "?,?,...,?" with n placeholders for an IN clause.
 func placeholders(n int) string {
 	if n <= 0 {
@@ -1019,6 +1040,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    dt.name,
 		    COALESCE(ds.role_desc, ''),
 		    CASE WHEN da.id IS NOT NULL THEN 1 ELSE 0 END,
+		    COALESCE(da.id, 0),
 		    ds.game_id,
 		    COALESCE(g.opponent, ''),
 		    COALESCE(g.event_type, ''),
@@ -1031,7 +1053,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    COALESCE(ds.event_name, ''),
 		    dt.id AS duty_type_id,
 		    CASE WHEN COALESCE(dt.instruction_md, '') != '' THEN 1 ELSE 0 END AS has_instruction,
-		    ds.hours_value
+		    ds.hours_value,
+		    (SELECT COUNT(*) FROM duty_assignment_comments dac
+		       JOIN duty_assignments da2 ON da2.id = dac.assignment_id
+		      WHERE da2.duty_slot_id = ds.id) AS comment_count
 		 FROM duty_slots ds
 		 JOIN duty_types dt ON dt.id = ds.duty_type_id
 		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
@@ -1065,11 +1090,13 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		SlotsTotal     int                 `json:"slots_total"`
 		Vacancies      int                 `json:"vacancies"`
 		ClaimedByMe    bool                `json:"claimed_by_me"`
+		MyAssignmentID int                 `json:"my_assignment_id,omitempty"`
 		RoleDesc       string              `json:"role_desc,omitempty"`
 		Audiences      []string            `json:"audiences,omitempty"`
 		Assignees      []publicAssignee    `json:"assignees"`
 		Can            policy.DutyCanFlags `json:"can"`
 		HoursValue     float64             `json:"hours_value"`
+		CommentCount   int                 `json:"comment_count"`
 	}
 	type boardGroup struct {
 		GameID    *int     `json:"game_id"`
@@ -1091,14 +1118,16 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	groupMap := map[string]*boardGroup{}
 
 	for rows.Next() {
-		var slotID, slotsTotal, slotsFilled, claimedInt, teamID, isPastInt, dutyTypeID, hasInstrInt int
+		var slotID, slotsTotal, slotsFilled, claimedInt, myAssignmentID, teamID, isPastInt, dutyTypeID, hasInstrInt int
 		var eventDate, eventTime, dutyType, roleDesc, opponent, eventType, gameTime, venue, teamName, eventName string
 		var gameID sql.NullInt64
 		var audiences sql.NullString
 		var hoursValue float64
+		var commentCount int
 		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
-			&dutyType, &roleDesc, &claimedInt, &gameID, &opponent, &eventType, &gameTime, &venue,
-			&teamID, &teamName, &isPastInt, &audiences, &eventName, &dutyTypeID, &hasInstrInt, &hoursValue)
+			&dutyType, &roleDesc, &claimedInt, &myAssignmentID, &gameID, &opponent, &eventType, &gameTime, &venue,
+			&teamID, &teamName, &isPastInt, &audiences, &eventName, &dutyTypeID, &hasInstrInt, &hoursValue,
+			&commentCount)
 
 		var key string
 		if gameID.Valid {
@@ -1148,11 +1177,13 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			SlotsTotal:     slotsTotal,
 			Vacancies:      slotsTotal - slotsFilled,
 			ClaimedByMe:    claimedInt == 1,
+			MyAssignmentID: myAssignmentID,
 			RoleDesc:       roleDesc,
 			Audiences:      audiencesFromDB(audiences),
 			Assignees:      []publicAssignee{},
 			Can:            boardDutyCan,
 			HoursValue:     hoursValue,
+			CommentCount:   commentCount,
 		})
 	}
 
@@ -1300,21 +1331,9 @@ func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 		targetUserID = *req.UserID
 	}
 
-	if targetUserID != claims.UserID {
-		// Verify the target is a proxy child linked to the logged-in user
-		var allowed bool
-		h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*)>0
-			 FROM family_links fl
-			 JOIN members m ON m.id = fl.member_id
-			 JOIN users u ON u.id = m.user_id
-			 WHERE fl.parent_user_id = ? AND u.id = ? AND u.can_login = 0`,
-			claims.UserID, targetUserID,
-		).Scan(&allowed)
-		if !allowed {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+	if !h.canActForUser(r.Context(), claims.UserID, targetUserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
 	}
 
 	// Atomically increment slots_filled only if capacity remains. This prevents
@@ -1372,6 +1391,135 @@ func (h *Handler) ListAssignments(w http.ResponseWriter, r *http.Request) {
 		var a assignment
 		rows.Scan(&a.ID, &a.UserName, &a.Status, &a.CashAmount)
 		result = append(result, a)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// maxAssignmentCommentBytes deckelt den Kommentartext (dienst-kommentare) —
+// großzügiger als z.B. SEPA-Ustrd (140), da kein XML-Constraint dahinter
+// steht, aber kurz genug, um ein Koordinations-Freitextfeld zu bleiben statt
+// eines zweiten Chats.
+const maxAssignmentCommentBytes = 280
+
+// assignmentOwner liefert duty_slot_id und user_id einer duty_assignments-
+// Zeile, oder ok=false wenn sie nicht existiert.
+func (h *Handler) assignmentOwner(ctx context.Context, assignmentID string) (slotID, userID int, ok bool) {
+	err := h.db.QueryRowContext(ctx,
+		`SELECT duty_slot_id, user_id FROM duty_assignments WHERE id=?`, assignmentID,
+	).Scan(&slotID, &userID)
+	return slotID, userID, err == nil
+}
+
+// PUT /api/duty-assignments/:id/comment
+// Upsert des eigenen Kommentars zur eigenen Zuteilung (oder der eines
+// Proxy-Kindes). Kein Admin-/Vorstand-Bypass — nur der Inhaber der Zuteilung
+// bzw. dessen Elternteil darf schreiben (dienst-kommentare, kein
+// Moderationsrecht, analog Chat-Umfragen).
+func (h *Handler) SetAssignmentComment(w http.ResponseWriter, r *http.Request) {
+	assignmentID := r.PathValue("id")
+	claims := auth.ClaimsFromCtx(r.Context())
+
+	slotID, ownerUserID, ok := h.assignmentOwner(r.Context(), assignmentID)
+	if !ok {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if !h.canActForUser(r.Context(), claims.UserID, ownerUserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	var req struct {
+		Body string `json:"body"`
+	}
+	json.NewDecoder(r.Body).Decode(&req)
+
+	body := strings.TrimSpace(req.Body)
+	if body == "" {
+		http.Error(w, "comment must not be empty", http.StatusBadRequest)
+		return
+	}
+	if len(body) > maxAssignmentCommentBytes {
+		http.Error(w, "comment too long", http.StatusBadRequest)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`INSERT INTO duty_assignment_comments (assignment_id, body) VALUES (?, ?)
+		 ON CONFLICT(assignment_id) DO UPDATE SET body=excluded.body, updated_at=CURRENT_TIMESTAMP`,
+		assignmentID, body); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.broadcastDutySlot(r.Context(), slotID, claims.UserID)
+	w.WriteHeader(http.StatusOK)
+}
+
+// DELETE /api/duty-assignments/:id/comment
+// Löscht den eigenen Kommentar explizit, unabhängig vom Austragen (das räumt
+// den Kommentar ohnehin automatisch über ON DELETE CASCADE auf).
+func (h *Handler) DeleteAssignmentComment(w http.ResponseWriter, r *http.Request) {
+	assignmentID := r.PathValue("id")
+	claims := auth.ClaimsFromCtx(r.Context())
+
+	slotID, ownerUserID, ok := h.assignmentOwner(r.Context(), assignmentID)
+	if !ok {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if !h.canActForUser(r.Context(), claims.UserID, ownerUserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`DELETE FROM duty_assignment_comments WHERE assignment_id=?`, assignmentID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	h.broadcastDutySlot(r.Context(), slotID, claims.UserID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// GET /api/duty-slots/:id/comments
+// Universelles Leserecht: jeder mit Board-Zugriff sieht alle Kommentare
+// eines Slots, unabhängig von eigener Zuteilung (dienst-kommentare).
+func (h *Handler) ListSlotComments(w http.ResponseWriter, r *http.Request) {
+	slotID := r.PathValue("id")
+
+	var exists bool
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*)>0 FROM duty_slots WHERE id=?`, slotID,
+	).Scan(&exists); err != nil || !exists {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT u.id, u.first_name || ' ' || u.last_name, dac.body, dac.created_at
+		 FROM duty_assignment_comments dac
+		 JOIN duty_assignments da ON da.id = dac.assignment_id
+		 JOIN users u ON u.id = da.user_id
+		 WHERE da.duty_slot_id = ?
+		 ORDER BY dac.created_at`, slotID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type slotComment struct {
+		UserID    int    `json:"user_id"`
+		UserName  string `json:"user_name"`
+		Body      string `json:"body"`
+		CreatedAt string `json:"created_at"`
+	}
+	result := []slotComment{}
+	for rows.Next() {
+		var c slotComment
+		rows.Scan(&c.UserID, &c.UserName, &c.Body, &c.CreatedAt)
+		result = append(result, c)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)

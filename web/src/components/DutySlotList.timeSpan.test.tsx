@@ -9,7 +9,7 @@ import DutySlotList, { type BoardSlot } from './DutySlotList'
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 1, name: 'Alice', role: 'standard' } }),
 }))
-vi.mock('../lib/api', () => ({ api: { post: vi.fn(), delete: vi.fn() } }))
+vi.mock('../lib/api', () => ({ api: { post: vi.fn(), delete: vi.fn(), get: vi.fn().mockResolvedValue({ data: [] }), put: vi.fn() } }))
 
 function baseSlot(overrides: Partial<BoardSlot> = {}): BoardSlot {
   return {
@@ -23,6 +23,7 @@ function baseSlot(overrides: Partial<BoardSlot> = {}): BoardSlot {
     vacancies: 1,
     claimed_by_me: false,
     assignees: [],
+    comment_count: 0,
     ...overrides,
   }
 }

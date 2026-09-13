@@ -58,7 +58,10 @@ async function openEditDialog() {
     </MemoryRouter>,
   )
   const user = userEvent.setup()
-  await user.click(await screen.findByText('Bearbeiten'))
+  // "Bearbeiten" steckt seit dem ⋮-Menü auch auf Desktop (dienst-kommentare)
+  // im ActionMenu statt in einem direkt sichtbaren Button — erst öffnen.
+  await user.click((await screen.findAllByLabelText('Aktionen'))[0])
+  await user.click((await screen.findAllByText('Bearbeiten'))[0])
   await screen.findByText('Dienst bearbeiten')
   return user
 }
@@ -119,7 +122,8 @@ describe('SpieltagDetailModal — Dienst löschen im Bearbeiten-Dialog', () => {
     await user.click(screen.getByLabelText('Ohne Benachrichtigung löschen'))
     await user.click(screen.getByRole('button', { name: 'Abbrechen' }))
 
-    await user.click(await screen.findByText('Bearbeiten'))
+    await user.click((await screen.findAllByLabelText('Aktionen'))[0])
+    await user.click((await screen.findAllByText('Bearbeiten'))[0])
     await user.click(screen.getByLabelText('Dienst löschen'))
     expect(await screen.findByLabelText(/Grund/)).toHaveValue('')
     expect(screen.getByLabelText('Ohne Benachrichtigung löschen')).not.toBeChecked()

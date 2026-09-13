@@ -217,7 +217,10 @@ describe('SpieltagDetailModal — Hinweis auf die Herausnahme aus der Regenerati
       </MemoryRouter>,
     )
     const user = userEvent.setup()
-    await user.click(await screen.findByText('Bearbeiten'))
+    // "Bearbeiten" steckt seit dem ⋮-Menü auch auf Desktop (dienst-kommentare)
+    // im ActionMenu statt in einem direkt sichtbaren Button — erst öffnen.
+    await user.click((await screen.findAllByLabelText('Aktionen'))[0])
+    await user.click((await screen.findAllByText('Bearbeiten'))[0])
 
     await screen.findByText('Dienst bearbeiten')
     expect(screen.getByText(/Nach dem Speichern gilt dieser Dienst als manuell gepflegt/)).toBeTruthy()
