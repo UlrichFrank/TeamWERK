@@ -799,7 +799,11 @@ func (h *Handler) CreateSlot(w http.ResponseWriter, r *http.Request) {
 	}
 	recipients := h.eligibleDutyRecipients(r.Context(), scope,
 		h.effectiveAudiences(r.Context(), req.DutyTypeID, req.Audiences))
-	notify.Send(h.db, h.cfg, recipients,
+	// SendAsync statt Send: Push-Versand ist pro Empfänger synchron (Gotcha
+	// „Push Notifications"). Im Kalender-Modal legt der Vorstand oft mehrere
+	// Slots hintereinander an — ein synchroner Push-Fan-out je Anlage ließ den
+	// Speichern-Request spürbar hängen.
+	notify.SendAsync(h.db, h.cfg, recipients,
 		"duties", "Neuer Dienst verfügbar", req.EventName+" — jetzt eintragen", "/dienste")
 	w.WriteHeader(http.StatusCreated)
 }

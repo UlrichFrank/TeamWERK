@@ -129,6 +129,22 @@ func (a *Audience) MembersAudience(ctx context.Context, memberIDs []int, extraUs
 	return set.slice()
 }
 
+// MemberOwnersAndParents resolves the narrow audience for an event bound to
+// specific members, without pulling in team staff: the members' own linked
+// users plus their parents (family_links). Anders als MembersAudience (die
+// zusätzlich Team-Stab/Trainer/Vorstand einschließt, weil sie "wen betrifft
+// der Termin" beantwortet) beantwortet diese Funktion "wer ist persönlich
+// betroffen" — z. B. wer wurde neu in eine Aufstellung auf- oder abgestellt.
+func (a *Audience) MemberOwnersAndParents(ctx context.Context, memberIDs []int) []int {
+	if len(memberIDs) == 0 {
+		return nil
+	}
+	set := newIDSet()
+	a.collectMemberOwners(ctx, set, memberIDs)
+	a.collectMemberParents(ctx, set, memberIDs)
+	return set.slice()
+}
+
 // teamIDsForMembers returns the distinct team IDs the given members belong to.
 func (a *Audience) teamIDsForMembers(ctx context.Context, memberIDs []int) []int {
 	if len(memberIDs) == 0 {

@@ -1088,18 +1088,7 @@ func (h *Handler) CreateGame(w http.ResponseWriter, r *http.Request) {
 			`INSERT INTO game_teams (game_id, team_id) VALUES (?,?)`, gameID, teamID)
 	}
 
-	eventName := ""
-	switch req.EventType {
-	case "heim":
-		eventName = "Heimspiel"
-	case "auswärts":
-		eventName = "Auswärtsspiel"
-	case "generisch":
-		eventName = req.Opponent
-	}
-	if req.EventType != "generisch" && req.Opponent != "" {
-		eventName += " vs. " + req.Opponent
-	}
+	eventName := gameEventName(req.EventType, req.Opponent)
 
 	// For generic events: persist user-supplied slots with is_custom=1 (no template).
 	// For heim/auswärts: req.Slots is intentionally ignored — runAutoRegen derives
@@ -1616,6 +1605,26 @@ func eventNameOrFallback(opponent string) string {
 		return s
 	}
 	return "Termin"
+}
+
+// gameEventName baut den Anzeigenamen eines Termins aus Typ und Gegner —
+// geteilt zwischen Anlage- und Aufstellungs-Meldung, damit beide denselben
+// Namen zeigen ("Heimspiel vs. HSG Ostfildern" / "Auswärtsspiel vs. …" /
+// bei generisch der freie Event-Name aus `opponent`).
+func gameEventName(eventType, opponent string) string {
+	eventName := ""
+	switch eventType {
+	case "heim":
+		eventName = "Heimspiel"
+	case "auswärts":
+		eventName = "Auswärtsspiel"
+	case "generisch":
+		eventName = opponent
+	}
+	if eventType != "generisch" && opponent != "" {
+		eventName += " vs. " + opponent
+	}
+	return eventName
 }
 
 // dutyAssigneesForGame returns the user IDs of all duty_assignments for slots
@@ -3152,6 +3161,14 @@ func (h *Handler) SaveLineup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Vorherige Aufstellung VOR dem Löschen laden — Grundlage für die Diff-
+	// Benachrichtigung unten (wer wird neu aufgestellt, wer fliegt raus).
+	oldMemberIDs, err := h.lineupMemberIDs(r.Context(), gameID)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+
 	tx, err := h.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
@@ -3181,7 +3198,129 @@ func (h *Handler) SaveLineup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.broadcastGame(r.Context(), gameID, "games")
+
+	added, removed := diffMemberIDs(oldMemberIDs, req.MemberIDs)
+	if len(added) > 0 || len(removed) > 0 {
+		h.notifyLineupChange(r.Context(), gameID, claims.UserID, added, removed)
+	}
+
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// lineupMemberIDs liefert die aktuell gespeicherte Aufstellung eines Spiels.
+func (h *Handler) lineupMemberIDs(ctx context.Context, gameID int) ([]int, error) {
+	rows, err := h.db.QueryContext(ctx, `SELECT member_id FROM game_lineup WHERE game_id=?`, gameID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// diffMemberIDs vergleicht alte und neue Aufstellung: added sind Mitglieder,
+// die neu dazukommen, removed jene, die rausfallen. Unveränderte Mitglieder
+// erscheinen in keiner der beiden Listen und werden nicht benachrichtigt.
+func diffMemberIDs(old, new_ []int) (added, removed []int) {
+	oldSet := make(map[int]bool, len(old))
+	for _, id := range old {
+		oldSet[id] = true
+	}
+	newSet := make(map[int]bool, len(new_))
+	for _, id := range new_ {
+		newSet[id] = true
+		if !oldSet[id] {
+			added = append(added, id)
+		}
+	}
+	for _, id := range old {
+		if !newSet[id] {
+			removed = append(removed, id)
+		}
+	}
+	return added, removed
+}
+
+// notifyLineupChange benachrichtigt genau die Spieler, deren Aufstellungsstatus
+// sich geändert hat — separat für "neu aufgestellt" und "rausgenommen", weil
+// beide Richtungen einen anderen Titel/Satz brauchen.
+func (h *Handler) notifyLineupChange(ctx context.Context, gameID, actorUserID int, added, removed []int) {
+	var opponent, date, evTime, eventType string
+	if err := h.db.QueryRowContext(ctx,
+		`SELECT COALESCE(opponent,''), date, time, event_type FROM games WHERE id=?`, gameID).
+		Scan(&opponent, &date, &evTime, &eventType); err != nil {
+		return
+	}
+	eventName := gameEventName(eventType, opponent)
+	when := notify.EventWhen(date, evTime)
+	actor := notify.ActorName(h.db, actorUserID)
+	url := fmt.Sprintf("/termine?focus=game-%d", gameID)
+
+	h.sendLineupChange(ctx, added, "in die Aufstellung aufgenommen", "In die Aufstellung aufgenommen", eventName, when, actor, url)
+	h.sendLineupChange(ctx, removed, "aus der Aufstellung genommen", "Aus der Aufstellung genommen", eventName, when, actor, url)
+}
+
+// sendLineupChange benachrichtigt eine Richtung der Aufstellungs-Änderung
+// (aufgenommen ODER entfernt). Die Empfängermenge ist bewusst eng —
+// hub.Audience.MemberOwnersAndParents (nur die betroffenen Spieler + deren
+// Eltern), nicht notify.TeamAudience: die Frage ist "wer wurde persönlich
+// umgestellt", nicht "wen betrifft der Termin" (der Rest der Mannschaft
+// bekommt schon die Änderungs-/Anlage-Meldung des Termins selbst). Läuft über
+// SendAsync statt Send: Push-Versand ist pro Empfänger synchron (Gotcha „Push
+// Notifications"), und eine Aufstellung mit vielen Spielern darf den
+// Speichern-Request nicht spürbar verzögern.
+func (h *Handler) sendLineupChange(ctx context.Context, memberIDs []int, clause, title, eventName, when, actor, url string) {
+	if len(memberIDs) == 0 {
+		return
+	}
+	names := h.memberNames(ctx, memberIDs)
+	if len(names) == 0 {
+		return
+	}
+	verb := "wurde"
+	if len(names) > 1 {
+		verb = "wurden"
+	}
+	whenPart := ""
+	if when != "" {
+		whenPart = " " + when
+	}
+	body := fmt.Sprintf("%s %s für %s%s %s. Geändert von %s.",
+		strings.Join(names, ", "), verb, eventName, whenPart, clause, actor)
+	recipients := hub.NewAudience(h.db).MemberOwnersAndParents(ctx, memberIDs)
+	notify.SendAsync(h.db, h.cfg, recipients, "games", title, body, url)
+}
+
+// memberNames lädt Anzeigenamen zu einer Menge von Member-IDs für die
+// Aufstellungs-Meldung.
+func (h *Handler) memberNames(ctx context.Context, memberIDs []int) []string {
+	if len(memberIDs) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(memberIDs)), ",")
+	rows, err := h.db.QueryContext(ctx,
+		`SELECT first_name || ' ' || last_name FROM members WHERE id IN (`+placeholders+`)`,
+		toAny(memberIDs)...)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return names
+		}
+		names = append(names, name)
+	}
+	return names
 }
 
 func audiencesFromDB(ns sql.NullString) []string {
