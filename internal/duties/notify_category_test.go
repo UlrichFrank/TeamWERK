@@ -69,3 +69,52 @@ func TestCreateSlot_NotifiesWithDutiesCategory(t *testing.T) {
 	}
 	waitForCategory(t, cat, "duties")
 }
+
+// TestCreateSlot_PushBlockiertDieAntwortNicht: notify.Send läuft pro
+// Empfänger synchron (Web-Push-Zustellung ist ein Netzwerk-Call je
+// Subscription) — im Kalender-Modal angelegte Dienste machten den
+// Speichern-Request deshalb spürbar langsam, bis CreateSlot auf
+// notify.SendAsync umgestellt wurde. Der Test lässt notify.Send absichtlich
+// für immer blockieren und erwartet trotzdem eine schnelle Antwort: kommt sie
+// nicht rechtzeitig, hängt der Response-Pfad wieder synchron am Push-Versand.
+func TestCreateSlot_PushBlockiertDieAntwortNicht(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team")
+	dutyTypeID := testutil.CreateDutyType(t, db, "Kasse", 1.0)
+	admin := testutil.CreateUser(t, db, "admin")
+
+	blockForever := make(chan struct{}) // wird nie geschlossen
+	orig := notify.Send
+	notify.Send = func(_ *sql.DB, _ *appconfig.Config, _ []int, _, _, _, _ string, _ ...notify.Option) {
+		<-blockForever
+	}
+	t.Cleanup(func() {
+		notify.Send = orig
+		close(blockForever)
+	})
+
+	srv := prodserver.New(t, db)
+	tok := testutil.Token(t, admin, "admin", nil)
+
+	start := time.Now()
+	res := testutil.Post(t, srv, "/api/duty-slots", tok, map[string]any{
+		"event_name":   "Heimspiel",
+		"event_date":   "2026-03-20",
+		"event_time":   "18:00",
+		"duty_type_id": dutyTypeID,
+		"role_desc":    "Kasse",
+		"slots_total":  2,
+		"season_id":    seasonID,
+		"team_id":      teamID,
+	})
+	elapsed := time.Since(start)
+	res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("status %d, want 201", res.StatusCode)
+	}
+	if elapsed > time.Second {
+		t.Fatalf("Speichern-Request dauerte %s trotz dauerhaft blockierendem notify.Send — "+
+			"CreateSlot muss notify.SendAsync verwenden, nicht notify.Send", elapsed)
+	}
+}
