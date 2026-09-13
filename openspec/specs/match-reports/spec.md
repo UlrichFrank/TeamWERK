@@ -447,6 +447,11 @@ liegen im Tier *Authenticated*; die fachliche Prüfung ist die Autorenschaft am 
 - **THEN** liefert das System HTTP 403 mit `{"error":"slot_not_owned"}`
 
 #### Scenario: Zweiter Draft für dasselbe Spiel
-- **WHEN** bereits ein `match_report` mit `game_id=X` existiert und ein weiterer Draft angelegt werden soll
+- **WHEN** bereits ein `match_report` mit `game_id=X` existiert, dessen Autor noch einen Spielbericht-Slot dieses Spiels hält (oder der nicht mehr im State `draft` ist), und ein weiterer Draft angelegt werden soll
 - **THEN** liefert das System HTTP 409 mit `{"error":"report_exists"}`
+
+#### Scenario: Verwaister Draft wird vom neuen Dienstinhaber übernommen
+- **WHEN** für `game_id=X` ein Draft existiert, dessen Autor keinen Spielbericht-Slot dieses Spiels mehr hält (z. B. nach Austragen), und der aktuelle Slot-Inhaber `POST /api/match-reports` aufruft
+- **THEN** liefert das System HTTP 200 mit der `{id}` des bestehenden Drafts, setzt `author_user_id` und `duty_slot_id` auf den neuen Inhaber bzw. seinen Slot und lässt Inhalt und Bilder unverändert
+- **AND** `GET /api/match-reports/my` führt diesen Slot vor der Übernahme als offenen Auftrag
 

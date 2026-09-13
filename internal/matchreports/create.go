@@ -72,7 +72,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		req.GameID, req.DutySlotID, claims.UserID, StateDraft, defaultTitle)
 	if err != nil {
 		if isUniqueViolation(err) {
-			writeErr(w, http.StatusConflict, "report_exists")
+			h.adoptOrConflict(w, req, claims.UserID)
 			return
 		}
 		logErr("matchreports.Create insert", err, "user", claims.UserID, "game", req.GameID)
@@ -83,6 +83,52 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 
 	h.broadcast()
 	writeJSON(w, http.StatusCreated, createResp{ID: int(id)})
+}
+
+// authorHoldsSlotSQL ist wahr, solange der Autor des Berichts `mr` noch einen
+// Spielbericht-Slot desselben Spiels hält. Ist sie falsch, ist ein Draft
+// verwaist: der Autor hat den Dienst abgegeben (Austragen, Regen, Slot-Tausch),
+// der Draft blockiert über UNIQUE(game_id) aber weiterhin jeden neuen Bericht.
+const authorHoldsSlotSQL = `EXISTS (
+	SELECT 1 FROM duty_assignments oda
+	JOIN duty_slots ods ON ods.id = oda.duty_slot_id
+	JOIN duty_types odt ON odt.id = ods.duty_type_id
+	WHERE ods.game_id = mr.game_id
+	  AND oda.user_id = mr.author_user_id
+	  AND oda.status IN ('assigned','fulfilled')
+	  AND odt.name = '` + matchReportDutyTypeName + `')`
+
+// adoptOrConflict behandelt einen Create auf ein Spiel, für das schon ein
+// Bericht existiert. Ist es ein verwaister Draft, übernimmt ihn der neue
+// Slot-Inhaber (Autor + Slot werden umgehängt, Inhalt und Bilder bleiben) —
+// der Bericht folgt dem Dienst, nicht der Person, die ihn zuerst angelegt hat.
+// Drafts eines noch aktiven Dienstinhabers und alles jenseits von `draft`
+// bleiben unangetastet → 409 report_exists.
+func (h *Handler) adoptOrConflict(w http.ResponseWriter, req createReq, userID int) {
+	res, err := h.db.Exec(
+		`UPDATE match_reports
+		 SET author_user_id=?, duty_slot_id=?, updated_at=CURRENT_TIMESTAMP
+		 WHERE id = (SELECT mr.id FROM match_reports mr
+		             WHERE mr.game_id=? AND mr.state=? AND mr.author_user_id<>?
+		               AND NOT `+authorHoldsSlotSQL+`)`,
+		userID, req.DutySlotID, req.GameID, StateDraft, userID)
+	if err != nil {
+		logErr("matchreports.Create adopt", err, "user", userID, "game", req.GameID)
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeErr(w, http.StatusConflict, "report_exists")
+		return
+	}
+	var id int
+	if err := h.db.QueryRow(`SELECT id FROM match_reports WHERE game_id=?`, req.GameID).Scan(&id); err != nil {
+		logErr("matchreports.Create adopt reload", err, "game", req.GameID)
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	h.broadcast()
+	writeJSON(w, http.StatusOK, createResp{ID: id})
 }
 
 // Delete löscht einen Draft-Bericht (nur im State draft/publish_failed) und

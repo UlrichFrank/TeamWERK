@@ -45,6 +45,7 @@ func testServer(t *testing.T, h *matchreports.Handler) *httptest.Server {
 		// Reihenfolge wichtig: statische Segmente (/pending, /my) VOR den
 		// {id}-Routen registrieren, sonst matcht chi „pending" als id.
 		r.Get("/api/match-reports/pending", h.Pending)
+		r.Get("/api/match-reports/my", h.MyList)
 		r.Post("/api/match-reports", h.Create)
 		r.Get("/api/match-reports/{id}", h.Get)
 		r.Put("/api/match-reports/{id}", h.Update)
@@ -218,6 +219,141 @@ func TestCreate_Duplicate(t *testing.T) {
 		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
 	if res.StatusCode != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", res.StatusCode)
+	}
+}
+
+// ─── TC-MR04b · Verwaister Draft nach Dienst-Wechsel ──────────────────────────
+//
+// Regression (Prod, 13.09.2026): A zieht den Spielbericht-Dienst, legt einen
+// leeren Draft an und trägt sich wieder aus; B übernimmt den Dienst. Der Draft
+// hing weiter an A und blockierte über UNIQUE(game_id) jeden Bericht — B sah auf
+// /spielberichte keinen Auftrag, und Create hätte 409 geliefert.
+
+// orphanedDraft baut genau diese Lage: ein Spielbericht-Slot, der jetzt newID
+// gehört, und ein Draft von prevID, der den Slot nicht mehr hält.
+func orphanedDraft(t *testing.T, db *sql.DB) (gameID, slotID, reportID, prevID, newID int) {
+	t.Helper()
+	seasonID, teamID, gameID := setupBasicGame(t, db)
+	prevID = testutil.CreateUser(t, db, auth.RoleStandard)
+	newID = testutil.CreateUser(t, db, auth.RoleStandard)
+	slotID = createSlotWithAssignee(t, db, seasonID, teamID, gameID, newID)
+	reportID = testutil.CreateMatchReport(t, db, gameID, prevID, slotID)
+	return
+}
+
+func myOpenSlotIDs(t *testing.T, srv *httptest.Server, userID int) []int {
+	t.Helper()
+	res := testutil.Get(t, srv, "/api/match-reports/my", testutil.Token(t, userID, auth.RoleStandard, nil))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("GET /my: expected 200, got %d", res.StatusCode)
+	}
+	var body struct {
+		OpenSlots []struct {
+			SlotID int `json:"slot_id"`
+		} `json:"open_slots"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	ids := make([]int, 0, len(body.OpenSlots))
+	for _, s := range body.OpenSlots {
+		ids = append(ids, s.SlotID)
+	}
+	return ids
+}
+
+func TestMyList_VerwaisterEntwurfIstOffenerAuftrag(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, slotID, _, _, newID := orphanedDraft(t, db)
+	srv := testServer(t, newHandlerWithPublisher(db, &fakePublisher{}))
+
+	got := myOpenSlotIDs(t, srv, newID)
+	if len(got) != 1 || got[0] != slotID {
+		t.Fatalf("open_slots = %v, want [%d]", got, slotID)
+	}
+}
+
+func TestCreate_UebernimmtVerwaistenEntwurf(t *testing.T) {
+	db := testutil.NewDB(t)
+	gameID, slotID, reportID, _, newID := orphanedDraft(t, db)
+	db.Exec(`UPDATE match_reports SET body_md='Halbzeitstand' WHERE id=?`, reportID)
+	srv := testServer(t, newHandlerWithPublisher(db, &fakePublisher{}))
+
+	res := testutil.Post(t, srv, "/api/match-reports", testutil.Token(t, newID, auth.RoleStandard, nil),
+		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+	var got struct{ ID int }
+	if err := json.NewDecoder(res.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ID != reportID {
+		t.Errorf("id = %d, want übernommenen Draft %d", got.ID, reportID)
+	}
+
+	var author int
+	var body string
+	db.QueryRow(`SELECT author_user_id, body_md FROM match_reports WHERE id=?`, reportID).Scan(&author, &body)
+	if author != newID {
+		t.Errorf("author_user_id = %d, want %d", author, newID)
+	}
+	if body != "Halbzeitstand" {
+		t.Errorf("Inhalt muss erhalten bleiben, body_md = %q", body)
+	}
+	if ids := myOpenSlotIDs(t, srv, newID); len(ids) != 0 {
+		t.Errorf("nach Übernahme kein offener Auftrag mehr erwartet, got %v", ids)
+	}
+}
+
+// Solange der Autor noch einen Spielbericht-Slot des Spiels hält, ist sein Draft
+// nicht verwaist — ein zweiter Slot-Inhaber darf ihn nicht an sich ziehen.
+func TestCreate_EntwurfDesAktivenDienstinhabersBleibt(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID, teamID, gameID := setupBasicGame(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
+	otherID := testutil.CreateUser(t, db, auth.RoleStandard)
+	dtID := testutil.CreateDutyType(t, db, "Spielbericht", 0.5)
+	slotA := testutil.CreateDutySlot(t, db, dtID, seasonID, teamID, gameID, "2026-05-15")
+	slotB := testutil.CreateDutySlot(t, db, dtID, seasonID, teamID, gameID, "2026-05-15")
+	testutil.AssignDutySlot(t, db, slotA, authorID)
+	testutil.AssignDutySlot(t, db, slotB, otherID)
+	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, slotA)
+	srv := testServer(t, newHandlerWithPublisher(db, &fakePublisher{}))
+
+	res := testutil.Post(t, srv, "/api/match-reports", testutil.Token(t, otherID, auth.RoleStandard, nil),
+		map[string]int{"game_id": gameID, "duty_slot_id": slotB})
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", res.StatusCode)
+	}
+	var author int
+	db.QueryRow(`SELECT author_user_id FROM match_reports WHERE id=?`, reportID).Scan(&author)
+	if author != authorID {
+		t.Errorf("author_user_id = %d, Draft darf nicht umgehängt werden", author)
+	}
+	if ids := myOpenSlotIDs(t, srv, otherID); len(ids) != 0 {
+		t.Errorf("kein offener Auftrag erwartet, got %v", ids)
+	}
+}
+
+// Ein eingereichter Bericht liegt beim Freigeber, nicht mehr beim Autor — auch
+// wenn der Autor den Dienst inzwischen abgegeben hat, wird er nicht übernommen.
+func TestCreate_EingereichterBerichtWirdNichtUebernommen(t *testing.T) {
+	db := testutil.NewDB(t)
+	gameID, slotID, reportID, prevID, newID := orphanedDraft(t, db)
+	db.Exec(`UPDATE match_reports SET state='pending_review' WHERE id=?`, reportID)
+	srv := testServer(t, newHandlerWithPublisher(db, &fakePublisher{}))
+
+	res := testutil.Post(t, srv, "/api/match-reports", testutil.Token(t, newID, auth.RoleStandard, nil),
+		map[string]int{"game_id": gameID, "duty_slot_id": slotID})
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409, got %d", res.StatusCode)
+	}
+	var author int
+	db.QueryRow(`SELECT author_user_id FROM match_reports WHERE id=?`, reportID).Scan(&author)
+	if author != prevID {
+		t.Errorf("author_user_id = %d, want %d", author, prevID)
 	}
 }
 

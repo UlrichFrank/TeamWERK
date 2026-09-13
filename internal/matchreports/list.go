@@ -90,9 +90,9 @@ func (h *Handler) loadMyReports(userID int) ([]ListItem, error) {
 }
 
 // loadMyOpenSlots liefert alle „Spielbericht"-Slots, die dem User zugewiesen
-// sind und für die noch kein match_reports-Eintrag existiert. Nur solche
-// Slots sind Kandidaten für „Neuer Bericht" — für andere gibt es entweder
-// keinen Bericht-Anspruch oder er läuft bereits.
+// sind und für die noch kein Bericht läuft: entweder existiert gar keiner,
+// oder nur ein verwaister Draft eines früheren Dienstinhabers (siehe
+// authorHoldsSlotSQL) — den übernimmt „Bericht schreiben" per Create.
 func (h *Handler) loadMyOpenSlots(userID int) ([]SlotItem, error) {
 	rows, err := h.db.Query(
 		`SELECT ds.id, ds.game_id, g.date, g.opponent
@@ -103,10 +103,12 @@ func (h *Handler) loadMyOpenSlots(userID int) ([]SlotItem, error) {
 		 LEFT JOIN match_reports mr ON mr.game_id = ds.game_id
 		 WHERE da.user_id = ?
 		   AND da.status IN ('assigned','fulfilled')
-		   AND dt.name = 'Spielbericht'
-		   AND mr.id IS NULL
+		   AND dt.name = ?
+		   AND (mr.id IS NULL
+		        OR (mr.state = ? AND mr.author_user_id <> da.user_id
+		            AND NOT `+authorHoldsSlotSQL+`))
 		 ORDER BY g.date DESC, ds.id DESC`,
-		userID,
+		userID, matchReportDutyTypeName, StateDraft,
 	)
 	if err != nil {
 		return nil, err
