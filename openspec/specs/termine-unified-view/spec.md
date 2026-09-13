@@ -9,12 +9,14 @@ Diese Spezifikation beschreibt die Capability `termine-unified-view`. (Automatis
 Die `/termine`-Seite SHALL ihren Filterzustand vollständig über URL-Query-Parameter abbilden. Beim Mount liest sie die Parameter aus `useSearchParams()` und initialisiert daraus den State. Jede Änderung an Filtern (Team-Auswahl, Termin-Typen, Vergangene anzeigen, Textfilter) MUSS die URL via `setSearchParams()` (Replace, nicht Push) aktualisieren, sodass die Seite per Browser-Back/Forward navigierbar und per Link teilbar ist.
 
 Unterstützte Parameter:
-- `team` (eine numerische Team-ID; fehlt → kein Team-Filter)
-- `types` (kommaseparierte Werte aus `training`, `heim`, `auswaerts`; fehlt → alle Typen aktiv, identisch zum bisherigen Default)
+- `team` (kommaseparierte Liste numerischer Team-IDs, z.B. `team=3` oder `team=3,7`; fehlt → kein Team-Filter). Ein Termin passt, wenn er mindestens einer der gewählten Mannschaften zugeordnet ist.
+- `types` (kommaseparierte Werte aus `training`, `heim`, `auswaerts`, `generisch`; fehlt → alle Typen aktiv, identisch zum bisherigen Default)
 - `past` (`1` zeigt vergangene Termine, default `0`)
 - `q` (Freitext-Filterausdruck; fehlt oder leer → kein Textfilter. Auswertung siehe Capability `termin-textfilter`)
 
 Ungültige oder unbekannte Werte SHALL ignoriert und der jeweilige Filter auf seinen Default zurückgesetzt werden — ohne Fehlermeldung. Für `q` gibt es keine ungültigen Werte: jeder Zeichenketten-Inhalt ist ein zulässiger Filterausdruck, ein Ausdruck ohne Treffer führt zu einer leeren Liste, nicht zu einem Fehler.
+
+Der Team-Filter SHALL als Dropdown mit Checkboxen bedienbar sein — in derselben Form wie der Typ-Filter im Compact-Modus — und auf jeder Bildschirmbreite erreichbar sein. Die leere Auswahl und die vollständige Auswahl sind derselbe Zustand („kein Filter"): wählt der Nutzer die letzte verbliebene Mannschaft ab oder hakt er alle an, SHALL `team` aus der URL verschwinden und die Kästchen SHALL wieder alle als angehakt erscheinen. Dieses Verhalten ist mit dem des Typ-Filters identisch.
 
 Anders als die übrigen Filter SHALL `q` die URL **verzögert** aktualisieren (~250 ms nach dem letzten Tastenanschlag), während die Liste unmittelbar gefiltert wird. Damit entsteht kein URL-Schreibvorgang pro Zeichen.
 
@@ -22,6 +24,20 @@ Anders als die übrigen Filter SHALL `q` die URL **verzögert** aktualisieren (~
 - **WHEN** ein User `/termine?team=3` aufruft
 - **THEN** ist der Team-Filter beim ersten Render auf Team-ID 3 vorbelegt
 - **THEN** zeigt die Liste ausschließlich Termine dieses Teams
+
+#### Scenario: Page lädt mit mehreren Teams aus URL
+- **WHEN** ein User `/termine?team=3,7` aufruft
+- **THEN** zeigt die Liste Termine der Teams 3 und 7 und keine anderen
+- **THEN** sind im Dropdown genau diese beiden Mannschaften angehakt
+
+#### Scenario: Letzte Mannschaft abgewählt
+- **WHEN** ein User im Team-Dropdown die letzte noch angehakte Mannschaft abwählt
+- **THEN** verschwindet `team` aus der URL
+- **THEN** sind alle Mannschaften wieder angehakt und alle Termine sichtbar
+
+#### Scenario: Alle Mannschaften angehakt
+- **WHEN** ein User im Team-Dropdown alle Mannschaften anhakt
+- **THEN** verschwindet `team` aus der URL (kein Filter statt einer vollständigen Aufzählung)
 
 #### Scenario: Page lädt mit Typ- und Past-Filter aus URL
 - **WHEN** ein User `/termine?types=heim,auswaerts&past=1` aufruft
@@ -69,6 +85,8 @@ Die `/termine`-Seite SHALL einen zusätzlichen Query-Parameter `focus` akzeptier
 
 Wenn die ID nicht in der geladenen Liste existiert (z.B. fremdes Team, gelöschter Termin), SHALL die Seite eine dezente Hinweismeldung „Dieser Termin ist nicht verfügbar" anzeigen — als nicht-blockierende Info oberhalb der Liste — und ansonsten normal funktionieren.
 
+Der Fokus SHALL enden, sobald der Nutzer den Team- oder Typ-Filter selbst ändert: `focus` verschwindet dabei aus der URL, und der zuvor fokussierte Termin unterliegt danach den Filtern wie jeder andere. Der Durchlass gilt dem Moment des Deep-Links, nicht der Sitzung danach — sonst bliebe ein Termin, den der gewählte Filter ausschließt, unbegrenzt in der Liste stehen. „Vergangene anzeigen" und der Textfilter beenden den Fokus NICHT: `past` schaltet die Fokus-Logik selbst um (Punkt 3 oben), und das Überleben eines nicht passenden `q` ist in `termin-textfilter` zugesagt.
+
 #### Scenario: Push-Notification öffnet konkreten Spieltermin
 - **WHEN** ein User über einen Push-Link `/termine?focus=game-17` öffnet
 - **THEN** wird zum Spiel mit ID 17 in der Liste gescrollt
@@ -91,6 +109,11 @@ Wenn die ID nicht in der geladenen Liste existiert (z.B. fremdes Team, gelöscht
 #### Scenario: Focus kombiniert mit Filter
 - **WHEN** ein User `/termine?team=2&types=heim&focus=game-17` öffnet
 - **THEN** werden Filter angewendet UND auf den fokussierten Termin gescrollt (sofern er nicht durch den Filter ausgeblendet würde; in dem Fall werden die einschränkenden Filter, die genau diesen Termin verbergen würden, ignoriert)
+
+#### Scenario: Team-Filteränderung beendet den Fokus
+- **WHEN** ein User `/termine?focus=game-17` öffnet (Spiel 17 gehört Team 2) und anschließend im Team-Dropdown Team 5 auswählt
+- **THEN** verschwindet `focus` aus der URL
+- **THEN** ist Spiel 17 nicht mehr sichtbar, weil es dem gewählten Team nicht zugeordnet ist
 
 ---
 
