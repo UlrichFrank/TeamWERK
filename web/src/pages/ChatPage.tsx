@@ -30,6 +30,7 @@ import {
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
 import AuthImage from "../components/AuthImage";
+import LinkifiedText from "../components/LinkifiedText";
 import {
   conversationTimeLabel,
   daySeparatorLabel,
@@ -2265,22 +2266,11 @@ export default function ChatPage() {
 }
 
 function renderWithLinks(body: string, isOwn: boolean) {
-  const parts = body.split(/(https?:\/\/[^\s]+)/g);
-  return parts.map((part, i) =>
-    /^https?:\/\//.test(part) ? (
-      <a
-        key={i}
-        href={part}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={`underline break-all ${isOwn ? "opacity-75" : "text-brand-blue"}`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {part}
-      </a>
-    ) : (
-      part
-    ),
+  return (
+    <LinkifiedText
+      text={body}
+      linkClassName={`underline break-all ${isOwn ? "opacity-75" : "text-brand-blue"}`}
+    />
   );
 }
 

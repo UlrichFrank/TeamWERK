@@ -44,7 +44,7 @@ export default function EventNoteEditor({ eventType, eventId, initialNote, onSav
         value={note}
         onChange={(e) => setNote(e.target.value)}
         rows={3}
-        placeholder="Hinweis für die Mannschaft (z. B. Halle gesperrt)"
+        placeholder="Hinweis für die Mannschaft (z. B. Halle gesperrt oder Link zum Turnierplan aus Dokumente)"
         className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
       />
       <div className="flex items-center justify-between">

@@ -1,4 +1,5 @@
 import { AlertTriangle } from 'lucide-react'
+import LinkifiedText from './LinkifiedText'
 
 type EventNoteIndicatorProps = {
   variant: 'icon' | 'inline'
@@ -11,7 +12,8 @@ type EventNoteIndicatorProps = {
  * vorhanden ist (note leer/whitespace).
  *
  * - `icon`   → kompaktes AlertTriangle, voller Text als title-Tooltip.
- * - `inline` → AlertTriangle + voller Hinweistext in einer eigenen Zeile.
+ * - `inline` → AlertTriangle + voller Hinweistext in einer eigenen Zeile;
+ *   URLs darin (z. B. kopierter Dokument-Link zum Turnierplan) sind klickbar.
  */
 export default function EventNoteIndicator({ variant, note, className = '' }: EventNoteIndicatorProps) {
   if (note.trim() === '') return null
@@ -31,7 +33,9 @@ export default function EventNoteIndicator({ variant, note, className = '' }: Ev
   return (
     <div className={`flex items-start gap-2 text-sm text-brand-danger ${className}`}>
       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-      <span className="whitespace-pre-wrap">{note}</span>
+      <span className="whitespace-pre-wrap min-w-0 break-words">
+        <LinkifiedText text={note} />
+      </span>
     </div>
   )
 }
