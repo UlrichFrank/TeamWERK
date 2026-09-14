@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { AlertTriangle, ChevronLeft, Download } from 'lucide-react'
 import { api } from '../lib/api'
+import { useGoBack } from '../hooks/useGoBack'
 import { errorStatus } from '../lib/errors'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
 
@@ -52,7 +52,7 @@ function parseFilenameFromDisposition(disposition: string | undefined, fallback:
 }
 
 export default function FileViewer(props: FileViewerProps) {
-  const navigate = useNavigate()
+  const goBack = useGoBack(props.fallbackPath)
   const [loaded, setLoaded] = useState<LoadedFile | null>(
     props.source === 'blob'
       ? { blob: props.blob, filename: props.filename, mimeType: props.mimeType }
@@ -105,11 +105,6 @@ export default function FileViewer(props: FileViewerProps) {
   useEffect(() => {
     return () => { if (blobUrl) URL.revokeObjectURL(blobUrl) }
   }, [blobUrl])
-
-  function goBack() {
-    if (window.history.length > 1) navigate(-1)
-    else navigate(props.fallbackPath, { replace: true })
-  }
 
   const headerName = loaded?.filename ?? 'Datei wird geladen…'
 

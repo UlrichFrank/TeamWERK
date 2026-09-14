@@ -10,6 +10,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { usePushSubscription } from '../hooks/usePushSubscription'
 import { useChatEvents } from '../hooks/useChatEvents'
 import { useScrollRestoration } from '../hooks/useScrollRestoration'
+import { HistoryBaseContext, historyIdx } from '../hooks/useGoBack'
 import { useVersion } from '../contexts/VersionContext'
 import { reloadWithSwActivation } from '../lib/reload'
 import { api, setMaintenanceHandler } from '../lib/api'
@@ -112,7 +113,8 @@ export default function AppShell() {
   // Baseline: History-Index beim AppShell-Mount. „Zurück" darf nur weiter
   // zurück gehen, als wir bei Session-Start standen — sonst landet der erste
   // Klick nach Login auf /login (führt zum Ausloggen).
-  const [initialHistoryIdx] = useState<number>(() => (window.history.state?.idx ?? 0))
+  // Seiten mit eigenem Zurück-Knopf lesen denselben Wert über `useGoBack`.
+  const [initialHistoryIdx] = useState<number>(historyIdx)
   // Scroll-Container der App ist dieses <main> (overflow-auto), nicht das Dokument.
   // Die iOS-Homescreen-PWA stellt dessen Position beim Zurück nicht selbst wieder her.
   const mainRef = useRef<HTMLElement>(null)
@@ -244,7 +246,7 @@ export default function AppShell() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- bewusster Zustand-Sync im Effekt (Prop-/Abhängigkeits-getrieben), kein Ableitungs-Bug
-    setCanGoBack((window.history.state?.idx ?? 0) > initialHistoryIdx)
+    setCanGoBack(historyIdx() > initialHistoryIdx)
   }, [location, initialHistoryIdx])
 
   useEffect(() => {
@@ -556,7 +558,9 @@ export default function AppShell() {
               </button>
             </div>
           )}
-          <Outlet />
+          <HistoryBaseContext.Provider value={initialHistoryIdx}>
+            <Outlet />
+          </HistoryBaseContext.Provider>
         </main>
       </div>
 

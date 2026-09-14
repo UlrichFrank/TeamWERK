@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { AlertTriangle, ChevronLeft, Lock } from 'lucide-react'
 import { api } from '../lib/api'
 import { decryptFile } from '../lib/bankCrypto'
 import { errorStatus } from '../lib/errors'
 import { useVault } from '../contexts/VaultContext'
 import FileViewer from '../components/FileViewer'
+import { useGoBack } from '../hooks/useGoBack'
 
 export default function SepaMandatViewerPage() {
   const { memberId } = useParams()
-  const navigate = useNavigate()
   const { privateKey } = useVault()
   const fallbackPath = memberId ? `/mitglieder/${memberId}` : '/mitglieder'
+  const goBack = useGoBack(fallbackPath)
 
   const [blob, setBlob] = useState<Blob | null>(null)
   const [loading, setLoading] = useState(false)
@@ -52,11 +53,6 @@ export default function SepaMandatViewerPage() {
 
     return () => { cancelled = true }
   }, [memberId, privateKey])
-
-  function goBack() {
-    if (window.history.length > 1) navigate(-1)
-    else navigate(fallbackPath, { replace: true })
-  }
 
   if (!memberId) {
     return <p className="text-sm text-brand-danger">Ungültige Mitglieds-ID.</p>
