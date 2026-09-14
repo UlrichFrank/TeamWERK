@@ -71,12 +71,13 @@ type ui struct {
 	win      fyne.Window
 	cacheDir string
 
-	client       *client.Client
-	email        string
-	seasonID     int
-	teamIDs      map[string]int
-	gameIDs      map[string]int
-	videosByGame map[int]client.ExistingVideo // gameID → bereits vorhandene(s) Video(s), für die Ersetzen-Auswahl
+	client        *client.Client
+	email         string
+	seasonID      int
+	teamIDs       map[string]int
+	gameIDs       map[string]int
+	videosByGame  map[int]client.ExistingVideo // gameID → bereits vorhandene(s) Video(s), für die Ersetzen-Auswahl
+	eligibleGames map[int]bool                 // game_id → darf der Nutzer hochladen (video-download-duty-upload); reine Vorauswahl-Filterung, Server entscheidet verbindlich
 
 	srcPath      string
 	fileLabel    *widget.Label
@@ -242,6 +243,7 @@ func (u *ui) login(server, email, password string) {
 		var (
 			seasonID int
 			teams    []client.Team
+			eligible map[int]bool
 		)
 		c, err := client.New(server, nil)
 		if err == nil {
@@ -253,6 +255,9 @@ func (u *ui) login(server, email, password string) {
 		if err == nil {
 			teams, err = c.Teams(ctx)
 		}
+		if err == nil {
+			eligible, err = c.EligibleGameIDs(ctx)
+		}
 		fyne.Do(func() {
 			u.status.SetText("")
 			if err != nil {
@@ -262,6 +267,7 @@ func (u *ui) login(server, email, password string) {
 			u.app.Preferences().SetString(prefServer, c.BaseURL())
 			u.app.Preferences().SetString(prefEmail, email)
 			u.client, u.email, u.seasonID = c, email, seasonID
+			u.eligibleGames = eligible
 			u.account.SetText("Angemeldet als " + email + " bei " + c.BaseURL())
 			u.setTeams(teams)
 		})
@@ -327,6 +333,14 @@ func (u *ui) onTeamChanged(label string) {
 			u.gameIDs = map[string]int{}
 			opts := []string{noGame}
 			for _, g := range games {
+				// Vorauswahl auf upload-berechtigte Spiele beschränken
+				// (video-download-duty-upload): eligibleGames vereint bereits
+				// Rollen-Berechtigung (Trainer/sportl. Leitung/Vorstand sehen
+				// alle Spiele ihrer Teams) und Video-Dienst-Zuweisungen — kein
+				// gesonderter Rollen-Check hier nötig.
+				if !u.eligibleGames[g.ID] {
+					continue
+				}
 				l := g.Label()
 				if v, ok := videosByGame[g.ID]; ok {
 					l += " · " + v.Describe(formatSize)
@@ -338,6 +352,10 @@ func (u *ui) onTeamChanged(label string) {
 				opts = append(opts, l)
 			}
 			u.gameSelect.SetOptions(opts)
+			if len(opts) == 1 {
+				u.status.SetText("Für dieses Konto gibt es bei dieser Mannschaft kein Spiel, für das ein " +
+					"Video-Upload erlaubt ist (Trainer/sportliche Leitung/Vorstand oder ein zugewiesener Video-Dienst).")
+			}
 		})
 	}()
 }

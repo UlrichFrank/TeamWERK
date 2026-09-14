@@ -377,12 +377,12 @@ func TestAPI_CreateVideoSeasonsGames(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]any{"video_id": 7, "upload_url": "/api/videos/upload/"})
 	})
-	mux.HandleFunc("GET /api/seasons", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/seasons/active", func(w http.ResponseWriter, r *http.Request) {
 		if seasonsStatus != http.StatusOK {
-			http.Error(w, "forbidden", seasonsStatus)
+			http.Error(w, "no active season", seasonsStatus)
 			return
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]any{{"id": 1, "is_active": false}, {"id": 3, "is_active": true}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 3, "name": "2025/26"})
 	})
 	mux.HandleFunc("GET /api/games", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("season_id") != "3" {
@@ -428,9 +428,34 @@ func TestAPI_CreateVideoSeasonsGames(t *testing.T) {
 		t.Fatalf("403 must become a permission error, got %v", err)
 	}
 
-	seasonsStatus = http.StatusForbidden
-	if _, err := c.ActiveSeasonID(ctx); !errors.Is(err, ErrNoUploadPermission) {
-		t.Fatalf("403 on seasons must mean no upload permission, got %v", err)
+	seasonsStatus = http.StatusNotFound
+	if _, err := c.ActiveSeasonID(ctx); !errors.Is(err, ErrNoActiveSeason) {
+		t.Fatalf("404 on seasons/active must mean no active season, got %v", err)
+	}
+}
+
+// TestEligibleGameIDs: /api/videos/upload-eligible-games liefert die Menge der
+// Spiele, für die der Nutzer laut Server hochladen darf (video-download-duty-
+// upload) — das Tool nutzt sie zur Vorauswahl-Filterung, nicht zur Autorisierung.
+func TestEligibleGameIDs(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/videos/upload-eligible-games", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"game_ids": []int{4, 5}})
+	})
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+	c, _ := New(srv.URL, srv.Client())
+	ctx := context.Background()
+
+	ids, err := c.EligibleGameIDs(ctx)
+	if err != nil {
+		t.Fatalf("EligibleGameIDs: %v", err)
+	}
+	if len(ids) != 2 || !ids[4] || !ids[5] {
+		t.Fatalf("EligibleGameIDs = %v, want {4:true, 5:true}", ids)
+	}
+	if ids[6] {
+		t.Error("game 6 must not be in the set")
 	}
 }
 

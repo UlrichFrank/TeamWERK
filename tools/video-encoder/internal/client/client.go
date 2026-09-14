@@ -31,7 +31,6 @@ var (
 	ErrTooManyAttempts    = errors.New("zu viele Anmeldeversuche — bitte später erneut versuchen")
 	ErrSessionExpired     = errors.New("Sitzung abgelaufen — bitte erneut anmelden")
 	ErrMaintenance        = errors.New("TeamWERK ist gerade im Wartungsmodus — bitte später erneut versuchen")
-	ErrNoUploadPermission = errors.New("dieses Konto darf keine Videos hochladen (nur Trainer, sportliche Leitung und Vorstand)")
 	ErrNoActiveSeason     = errors.New("in TeamWERK ist keine Saison aktiv — bitte den Vorstand informieren")
 )
 
@@ -287,28 +286,47 @@ func (c *Client) Teams(ctx context.Context) ([]Team, error) {
 	return active, nil
 }
 
-// ActiveSeasonID liefert die aktive Saison (GET /api/seasons). Die Route steht
-// im selben Rechte-Tier wie der Upload (Trainer/sportl. Leitung/Vorstand) —
-// ein 403 heißt deshalb schon hier: dieses Konto kann keine Videos hochladen.
+// ActiveSeasonID liefert die aktive Saison (GET /api/seasons/active,
+// Authenticated-Tier — jedes eingeloggte Konto darf das lesen, anders als die
+// vollständige Saisonhistorie unter GET /api/seasons). Video-Upload-Recht wird
+// seit video-download-duty-upload nicht mehr pauschal über die Vereinsfunktion
+// entschieden (Trainer/sportl. Leitung/Vorstand ODER eine passende
+// Video-Dienst-Zuweisung), deshalb ist ein 403 an dieser Stelle kein sinnvolles
+// Signal mehr — EligibleGameIDs entscheidet das später pro Spiel.
 func (c *Client) ActiveSeasonID(ctx context.Context) (int, error) {
-	var seasons []struct {
-		ID       int  `json:"id"`
-		IsActive bool `json:"is_active"`
+	var season struct {
+		ID int `json:"id"`
 	}
-	err := c.getJSON(ctx, "Saisons laden", "/api/seasons", &seasons)
+	err := c.getJSON(ctx, "Saison laden", "/api/seasons/active", &season)
 	var se *StatusError
-	if errors.As(err, &se) && se.Status == http.StatusForbidden {
-		return 0, ErrNoUploadPermission
+	if errors.As(err, &se) && se.Status == http.StatusNotFound {
+		return 0, ErrNoActiveSeason
 	}
 	if err != nil {
 		return 0, err
 	}
-	for _, s := range seasons {
-		if s.IsActive {
-			return s.ID, nil
-		}
+	return season.ID, nil
+}
+
+// EligibleGameIDs liefert die Menge der Spiele, für die der angemeldete Nutzer
+// aktuell ein Video hochladen darf (GET /api/videos/upload-eligible-games,
+// video-download-duty-upload) — Vereinigung aus Rollen-Berechtigung
+// (Trainer/sportl. Leitung/Vorstand/Admin: alle Spiele ihrer Teams) und
+// Video-Dienst-Zuweisungen (genau das zugewiesene Spiel). Die UI filtert die
+// Spielauswahl darauf; die eigentliche Autorisierung bleibt serverseitig bei
+// CreateVideo — diese Menge ist reine Vorauswahl.
+func (c *Client) EligibleGameIDs(ctx context.Context) (map[int]bool, error) {
+	var resp struct {
+		GameIDs []int `json:"game_ids"`
 	}
-	return 0, ErrNoActiveSeason
+	if err := c.getJSON(ctx, "Berechtigte Spiele laden", "/api/videos/upload-eligible-games", &resp); err != nil {
+		return nil, err
+	}
+	ids := make(map[int]bool, len(resp.GameIDs))
+	for _, id := range resp.GameIDs {
+		ids[id] = true
+	}
+	return ids, nil
 }
 
 // Game ist ein Spiel aus GET /api/games.
