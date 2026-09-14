@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, X } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import KaderMemberSearch from '../components/KaderMemberSearch'
@@ -41,7 +41,6 @@ export default function UebungsgruppenPage() {
   const [renameValue, setRenameValue] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<PracticeGroup | null>(null)
   const [deleting, setDeleting] = useState(false)
-  const [busy, setBusy] = useState<Record<string, boolean>>({})
 
   useEscapeKey(
     deleteConfirm ? () => setDeleteConfirm(null) :
@@ -115,15 +114,12 @@ export default function UebungsgruppenPage() {
     }
   }
 
-  const mutate = async (key: string, body: Record<string, number[]>) => {
-    setBusy(prev => ({ ...prev, [key]: true }))
+  const mutate = async (groupId: number, body: Record<string, number[]>) => {
     try {
-      await api.put(`/practice-groups/${key.split('-')[0]}`, body)
+      await api.put(`/practice-groups/${groupId}`, body)
       await load()
     } catch {
       setError('Änderung fehlgeschlagen.')
-    } finally {
-      setBusy(prev => ({ ...prev, [key]: false }))
     }
   }
 
@@ -179,8 +175,8 @@ export default function UebungsgruppenPage() {
           <div className="px-5 py-2 border-t border-brand-border-subtle">
             <KaderTrainerSearch
               assignedTrainers={g.trainers}
-              onAdd={memberId => mutate(`${g.id}-trainer-add-${memberId}`, { trainers_add: [memberId] })}
-              onRemove={memberId => mutate(`${g.id}-trainer-remove-${memberId}`, { trainers_remove: [memberId] })}
+              onAdd={memberId => mutate(g.id, { trainers_add: [memberId] })}
+              onRemove={memberId => mutate(g.id, { trainers_remove: [memberId] })}
             />
           </div>
 
@@ -205,15 +201,9 @@ export default function UebungsgruppenPage() {
                     </span>
                     <PersonChip userId={m.user_id} name={m.name} />
                   </span>
-                  <button
-                    onClick={() => mutate(`${g.id}-member-remove-${m.id}`, { members_remove: [m.id] })}
-                    disabled={busy[`${g.id}-member-remove-${m.id}`]}
-                    className="text-brand-text-muted hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
-                    aria-label="Mitglied entfernen"
-                    title="Mitglied entfernen"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                  <ActionMenu actions={[
+                    { label: 'Entfernen', onClick: () => mutate(g.id, { members_remove: [m.id] }), variant: 'danger' },
+                  ]} />
                 </li>
               ))}
             </ul>
