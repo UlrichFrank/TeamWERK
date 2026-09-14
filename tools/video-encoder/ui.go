@@ -127,6 +127,23 @@ func (u *ui) build() fyne.CanvasObject {
 	u.fileLabel.Wrapping = fyne.TextWrapWord
 	u.chooseBtn = widget.NewButtonWithIcon("Datei auswählen …", theme.FolderOpenIcon(), u.chooseFile)
 
+	// Hinzufügen-oder-Ersetzen-Auswahl (video-upload-anhaengen-oder-ersetzen):
+	// nur sichtbar, wenn zum gewählten Spiel schon (ein) Video(s) existieren
+	// (onGameChanged steuert Show/Hide). Ein eigener Container statt eines
+	// Form-Items, weil widget.Form in dieser Fyne-Version keine ausblendbaren
+	// Zeilen kennt — ein normaler Container lässt sich dagegen komplett
+	// verbergen, inklusive seiner Beschriftung. MUSS vor u.gameSelect gebaut
+	// werden: dessen SetSelected(noGame) unten löst synchron onGameChanged
+	// aus, das u.replaceGroup bereits braucht (sonst Nil-Pointer-Panic beim
+	// Start).
+	u.replaceHint = widget.NewLabel("")
+	u.replaceHint.Wrapping = fyne.TextWrapWord
+	u.replaceGroup = widget.NewRadioGroup([]string{optAppend, optReplace}, nil)
+	u.replaceGroup.Horizontal = true
+	u.replaceGroup.SetSelected(optAppend)
+	u.replaceBox = container.NewVBox(u.replaceHint, u.replaceGroup)
+	u.replaceBox.Hide()
+
 	u.teamSelect = widget.NewSelect(nil, u.onTeamChanged)
 	u.teamSelect.PlaceHolder = "Mannschaft auswählen …"
 	u.gameSelect = widget.NewSelect([]string{noGame}, u.onGameChanged)
@@ -145,20 +162,6 @@ func (u *ui) build() fyne.CanvasObject {
 		widget.NewFormItem("Titel", u.titleEntry),
 		widget.NewFormItem("Beschreibung", u.descEntry),
 	)
-
-	// Hinzufügen-oder-Ersetzen-Auswahl (video-upload-anhaengen-oder-ersetzen):
-	// nur sichtbar, wenn zum gewählten Spiel schon (ein) Video(s) existieren
-	// (onGameChanged steuert Show/Hide). Ein eigener Container statt eines
-	// Form-Items, weil widget.Form in dieser Fyne-Version keine ausblendbaren
-	// Zeilen kennt — ein normaler Container lässt sich dagegen komplett
-	// verbergen, inklusive seiner Beschriftung.
-	u.replaceHint = widget.NewLabel("")
-	u.replaceHint.Wrapping = fyne.TextWrapWord
-	u.replaceGroup = widget.NewRadioGroup([]string{optAppend, optReplace}, nil)
-	u.replaceGroup.Horizontal = true
-	u.replaceGroup.SetSelected(optAppend)
-	u.replaceBox = container.NewVBox(u.replaceHint, u.replaceGroup)
-	u.replaceBox.Hide()
 
 	u.startBtn = widget.NewButtonWithIcon("Encodieren und hochladen", theme.UploadIcon(), u.start)
 	u.startBtn.Importance = widget.HighImportance
