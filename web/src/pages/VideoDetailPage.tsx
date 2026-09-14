@@ -67,14 +67,21 @@ function VideoPlayer({ id, title }: { id: number; title: string }) {
   // masterURL wird für Chromecast-Wurf gebraucht — CastButton übergibt die
   // komplette URL inkl. ?st=-Token an den Receiver, der direkt vom Server holt.
   const [masterURL, setMasterURL] = useState('')
-  const [downloading, setDownloading] = useState(false)
+  // 'building' vor dem ersten empfangenen Byte (Server remuxt per ffmpeg on-demand,
+  // siehe Gotcha „Video-Download"), 'downloading' sobald der Blob tatsächlich fließt.
+  const [downloadPhase, setDownloadPhase] = useState<'idle' | 'building' | 'downloading'>('idle')
   const { keepAlive } = useAuth()
 
   const handleDownload = async () => {
-    setDownloading(true)
+    setDownloadPhase('building')
     setError('')
     try {
-      const res = await api.get(`/videos/${id}/download`, { responseType: 'blob' })
+      const res = await api.get(`/videos/${id}/download`, {
+        responseType: 'blob',
+        onDownloadProgress: e => {
+          if (e.loaded > 0) setDownloadPhase('downloading')
+        },
+      })
       const url = URL.createObjectURL(res.data)
       const a = document.createElement('a')
       a.href = url
@@ -84,7 +91,7 @@ function VideoPlayer({ id, title }: { id: number; title: string }) {
     } catch {
       setError('Der Download ist fehlgeschlagen.')
     } finally {
-      setDownloading(false)
+      setDownloadPhase('idle')
     }
   }
 
@@ -237,15 +244,15 @@ function VideoPlayer({ id, title }: { id: number; title: string }) {
         className="w-full rounded-lg bg-brand-black aspect-video"
       />
       {masterURL && (
-        <div className="mt-2 flex justify-end gap-2">
+        <div className="mt-2 flex justify-end items-center gap-2">
           <button
             type="button"
             onClick={handleDownload}
-            disabled={downloading}
+            disabled={downloadPhase !== 'idle'}
             className={`${BTN_SMALL} inline-flex items-center gap-1.5`}
           >
             <Download className="w-4 h-4" />
-            {downloading ? 'Lädt herunter…' : 'Herunterladen'}
+            {downloadPhase === 'building' ? 'Baue Archiv…' : downloadPhase === 'downloading' ? 'Lädt herunter…' : 'Herunterladen'}
           </button>
           <CastButton masterURL={masterURL} />
         </div>
