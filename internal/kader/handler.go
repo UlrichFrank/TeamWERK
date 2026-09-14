@@ -139,13 +139,14 @@ type kaderRow struct {
 }
 
 type memberRow struct {
-	ID        int     `json:"id"`
-	Name      string  `json:"name"`
-	UserID    *int    `json:"user_id,omitempty"`
-	BirthYear int     `json:"birth_year"`
-	Gender    string  `json:"gender"`
-	Positions *string `json:"positions"`
-	Status    string  `json:"status"`
+	ID           int     `json:"id"`
+	Name         string  `json:"name"`
+	UserID       *int    `json:"user_id,omitempty"`
+	BirthYear    int     `json:"birth_year"`
+	Gender       string  `json:"gender"`
+	Positions    *string `json:"positions"`
+	Status       string  `json:"status"`
+	JerseyNumber *int    `json:"jersey_number,omitempty"`
 }
 
 type trainerRow struct {
@@ -933,7 +934,8 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
 		        m.gender,
 		        m.position,
-		        m.status
+		        m.status,
+		        m.jersey_number
 		 FROM kader_members km
 		 JOIN members m ON m.id=km.member_id
 		 WHERE km.kader_id=?
@@ -946,11 +948,15 @@ func (h *Handler) loadMembers(ctx context.Context, kaderID int) ([]memberRow, er
 	result := []memberRow{}
 	for rows.Next() {
 		var m memberRow
-		var userID sql.NullInt64
-		rows.Scan(&m.ID, &m.Name, &userID, &m.BirthYear, &m.Gender, &m.Positions, &m.Status)
+		var userID, jerseyNumber sql.NullInt64
+		rows.Scan(&m.ID, &m.Name, &userID, &m.BirthYear, &m.Gender, &m.Positions, &m.Status, &jerseyNumber)
 		if userID.Valid {
 			n := int(userID.Int64)
 			m.UserID = &n
+		}
+		if jerseyNumber.Valid {
+			n := int(jerseyNumber.Int64)
+			m.JerseyNumber = &n
 		}
 		result = append(result, m)
 	}
@@ -965,7 +971,8 @@ func (h *Handler) loadExtendedMembers(ctx context.Context, kaderID int) ([]membe
 		        COALESCE(CAST(strftime('%Y', m.date_of_birth) AS INTEGER), 0),
 		        m.gender,
 		        m.position,
-		        m.status
+		        m.status,
+		        m.jersey_number
 		 FROM kader_extended_members kem
 		 JOIN members m ON m.id=kem.member_id
 		 WHERE kem.kader_id=?
@@ -978,11 +985,15 @@ func (h *Handler) loadExtendedMembers(ctx context.Context, kaderID int) ([]membe
 	result := []memberRow{}
 	for rows.Next() {
 		var m memberRow
-		var userID sql.NullInt64
-		rows.Scan(&m.ID, &m.Name, &userID, &m.BirthYear, &m.Gender, &m.Positions, &m.Status)
+		var userID, jerseyNumber sql.NullInt64
+		rows.Scan(&m.ID, &m.Name, &userID, &m.BirthYear, &m.Gender, &m.Positions, &m.Status, &jerseyNumber)
 		if userID.Valid {
 			n := int(userID.Int64)
 			m.UserID = &n
+		}
+		if jerseyNumber.Valid {
+			n := int(jerseyNumber.Int64)
+			m.JerseyNumber = &n
 		}
 		result = append(result, m)
 	}

@@ -9,6 +9,7 @@ import PersonChip from '../components/PersonChip'
 import PositionStatus from '../components/PositionStatus'
 import CopyKaderModal from '../components/CopyKaderModal'
 import AutoAssignModal from '../components/AutoAssignModal'
+import ActionMenu from '../components/ActionMenu'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
 import { compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
@@ -28,6 +29,7 @@ interface Member {
   birth_year: number
   gender: string
   status?: string
+  jersey_number?: number
 }
 
 interface Kader {
@@ -90,6 +92,7 @@ export default function AdminKaderPage() {
 
   const [deleteConfirm, setDeleteConfirm] = useState<Kader | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [memberView, setMemberView] = useState<Record<number, 'kader' | 'erweitert'>>({})
 
   useEscapeKey(
     deleteConfirm ? () => setDeleteConfirm(null) :
@@ -491,15 +494,13 @@ export default function AdminKaderPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-xs text-brand-text-muted">{k.member_count} Mitgl.</span>
-                      <button
-                        onClick={() => k.member_count === 0 ? setDeleteConfirm(k) : showToast('Erst alle Mitglieder entfernen')}
-                        disabled={k.member_count > 0}
-                        title={k.member_count > 0 ? 'Erst alle Mitglieder entfernen' : 'Kader löschen'}
-                        aria-label="Kader löschen"
-                        className="text-brand-text-subtle hover:text-brand-danger transition-colors disabled:cursor-not-allowed disabled:opacity-40 p-0.5 rounded"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                      <ActionMenu actions={[
+                        {
+                          label: 'Löschen',
+                          onClick: () => k.member_count === 0 ? setDeleteConfirm(k) : showToast('Erst alle Mitglieder entfernen'),
+                          variant: 'danger',
+                        },
+                      ]} />
                     </div>
                   </div>
 
@@ -594,86 +595,119 @@ export default function AdminKaderPage() {
                     />
                   </div>
 
-                  {/* Member search */}
-                  <div className="px-5 pt-2 pb-2 border-t border-brand-border-subtle">
-                    <KaderMemberSearch
-                      kaderId={k.id}
-                      onMemberAdded={() => selectedSeason && loadKader(selectedSeason.id)}
-                      birthYears={k.birth_years}
-                    />
+                  {/* Kader / erweiterter Kader toggle */}
+                  <div className="px-5 pt-3 border-t border-brand-border-subtle">
+                    <div className="flex rounded-md border border-brand-border-subtle overflow-hidden text-xs w-fit">
+                      <button
+                        onClick={() => setMemberView(prev => ({ ...prev, [k.id]: 'kader' }))}
+                        className={`px-3 py-1 transition-colors ${(memberView[k.id] ?? 'kader') === 'kader'
+                          ? 'bg-brand-yellow text-brand-black font-medium'
+                          : 'bg-white text-brand-text-muted hover:bg-brand-border-subtle'}`}
+                      >
+                        Kader ({(k.members ?? []).length})
+                      </button>
+                      <button
+                        onClick={() => setMemberView(prev => ({ ...prev, [k.id]: 'erweitert' }))}
+                        className={`px-3 py-1 transition-colors border-l border-brand-border-subtle ${(memberView[k.id] ?? 'kader') === 'erweitert'
+                          ? 'bg-brand-yellow text-brand-black font-medium'
+                          : 'bg-white text-brand-text-muted hover:bg-brand-border-subtle'}`}
+                      >
+                        Erweiterter Kader ({(k.extended_members ?? []).length})
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Member list */}
-                  {(k.members ?? []).length === 0 ? (
-                    <p className="text-xs text-brand-text-subtle italic px-5 py-3">Keine Mitglieder</p>
-                  ) : (
-                    <ul className="divide-y divide-brand-border-subtle px-5 pb-4">
-                      {(k.members ?? []).map(m => (
-                        <li key={m.id} className="flex items-center justify-between py-2 gap-2">
-                          <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
-                            <PersonChip userId={m.user_id} name={m.name} />
-                            <span className="text-brand-text-muted text-xs">
-                              ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
-                            </span>
-                            {m.status === 'anwaerter' && (
-                              <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-green/10 text-brand-green">
-                                Anwärter
-                              </span>
-                            )}
-                          </span>
-                          <button
-                            onClick={() => handleRemoveMember(k.id, m.id)}
-                            disabled={removing[`${k.id}-${m.id}`]}
-                            className="text-brand-text-muted hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
-                            aria-label="Mitglied entfernen"
-                            title="Mitglied entfernen"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {(memberView[k.id] ?? 'kader') === 'kader' ? (
+                    <>
+                      {/* Member search */}
+                      <div className="px-5 pt-2 pb-2 border-t border-brand-border-subtle">
+                        <KaderMemberSearch
+                          kaderId={k.id}
+                          onMemberAdded={() => selectedSeason && loadKader(selectedSeason.id)}
+                          birthYears={k.birth_years}
+                        />
+                      </div>
 
-                  {/* Extended member search */}
-                  <div className="px-5 pt-2 pb-2 border-t border-brand-border-subtle">
-                    <p className="text-xs font-medium text-brand-text-muted mb-2">Erweiterter Kader</p>
-                    <KaderExtendedSearch
-                      kaderId={k.id}
-                      onMemberAdded={() => selectedSeason && loadKader(selectedSeason.id)}
-                    />
-                  </div>
-
-                  {/* Extended member list */}
-                  {(k.extended_members ?? []).length === 0 ? (
-                    <p className="text-xs text-brand-text-subtle italic px-5 py-3">Keine erweiterten Mitglieder</p>
-                  ) : (
-                    <ul className="divide-y divide-brand-border-subtle px-5 pb-4">
-                      {(k.extended_members ?? []).map(m => (
-                        <li key={m.id} className="flex items-center justify-between py-2 gap-2">
-                          <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
-                            <PersonChip userId={m.user_id} name={m.name} />
-                            <span className="text-brand-text-muted text-xs">
-                              ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
-                            </span>
-                            {m.status === 'anwaerter' && (
-                              <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-green/10 text-brand-green">
-                                Anwärter
+                      {/* Member list */}
+                      {(k.members ?? []).length === 0 ? (
+                        <p className="text-xs text-brand-text-subtle italic px-5 py-3">Keine Mitglieder</p>
+                      ) : (
+                        <ul className="divide-y divide-brand-border-subtle px-5 pb-4">
+                          {(k.members ?? []).map(m => (
+                            <li key={m.id} className="flex items-center justify-between py-2 gap-2">
+                              <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
+                                <span className="text-brand-text-muted text-xs font-mono w-6 inline-block text-right">
+                                  {m.jersey_number != null ? `#${m.jersey_number}` : ''}
+                                </span>
+                                <PersonChip userId={m.user_id} name={m.name} />
+                                <span className="text-brand-text-muted text-xs">
+                                  ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
+                                </span>
+                                {m.status === 'anwaerter' && (
+                                  <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-green/10 text-brand-green">
+                                    Anwärter
+                                  </span>
+                                )}
                               </span>
-                            )}
-                          </span>
-                          <button
-                            onClick={() => handleRemoveExtendedMember(k.id, m.id)}
-                            disabled={removing[`ext-${k.id}-${m.id}`]}
-                            className="text-brand-text-muted hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
-                            aria-label="Aus erweitertem Kader entfernen"
-                            title="Aus erweitertem Kader entfernen"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                              <button
+                                onClick={() => handleRemoveMember(k.id, m.id)}
+                                disabled={removing[`${k.id}-${m.id}`]}
+                                className="text-brand-text-muted hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
+                                aria-label="Mitglied entfernen"
+                                title="Mitglied entfernen"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* Extended member search */}
+                      <div className="px-5 pt-2 pb-2 border-t border-brand-border-subtle">
+                        <KaderExtendedSearch
+                          kaderId={k.id}
+                          onMemberAdded={() => selectedSeason && loadKader(selectedSeason.id)}
+                        />
+                      </div>
+
+                      {/* Extended member list */}
+                      {(k.extended_members ?? []).length === 0 ? (
+                        <p className="text-xs text-brand-text-subtle italic px-5 py-3">Keine erweiterten Mitglieder</p>
+                      ) : (
+                        <ul className="divide-y divide-brand-border-subtle px-5 pb-4">
+                          {(k.extended_members ?? []).map(m => (
+                            <li key={m.id} className="flex items-center justify-between py-2 gap-2">
+                              <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
+                                <span className="text-brand-text-muted text-xs font-mono w-6 inline-block text-right">
+                                  {m.jersey_number != null ? `#${m.jersey_number}` : ''}
+                                </span>
+                                <PersonChip userId={m.user_id} name={m.name} />
+                                <span className="text-brand-text-muted text-xs">
+                                  ({m.birth_year}/{GENDER_SHORT[m.gender] ?? m.gender})
+                                </span>
+                                {m.status === 'anwaerter' && (
+                                  <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-green/10 text-brand-green">
+                                    Anwärter
+                                  </span>
+                                )}
+                              </span>
+                              <button
+                                onClick={() => handleRemoveExtendedMember(k.id, m.id)}
+                                disabled={removing[`ext-${k.id}-${m.id}`]}
+                                className="text-brand-text-muted hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
+                                aria-label="Aus erweitertem Kader entfernen"
+                                title="Aus erweitertem Kader entfernen"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   )}
                 </div>
               )

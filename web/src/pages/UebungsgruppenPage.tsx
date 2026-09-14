@@ -5,6 +5,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import KaderMemberSearch from '../components/KaderMemberSearch'
 import KaderTrainerSearch from '../components/KaderTrainerSearch'
 import PersonChip from '../components/PersonChip'
+import ActionMenu from '../components/ActionMenu'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorData } from '../lib/errors'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY } from '../lib/buttonStyles'
@@ -16,6 +17,7 @@ interface Person {
   name: string
   user_id?: number
   status?: string
+  jersey_number?: number
 }
 
 interface PracticeGroup {
@@ -168,14 +170,9 @@ export default function UebungsgruppenPage() {
             </button>
             <div className="flex items-center gap-2 shrink-0">
               <span className="text-xs text-brand-text-muted">{g.members.length} Mitgl.</span>
-              <button
-                onClick={() => setDeleteConfirm(g)}
-                aria-label="Übungsgruppe löschen"
-                title="Übungsgruppe löschen"
-                className="text-brand-text-subtle hover:text-brand-danger transition-colors p-0.5 rounded"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <ActionMenu actions={[
+                { label: 'Löschen', onClick: () => setDeleteConfirm(g), variant: 'danger' },
+              ]} />
             </div>
           </div>
 
@@ -203,6 +200,9 @@ export default function UebungsgruppenPage() {
               {g.members.map(m => (
                 <li key={m.id} className="flex items-center justify-between py-2 gap-2">
                   <span className="text-sm text-brand-text flex items-center gap-1.5 flex-wrap">
+                    <span className="text-brand-text-muted text-xs font-mono w-6 inline-block text-right">
+                      {m.jersey_number != null ? `#${m.jersey_number}` : ''}
+                    </span>
                     <PersonChip userId={m.user_id} name={m.name} />
                   </span>
                   <button

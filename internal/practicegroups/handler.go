@@ -43,10 +43,11 @@ func (h *Handler) broadcast() {
 }
 
 type memberRow struct {
-	ID     int    `json:"id"`
-	Name   string `json:"name"`
-	UserID *int   `json:"user_id,omitempty"`
-	Status string `json:"status"`
+	ID           int    `json:"id"`
+	Name         string `json:"name"`
+	UserID       *int   `json:"user_id,omitempty"`
+	Status       string `json:"status"`
+	JerseyNumber *int   `json:"jersey_number,omitempty"`
 }
 
 type group struct {
@@ -70,7 +71,7 @@ func (h *Handler) activeSeasonID(ctx context.Context) (int, error) {
 // einer Gruppe. table ist eine Konstante aus diesem Paket, nie Nutzereingabe.
 func (h *Handler) loadPeople(ctx context.Context, table string, kaderID int) ([]memberRow, error) {
 	rows, err := h.db.QueryContext(ctx, `
-		SELECT m.id, m.first_name || ' ' || m.last_name, m.user_id, m.status
+		SELECT m.id, m.first_name || ' ' || m.last_name, m.user_id, m.status, m.jersey_number
 		FROM `+table+` x
 		JOIN members m ON m.id = x.member_id
 		WHERE x.kader_id = ?
@@ -82,13 +83,17 @@ func (h *Handler) loadPeople(ctx context.Context, table string, kaderID int) ([]
 	out := []memberRow{}
 	for rows.Next() {
 		var mr memberRow
-		var uid sql.NullInt64
-		if err := rows.Scan(&mr.ID, &mr.Name, &uid, &mr.Status); err != nil {
+		var uid, jerseyNumber sql.NullInt64
+		if err := rows.Scan(&mr.ID, &mr.Name, &uid, &mr.Status, &jerseyNumber); err != nil {
 			return nil, err
 		}
 		if uid.Valid {
 			v := int(uid.Int64)
 			mr.UserID = &v
+		}
+		if jerseyNumber.Valid {
+			v := int(jerseyNumber.Int64)
+			mr.JerseyNumber = &v
 		}
 		out = append(out, mr)
 	}
