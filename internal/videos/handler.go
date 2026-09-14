@@ -15,9 +15,14 @@ type Handler struct {
 	db  *sql.DB
 	hub *hub.EventHub
 	cfg *appconfig.Config
+
+	// remux ist die ffmpeg-Naht für GET /api/videos/{id}/download
+	// (video-download-duty-upload); Produktion nutzt realFFmpegRemux, Tests
+	// injizieren eine Fake analog zu Worker.transcode.
+	remux remuxFunc
 }
 
 // NewHandler verdrahtet DB, Event-Hub und Config zu einem Video-Handler.
 func NewHandler(db *sql.DB, h *hub.EventHub, cfg *appconfig.Config) *Handler {
-	return &Handler{db: db, hub: h, cfg: cfg}
+	return &Handler{db: db, hub: h, cfg: cfg, remux: realFFmpegRemux}
 }

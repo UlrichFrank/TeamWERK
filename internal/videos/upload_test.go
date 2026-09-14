@@ -20,16 +20,14 @@ import (
 )
 
 // newUploadServer mounts POST /api/videos behind the same auth tier as
-// internal/app/router.go (JWT + RequireClubFunction upload tier). CreateUpload
-// additionally enforces CanUploadToTeam.
+// internal/app/router.go (JWT-only, Authenticated-Tier seit
+// video-download-duty-upload — die Autorisierung sitzt vollständig in
+// CreateUpload: CanUploadToTeam ODER CanUploadForGameViaDuty).
 func newUploadServer(t *testing.T, h *Handler) *httptest.Server {
 	t.Helper()
 	r := chi.NewRouter()
 	r.Use(auth.Middleware(testutil.TestJWTSecret))
-	r.Group(func(r chi.Router) {
-		r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
-		r.Post("/api/videos", h.CreateUpload)
-	})
+	r.Post("/api/videos", h.CreateUpload)
 	srv := httptest.NewServer(r)
 	t.Cleanup(srv.Close)
 	return srv
@@ -208,6 +206,130 @@ func TestCreateUpload_ForbiddenForeignTeam(t *testing.T) {
 	db.QueryRow(`SELECT COUNT(*) FROM videos WHERE team_id = ?`, teamB).Scan(&n)
 	if n != 0 {
 		t.Errorf("forbidden upload created %d rows, want 0", n)
+	}
+}
+
+// --- Dienst-basierter Upload (video-download-duty-upload) --------------------
+
+func TestCreateUpload_DutyBasedForAssignedGame(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := uploadHandler(t, db, 1024)
+	srv := newUploadServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	game := testutil.CreateGame(t, db, season, team, "2026-03-15")
+
+	videoDutyType := createDutyTypeWithVideoFlag(t, db, "Video", true)
+	slot := testutil.CreateDutySlot(t, db, videoDutyType, season, team, game, "2026-03-15")
+
+	// Plain user without any club function, but with a video-upload duty
+	// assignment for exactly this game.
+	user := testutil.CreateUser(t, db, "standard")
+	addDutyAssignment(t, db, slot, user)
+
+	tok := testutil.Token(t, user, "standard", []string{"spieler"})
+	body := map[string]any{
+		"title":      "Mein Video",
+		"team_id":    team,
+		"season_id":  season,
+		"game_id":    game,
+		"size_bytes": 1024,
+	}
+	res := testutil.Post(t, srv, "/api/videos", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", res.StatusCode)
+	}
+}
+
+func TestCreateUpload_DutyForDifferentGameForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := uploadHandler(t, db, 1024)
+	srv := newUploadServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	assignedGame := testutil.CreateGame(t, db, season, team, "2026-03-15")
+	otherGame := testutil.CreateGame(t, db, season, team, "2026-03-22")
+
+	videoDutyType := createDutyTypeWithVideoFlag(t, db, "Video", true)
+	slot := testutil.CreateDutySlot(t, db, videoDutyType, season, team, assignedGame, "2026-03-15")
+
+	user := testutil.CreateUser(t, db, "standard")
+	addDutyAssignment(t, db, slot, user)
+
+	tok := testutil.Token(t, user, "standard", []string{"spieler"})
+	body := map[string]any{
+		"title":      "Fremdes Spiel",
+		"team_id":    team,
+		"season_id":  season,
+		"game_id":    otherGame,
+		"size_bytes": 1024,
+	}
+	res := testutil.Post(t, srv, "/api/videos", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", res.StatusCode)
+	}
+}
+
+func TestCreateUpload_DutyBasedWithoutGameIDForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := uploadHandler(t, db, 1024)
+	srv := newUploadServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	game := testutil.CreateGame(t, db, season, team, "2026-03-15")
+
+	videoDutyType := createDutyTypeWithVideoFlag(t, db, "Video", true)
+	slot := testutil.CreateDutySlot(t, db, videoDutyType, season, team, game, "2026-03-15")
+
+	user := testutil.CreateUser(t, db, "standard")
+	addDutyAssignment(t, db, slot, user)
+
+	tok := testutil.Token(t, user, "standard", []string{"spieler"})
+	body := map[string]any{
+		"title":      "Ohne Spielbezug",
+		"team_id":    team,
+		"season_id":  season,
+		"size_bytes": 1024,
+	}
+	res := testutil.Post(t, srv, "/api/videos", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", res.StatusCode)
+	}
+}
+
+func TestCreateUpload_DutyOnNonGrantingTypeForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := uploadHandler(t, db, 1024)
+	srv := newUploadServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	game := testutil.CreateGame(t, db, season, team, "2026-03-15")
+
+	nonGrantingType := createDutyTypeWithVideoFlag(t, db, "Kuchen", false)
+	slot := testutil.CreateDutySlot(t, db, nonGrantingType, season, team, game, "2026-03-15")
+
+	user := testutil.CreateUser(t, db, "standard")
+	addDutyAssignment(t, db, slot, user)
+
+	tok := testutil.Token(t, user, "standard", []string{"spieler"})
+	body := map[string]any{
+		"title":      "Kein Video-Dienst",
+		"team_id":    team,
+		"season_id":  season,
+		"game_id":    game,
+		"size_bytes": 1024,
+	}
+	res := testutil.Post(t, srv, "/api/videos", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", res.StatusCode)
 	}
 }
 

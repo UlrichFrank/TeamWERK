@@ -673,6 +673,7 @@ func objectFixtures() map[string]objFixture {
 	videoFixture := func(w *objWorld) map[string]string { return p("id", w.newVideo()) }
 	add("GET /api/videos/{id}", objFixture{params: videoFixture})
 	add("GET /api/videos/{id}/play", objFixture{params: videoFixture, noOwnerProbe: true})
+	add("GET /api/videos/{id}/download", objFixture{params: videoFixture, noOwnerProbe: true})
 	add("PATCH /api/videos/{id}", objFixture{params: videoFixture, noOwnerProbe: true})
 	add("DELETE /api/videos/{id}", objFixture{params: videoFixture, noOwnerProbe: true})
 	add("GET /api/videos/{id}/hls/master.m3u8", objFixture{params: videoFixture, noOwnerProbe: true})

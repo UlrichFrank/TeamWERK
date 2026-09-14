@@ -149,6 +149,16 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	// Dienst-basierter Fallback (video-download-duty-upload): ohne Rollen-
+	// Berechtigung, aber mit einer Video-Upload-Dienst-Zuweisung für genau
+	// dieses Spiel.
+	if !ok && req.GameID != nil {
+		ok, err = h.CanUploadForGameViaDuty(claims, *req.GameID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
 	if !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return

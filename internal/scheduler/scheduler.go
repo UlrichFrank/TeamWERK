@@ -57,6 +57,7 @@ func (s *Scheduler) Run() {
 	s.sendCarpoolingReminders()
 	s.sendEventNoteReminders()
 	s.cleanStaleVideoUploads()
+	s.cleanStaleVideoDownloadTemp()
 	s.failStaleVideoUploads()
 	s.cleanFailedVideoRaw()
 	s.runVideoRetention()
@@ -200,6 +201,49 @@ func (s *Scheduler) cleanStaleVideoUploads() {
 	}
 	if removed > 0 {
 		slog.Info("stale video uploads cleaned", "count", removed)
+	}
+}
+
+// cleanStaleVideoDownloadTemp entfernt verwaiste Remux-Temp-Dateien (>1 h) im
+// Download-Temp-Verzeichnis (video-download-duty-upload, internal/videos.
+// DownloadTempDir). Der Download-Handler räumt seine Temp-Dateien selbst per
+// `defer os.Remove` auf — dieser Job fängt nur den Fall eines Server-Absturzes
+// mitten im Remux ab (analog cleanStaleVideoUploads für tus-Sessions). Kurzer
+// Cutoff, weil eine einzelne Datei nur für die Dauer eines Requests existieren
+// soll (Sekunden bis wenige Minuten bei Stream-Copy), nicht 24 h wie bei
+// tus-Sessions.
+//
+// Inline statt videos.DownloadTempDir/-Logik aufzurufen: der Scheduler ist ein
+// Foundation-Package und darf das Domain-Package videos nicht importieren
+// (Architektur-Test).
+func (s *Scheduler) cleanStaleVideoDownloadTemp() {
+	dir := filepath.Join(s.cfg.VideoStorageDir, "tmp")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		slog.Error("scheduler stale-download-temp cleanup failed", "error", err)
+		return
+	}
+	cutoff := time.Now().Add(-time.Hour)
+	removed := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			if err := os.Remove(filepath.Join(dir, e.Name())); err == nil {
+				removed++
+			}
+		}
+	}
+	if removed > 0 {
+		slog.Info("stale video download temp files cleaned", "count", removed)
 	}
 }
 

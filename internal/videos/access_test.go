@@ -71,6 +71,77 @@ func TestCanUploadToTeam(t *testing.T) {
 	}
 }
 
+// --- CanUploadForGameViaDuty --------------------------------------------------
+
+// createDutyTypeWithVideoFlag inserts a duty type and optionally marks it as
+// granting video upload (grants_video_upload).
+func createDutyTypeWithVideoFlag(t *testing.T, db *sql.DB, name string, grants bool) int {
+	t.Helper()
+	id := testutil.CreateDutyType(t, db, name, 1.0)
+	if grants {
+		if _, err := db.Exec(`UPDATE duty_types SET grants_video_upload = 1 WHERE id = ?`, id); err != nil {
+			t.Fatalf("set grants_video_upload: %v", err)
+		}
+	}
+	return id
+}
+
+// addDutyAssignment inserts a duty_assignments row (default status 'assigned').
+func addDutyAssignment(t *testing.T, db *sql.DB, slotID, userID int) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO duty_assignments (duty_slot_id, user_id) VALUES (?, ?)`, slotID, userID); err != nil {
+		t.Fatalf("addDutyAssignment: %v", err)
+	}
+}
+
+func TestCanUploadForGameViaDuty(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := NewHandler(db, nil, nil)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	gameA := testutil.CreateGame(t, db, season, team, "2026-03-01")
+	gameB := testutil.CreateGame(t, db, season, team, "2026-03-08")
+
+	videoDutyType := createDutyTypeWithVideoFlag(t, db, "Video", true)
+	otherDutyType := createDutyTypeWithVideoFlag(t, db, "Kuchen", false)
+
+	slotForGameA := testutil.CreateDutySlot(t, db, videoDutyType, season, team, gameA, "2026-03-01")
+	slotOtherType := testutil.CreateDutySlot(t, db, otherDutyType, season, team, gameA, "2026-03-01")
+
+	userWithVideoDutyForA := testutil.CreateUser(t, db, "standard")
+	addDutyAssignment(t, db, slotForGameA, userWithVideoDutyForA)
+
+	userWithOtherDutyForA := testutil.CreateUser(t, db, "standard")
+	addDutyAssignment(t, db, slotOtherType, userWithOtherDutyForA)
+
+	userWithoutAnyDuty := testutil.CreateUser(t, db, "standard")
+
+	tests := []struct {
+		name   string
+		claims *auth.Claims
+		gameID int
+		want   bool
+	}{
+		{"Zuweisung fuer genau dieses Spiel", claims(userWithVideoDutyForA, "standard", "spieler"), gameA, true},
+		{"Zuweisung fuer ein anderes Spiel zaehlt nicht", claims(userWithVideoDutyForA, "standard", "spieler"), gameB, false},
+		{"Diensttyp ohne grants_video_upload zaehlt nicht", claims(userWithOtherDutyForA, "standard", "spieler"), gameA, false},
+		{"keine Zuweisung", claims(userWithoutAnyDuty, "standard", "spieler"), gameA, false},
+		{"nil claims", nil, gameA, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := h.CanUploadForGameViaDuty(tc.claims, tc.gameID)
+			if err != nil {
+				t.Fatalf("CanUploadForGameViaDuty: %v", err)
+			}
+			if got != tc.want {
+				t.Errorf("CanUploadForGameViaDuty = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 // --- CanManageTeamVideos -----------------------------------------------------
 
 func TestCanManageTeamVideos(t *testing.T) {

@@ -545,10 +545,15 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/videos", expected: exAuth},
 	{method: "GET", path: "/api/videos/{id}", expected: exAuth},
 	{method: "GET", path: "/api/videos/{id}/play", expected: exAuth},
+	{method: "GET", path: "/api/videos/{id}/download", expected: exAuth},
 	{method: "PATCH", path: "/api/videos/{id}", expected: exAuth},
 	{method: "DELETE", path: "/api/videos/{id}", expected: exAuth},
-	// Upload-Init: RequireClubFunction("vorstand","trainer","sportliche_leitung")
-	{method: "POST", path: "/api/videos", expected: exVorstandTrainer},
+	// Upload-Init (video-download-duty-upload): NICHT mehr auf Trainer/sportl.
+	// Leitung/Vorstand beschränkt — CanUploadToTeam ODER eine Video-Upload-
+	// Dienst-Zuweisung für game_id wird im Handler selbst geprüft, das
+	// Router-Tier ist deshalb Authenticated wie die übrigen Video-Routen.
+	{method: "POST", path: "/api/videos", expected: exAuth},
+	{method: "GET", path: "/api/videos/upload-eligible-games", expected: exAuth},
 	// HLS-Auslieferung: public, nur per Stream-Token (?st=) — ohne Token 403 für alle.
 	{method: "GET", path: "/api/videos/{id}/hls/master.m3u8", expected: exPublic},
 	{method: "GET", path: "/api/videos/{id}/hls/{rendition}/{segment}", expected: exPublic},

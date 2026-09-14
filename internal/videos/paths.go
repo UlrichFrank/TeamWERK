@@ -36,3 +36,10 @@ func MasterManifestPath(root string, id int) string {
 func RenditionDir(root string, id int, rendition string) string {
 	return filepath.Join(ProcessedDir(root, id), rendition)
 }
+
+// DownloadTempDir liefert das Verzeichnis für kurzlebige Remux-Ausgaben des
+// Download-Endpoints (video-download-duty-upload). Dateien darin sind je
+// Request-Laufzeit gültig und werden danach gelöscht — kein Dauer-Cache.
+func DownloadTempDir(root string) string {
+	return filepath.Join(root, "tmp")
+}

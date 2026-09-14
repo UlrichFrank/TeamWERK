@@ -32,6 +32,28 @@ func (h *Handler) CanUploadToTeam(claims *auth.Claims, teamID int) (bool, error)
 	return false, nil
 }
 
+// CanUploadForGameViaDuty meldet, ob der Aufrufer für gameID hochladen darf,
+// weil er dort eine Dienst-Zuweisung auf einen als grants_video_upload
+// markierten Diensttyp hat (video-download-duty-upload). Die Berechtigung
+// hängt am konkreten Spiel der Zuweisung, nicht am Team des Dienst-Slots —
+// ein generischer Slot (team_id IS NULL) zählt genauso wie ein team-gebundener.
+// Der Status der Zuweisung wird bewusst NICHT gefiltert: jede Zuweisung
+// (assigned/fulfilled/cash_substitute) zählt, "eingetragen bin/war" deckt auch
+// bereits erledigte Dienste ab.
+func (h *Handler) CanUploadForGameViaDuty(claims *auth.Claims, gameID int) (bool, error) {
+	if claims == nil {
+		return false, nil
+	}
+	var n int
+	err := h.db.QueryRow(`
+		SELECT COUNT(*) FROM duty_assignments da
+		JOIN duty_slots ds ON ds.id = da.duty_slot_id
+		JOIN duty_types dt ON dt.id = ds.duty_type_id
+		WHERE da.user_id = ? AND ds.game_id = ? AND dt.grants_video_upload = 1`,
+		claims.UserID, gameID).Scan(&n)
+	return n > 0, err
+}
+
 // CanManageTeamVideos meldet, ob der Aufrufer Videos eines Teams ändern/löschen
 // darf: jeder Trainer des Teams, Vorstand, Admin (Trainer vertreten sich
 // gegenseitig — nicht nur der ursprüngliche Hochlader; siehe design.md

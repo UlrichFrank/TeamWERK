@@ -451,8 +451,27 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Upload-Routen werden separat registriert (eigener Tier).
 		r.Get("/api/videos", h.Videos.List)
 		r.Get("/api/videos/{id}", h.Videos.Get)
+		r.Get("/api/videos/{id}/download", h.Videos.Download)
 		r.Patch("/api/videos/{id}", h.Videos.Update)
 		r.Delete("/api/videos/{id}", h.Videos.Delete)
+		// Spielvideos — Upload-Tier: NICHT mehr auf Trainer/sportliche
+		// Leitung/Vorstand/Admin beschränkt (video-download-duty-upload). POST
+		// init prüft CanUploadToTeam ODER eine Video-Upload-Dienst-Zuweisung für
+		// das angegebene game_id (CanUploadForGameViaDuty); der tus-Mount bindet
+		// jede Session unabhängig davon an ihren Ersteller (preUploadCreate,
+		// created_by-Check) — die Autorisierung sitzt vollständig im Handler,
+		// nicht mehr im Router-Tier.
+		r.Get("/api/videos/upload-eligible-games", h.Videos.EligibleGames)
+		r.Post("/api/videos", h.Videos.CreateUpload)
+		if h.VideosTus != nil {
+			// tusd v2 routet intern über strings.Trim(URL.Path, "/") und
+			// erwartet einen bereits gestrippten BasePath: leer ⇒ POST
+			// (Create), sonst ⇒ {id} für HEAD/PATCH. chi reicht die volle
+			// URL durch, daher hier den Mount-Prefix per StripPrefix
+			// entfernen — sonst fällt jeder POST an /api/videos/upload/
+			// in tusd's Default-Branch und liefert 405 "method not allowed".
+			r.Handle("/api/videos/upload/*", http.StripPrefix("/api/videos/upload", h.VideosTus))
+		}
 
 		// Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
@@ -482,20 +501,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Vorstand + Trainer + sportliche_leitung
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
-			// Spielvideos — Upload-Tier (trainer/sportliche_leitung/vorstand;
-			// admin umgeht RequireClubFunction). POST init prüft zusätzlich
-			// CanUploadToTeam; der tus-Mount nimmt PATCH/HEAD der bereits
-			// autorisierten Session entgegen (Korrelation via video_id-Metadata).
-			r.Post("/api/videos", h.Videos.CreateUpload)
-			if h.VideosTus != nil {
-				// tusd v2 routet intern über strings.Trim(URL.Path, "/") und
-				// erwartet einen bereits gestrippten BasePath: leer ⇒ POST
-				// (Create), sonst ⇒ {id} für HEAD/PATCH. chi reicht die volle
-				// URL durch, daher hier den Mount-Prefix per StripPrefix
-				// entfernen — sonst fällt jeder POST an /api/videos/upload/
-				// in tusd's Default-Branch und liefert 405 "method not allowed".
-				r.Handle("/api/videos/upload/*", http.StripPrefix("/api/videos/upload", h.VideosTus))
-			}
 			r.Get("/api/venues", h.Venues.List)
 			r.Post("/api/venues", h.Venues.Create)
 			r.Post("/api/venues/import", h.Venues.Import)
