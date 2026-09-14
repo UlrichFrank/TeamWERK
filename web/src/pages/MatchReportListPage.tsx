@@ -4,11 +4,12 @@ import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { FileText, Plus, ExternalLink } from 'lucide-react'
 import { BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
+import { MATCH_REPORT_STATE_LABEL, type MatchReportState } from '../lib/matchReportState'
 
 type ReportItem = {
     id: number
     game_id: number
-    state: 'draft' | 'pending_review' | 'publishing' | 'published' | 'publish_failed'
+    state: MatchReportState
     match_date: string
     opponent: string
     published_url: string | null
@@ -21,14 +22,6 @@ type SlotItem = {
     opponent: string
 }
 
-
-const STATE_LABEL: Record<string, string> = {
-    draft: 'Entwurf',
-    pending_review: 'Wartet auf Freigabe',
-    publishing: 'Wird veröffentlicht…',
-    published: 'Veröffentlicht',
-    publish_failed: 'Fehler',
-}
 
 export default function MatchReportListPage() {
     const navigate = useNavigate()
@@ -147,7 +140,7 @@ export default function MatchReportListPage() {
                                             {formatDate(r.match_date)} — {r.opponent}
                                         </div>
                                         <div className="text-xs text-brand-text-muted">
-                                            {STATE_LABEL[r.state] ?? r.state}
+                                            {MATCH_REPORT_STATE_LABEL[r.state] ?? r.state}
                                         </div>
                                     </div>
                                 </div>

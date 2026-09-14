@@ -7,6 +7,7 @@ import { AlertTriangle, ImageOff, Trash2, Upload, X, Eye, EyeOff, Send } from 'l
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
+import { MATCH_REPORT_STATE_LABEL, type MatchReportState } from '../lib/matchReportState'
 
 const MAX_IMAGES = 10
 
@@ -45,7 +46,7 @@ type MatchReport = {
     game_id: number
     duty_slot_id: number | null
     author_user_id: number
-    state: 'draft' | 'pending_review' | 'publishing' | 'published' | 'publish_failed'
+    state: MatchReportState
     title: string
     home_goals: number | null
     away_goals: number | null
@@ -125,8 +126,14 @@ export default function MatchReportFormPage() {
         if (evt === 'match-report-event') load()
     })
 
-    if (error) return <div className="p-6 text-brand-danger">{error}</div>
-    if (!report) return <div className="p-6 text-brand-text-muted">Lade Bericht…</div>
+    if (error) {
+        return (
+            <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+                {error}
+            </div>
+        )
+    }
+    if (!report) return <p className="text-sm text-brand-text-muted">Lade Bericht…</p>
 
     // Rollen des aktuellen Users im Bericht-Kontext:
     // - Autor: darf im Draft editieren, danach nur noch lesen.
@@ -225,11 +232,11 @@ export default function MatchReportFormPage() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto p-4 sm:p-8 space-y-6">
-            <div className="flex items-center justify-between gap-4">
+        <div className="space-y-4 sm:space-y-6">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
                 <h1 className="text-2xl font-bold text-brand-text">Spielbericht</h1>
-                <span className="text-xs uppercase tracking-wide text-brand-text-muted">
-                    Status: {report.state}
+                <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-border-subtle text-brand-text-muted">
+                    {MATCH_REPORT_STATE_LABEL[report.state] ?? report.state}
                 </span>
             </div>
 
@@ -261,108 +268,110 @@ export default function MatchReportFormPage() {
                 </div>
             )}
 
-            <div className="space-y-2">
-                <label className="block text-sm font-medium text-brand-text">Titel</label>
-                <input
-                    type="text"
-                    className={input}
-                    value={title}
-                    onChange={e => setTitle(e.target.value)}
-                    disabled={readOnly}
-                    maxLength={200}
-                    placeholder="Kurzer, aussagekräftiger Titel"
-                />
-            </div>
-
-            <ScoreFieldset
-                tournament={tournament}
-                homeGoals={homeGoals} awayGoals={awayGoals}
-                homeGoalsHT={homeGoalsHT} awayGoalsHT={awayGoalsHT}
-                onChange={{ setTournament, setHomeGoals, setAwayGoals, setHomeGoalsHT, setAwayGoalsHT }}
-                readOnly={readOnly}
-            />
-
-            <div className="space-y-2">
-                <label className="block text-sm font-medium text-brand-text">Abstract (Teaser, max 500 Zeichen)</label>
-                <textarea
-                    className={input}
-                    rows={2}
-                    maxLength={500}
-                    value={abstract}
-                    onChange={e => setAbstract(e.target.value)}
-                    disabled={readOnly}
-                    placeholder="Kurzer Anriss für Kachel-Ansicht auf der Homepage."
-                />
-                <div className="text-xs text-brand-text-muted text-right">{abstract.length}/500</div>
-            </div>
-
-            <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-brand-text">Bericht (Markdown)</label>
-                    <button
-                        type="button"
-                        className="text-xs text-brand-text-muted hover:text-brand-text inline-flex items-center gap-1"
-                        onClick={() => setPreview(p => !p)}
-                    >
-                        {preview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        {preview ? 'Editor' : 'Vorschau'}
-                    </button>
+            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 space-y-6">
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-brand-text">Titel</label>
+                    <input
+                        type="text"
+                        className={input}
+                        value={title}
+                        onChange={e => setTitle(e.target.value)}
+                        disabled={readOnly}
+                        maxLength={200}
+                        placeholder="Kurzer, aussagekräftiger Titel"
+                    />
                 </div>
-                {preview ? (
-                    <div className="border border-brand-border rounded-md p-3 min-h-[200px] bg-brand-surface-card">
-                        <MarkdownRenderer markdown={bodyMd} />
-                    </div>
-                ) : (
+
+                <ScoreFieldset
+                    tournament={tournament}
+                    homeGoals={homeGoals} awayGoals={awayGoals}
+                    homeGoalsHT={homeGoalsHT} awayGoalsHT={awayGoalsHT}
+                    onChange={{ setTournament, setHomeGoals, setAwayGoals, setHomeGoalsHT, setAwayGoalsHT }}
+                    readOnly={readOnly}
+                />
+
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-brand-text">Abstract (Teaser, max 500 Zeichen)</label>
                     <textarea
                         className={input}
-                        rows={12}
-                        value={bodyMd}
-                        onChange={e => setBodyMd(e.target.value)}
+                        rows={2}
+                        maxLength={500}
+                        value={abstract}
+                        onChange={e => setAbstract(e.target.value)}
                         disabled={readOnly}
-                        placeholder="## Erste Halbzeit&#10;..."
+                        placeholder="Kurzer Anriss für Kachel-Ansicht auf der Homepage."
                     />
+                    <div className="text-xs text-brand-text-muted text-right">{abstract.length}/500</div>
+                </div>
+
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <label className="block text-sm font-medium text-brand-text">Bericht (Markdown)</label>
+                        <button
+                            type="button"
+                            className="text-xs text-brand-text-muted hover:text-brand-text inline-flex items-center gap-1"
+                            onClick={() => setPreview(p => !p)}
+                        >
+                            {preview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {preview ? 'Editor' : 'Vorschau'}
+                        </button>
+                    </div>
+                    {preview ? (
+                        <div className="border border-brand-border rounded-md p-3 min-h-[200px] bg-white">
+                            <MarkdownRenderer markdown={bodyMd} />
+                        </div>
+                    ) : (
+                        <textarea
+                            className={input}
+                            rows={12}
+                            value={bodyMd}
+                            onChange={e => setBodyMd(e.target.value)}
+                            disabled={readOnly}
+                            placeholder="## Erste Halbzeit&#10;..."
+                        />
+                    )}
+                </div>
+
+                <ImagesSection
+                    reportID={reportID}
+                    images={report.images ?? []}
+                    readOnly={readOnly}
+                    onChange={load}
+                />
+
+                {/* Hinweis-Banner nach Submit für den Autor */}
+                {report.state === 'pending_review' && isAuthor && !isReviewer && (
+                    <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                        Zur Prüfung eingereicht — nur Medien oder Vorstand kann jetzt bearbeiten oder veröffentlichen.
+                    </div>
+                )}
+
+                {canEdit && (
+                    <div className="flex flex-wrap gap-3 pt-4 border-t border-brand-border-subtle">
+                        <button className={BTN_PRIMARY} onClick={saveDraft} disabled={saving}>
+                            {saving ? 'Speichere…' : 'Entwurf speichern'}
+                        </button>
+                        {canSubmit && (
+                            <button className={BTN_PRIMARY} onClick={submitForReview} disabled={submitting}>
+                                <Send className="inline-block w-4 h-4 mr-1" />
+                                {submitting ? 'Sende…' : 'Zur Prüfung senden'}
+                            </button>
+                        )}
+                        {canPublish && (
+                            <button className={BTN_PRIMARY} onClick={publish} disabled={publishing}>
+                                <Send className="inline-block w-4 h-4 mr-1" />
+                                {publishing ? 'Veröffentliche…' : 'Veröffentlichen'}
+                            </button>
+                        )}
+                        {isAuthor && report.state === 'draft' && (
+                            <button className={BTN_DANGER} onClick={deleteDraft}>
+                                <Trash2 className="inline-block w-4 h-4 mr-1" />
+                                Draft löschen
+                            </button>
+                        )}
+                    </div>
                 )}
             </div>
-
-            <ImagesSection
-                reportID={reportID}
-                images={report.images ?? []}
-                readOnly={readOnly}
-                onChange={load}
-            />
-
-            {/* Hinweis-Banner nach Submit für den Autor */}
-            {report.state === 'pending_review' && isAuthor && !isReviewer && (
-                <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
-                    Zur Prüfung eingereicht — nur Medien oder Vorstand kann jetzt bearbeiten oder veröffentlichen.
-                </div>
-            )}
-
-            {canEdit && (
-                <div className="flex flex-wrap gap-3 pt-4 border-t border-brand-border-subtle">
-                    <button className={BTN_PRIMARY} onClick={saveDraft} disabled={saving}>
-                        {saving ? 'Speichere…' : 'Entwurf speichern'}
-                    </button>
-                    {canSubmit && (
-                        <button className={BTN_PRIMARY} onClick={submitForReview} disabled={submitting}>
-                            <Send className="inline-block w-4 h-4 mr-1" />
-                            {submitting ? 'Sende…' : 'Zur Prüfung senden'}
-                        </button>
-                    )}
-                    {canPublish && (
-                        <button className={BTN_PRIMARY} onClick={publish} disabled={publishing}>
-                            <Send className="inline-block w-4 h-4 mr-1" />
-                            {publishing ? 'Veröffentliche…' : 'Veröffentlichen'}
-                        </button>
-                    )}
-                    {isAuthor && report.state === 'draft' && (
-                        <button className={BTN_DANGER} onClick={deleteDraft}>
-                            <Trash2 className="inline-block w-4 h-4 mr-1" />
-                            Draft löschen
-                        </button>
-                    )}
-                </div>
-            )}
         </div>
     )
 }
@@ -620,7 +629,7 @@ function ImageTile(props: {
     }, [props.image.id, props.image.url])
 
     return (
-        <div className="border border-brand-border-subtle rounded-md p-2 bg-brand-surface-card space-y-2">
+        <div className="border border-brand-border-subtle rounded-md p-2 bg-white space-y-2">
             {previewError ? (
                 <div className="aspect-square w-full bg-brand-surface-card rounded overflow-hidden flex flex-col items-center justify-center text-brand-danger gap-1">
                     <ImageOff className="w-6 h-6" />
