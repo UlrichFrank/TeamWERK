@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/duties"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
@@ -13,22 +14,39 @@ import (
 // notifiedUsers reads the recipients of the duties notification from user_events —
 // notify.Send schreibt den Event-Log als ersten Schritt, vor jedem Präferenzfilter,
 // und ist damit die verlässliche Beobachtungsstelle für die Empfängermenge.
+//
+// CreateSlot verschickt über notify.SendAsync (Gotcha „Push Notifications"): der
+// Event-Log-Insert läuft in einer Hintergrund-Goroutine, die beim Zurückkommen des
+// POST-Response noch nicht zwingend fertig ist. Ein einzelnes synchrones SELECT direkt
+// danach ist deshalb ein Race — lokal meist grün (Goroutine gewinnt fast immer), unter
+// CI-Last reproduzierbar leer. Alle Aufrufer hier erwarten mindestens einen Empfänger,
+// nie ein bewusst leeres Ergebnis — deshalb pollt diese Funktion bis zur ersten
+// nicht-leeren Antwort (analog `waitForEventLogRow` in internal/games), statt sofort zu
+// lesen. eventlog.Record schreibt alle Empfänger in einem einzigen INSERT-Statement, das
+// Auftauchen einer Zeile beweist also das Auftauchen aller.
 func notifiedUsers(t *testing.T, db *sql.DB) map[int]bool {
 	t.Helper()
-	rows, err := db.Query(`SELECT user_id FROM user_events WHERE category='duties'`)
-	if err != nil {
-		t.Fatalf("read user_events: %v", err)
-	}
-	defer rows.Close()
-	got := map[int]bool{}
-	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
-			t.Fatalf("scan user_events: %v", err)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		rows, err := db.Query(`SELECT user_id FROM user_events WHERE category='duties'`)
+		if err != nil {
+			t.Fatalf("read user_events: %v", err)
 		}
-		got[id] = true
+		got := map[int]bool{}
+		for rows.Next() {
+			var id int
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				t.Fatalf("scan user_events: %v", err)
+			}
+			got[id] = true
+		}
+		rows.Close()
+		if len(got) > 0 || time.Now().After(deadline) {
+			return got
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
-	return got
 }
 
 // addPlayer legt einen User mit Vereinsfunktion 'spieler' im Kader des Teams an.
