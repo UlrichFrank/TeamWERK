@@ -374,6 +374,108 @@ func (c *Client) Games(ctx context.Context, seasonID, teamID int) ([]Game, error
 	return out, nil
 }
 
+// ExistingVideo beschreibt die Videos, die einem Spiel bereits zugeordnet
+// sind — Warnhinweis in der Spiel-Auswahl gegen einen versehentlichen
+// Doppel-Upload (video-speicherplatz) und Grundlage für die
+// Hinzufügen-oder-Ersetzen-Auswahl (video-upload-anhaengen-oder-ersetzen):
+// IDs trägt ALLE vorhandenen Video-IDs des Spiels (für „Ersetzen" — dabei
+// werden alle gelöscht, nicht nur eines), Status/DiskBytes gehören zum für
+// die Anzeige „aussagekräftigsten" Video (ready gewinnt vor allen anderen).
+type ExistingVideo struct {
+	IDs       []int
+	Status    string
+	DiskBytes *int64
+}
+
+// videoStatusLabelDE spiegelt STATUS_OPTIONS aus web/src/pages/VideosPage.tsx
+// (eigene Kopie: separates Go-Modul, kein gemeinsamer Code mit dem Server).
+func videoStatusLabelDE(status string) string {
+	switch status {
+	case "uploading":
+		return "wird hochgeladen"
+	case "queued":
+		return "in Warteschlange"
+	case "processing":
+		return "wird verarbeitet"
+	case "ready":
+		return "bereit"
+	case "failed":
+		return "fehlgeschlagen"
+	default:
+		return status
+	}
+}
+
+// Describe bildet den Dropdown-Zusatz "Video vorhanden: bereit (1.4 GB)" bzw.
+// bei mehreren Videos "2 Videos vorhanden: bereit (1.4 GB)".
+func (v ExistingVideo) Describe(formatSize func(int64) string) string {
+	label := "Video vorhanden: " + videoStatusLabelDE(v.Status)
+	if len(v.IDs) > 1 {
+		label = fmt.Sprintf("%d Videos vorhanden: %s", len(v.IDs), videoStatusLabelDE(v.Status))
+	}
+	if v.DiskBytes != nil {
+		label += " (" + formatSize(*v.DiskBytes) + ")"
+	}
+	return label
+}
+
+// VideosByGame liefert je Spiel mit vorhandenem Video (GET /api/videos,
+// team_id-gefiltert) alle vorhandenen Video-IDs plus Status/Größe des für die
+// Anzeige "aussagekräftigsten" Videos. Hat ein Spiel mehrere Videos (z.B.
+// zwei Halbzeiten, oder nach einem gescheiterten und einem erneuten Versuch),
+// gewinnt für Status/DiskBytes 'ready' vor allen anderen Status — das ist die
+// für den Nutzer relevante Aussage ("es existiert schon ein fertiges Video
+// dafür"); IDs sammelt dagegen ausnahmslos alle, weil "Ersetzen"
+// (video-upload-anhaengen-oder-ersetzen) sie alle löschen muss, nicht nur die
+// für das Label gewählte.
+func (c *Client) VideosByGame(ctx context.Context, teamID int) (map[int]ExistingVideo, error) {
+	var page struct {
+		Items []struct {
+			ID        int    `json:"id"`
+			GameID    *int   `json:"game_id"`
+			Status    string `json:"status"`
+			DiskBytes *int64 `json:"disk_bytes"`
+		} `json:"items"`
+	}
+	path := fmt.Sprintf("/api/videos?team_id=%d&limit=200", teamID)
+	if err := c.getJSON(ctx, "Videos laden", path, &page); err != nil {
+		return nil, err
+	}
+	out := map[int]ExistingVideo{}
+	for _, it := range page.Items {
+		if it.GameID == nil {
+			continue
+		}
+		ev := out[*it.GameID]
+		ev.IDs = append(ev.IDs, it.ID)
+		if ev.Status == "" || (ev.Status != "ready" && it.Status == "ready") {
+			ev.Status, ev.DiskBytes = it.Status, it.DiskBytes
+		}
+		out[*it.GameID] = ev
+	}
+	return out, nil
+}
+
+// DeleteVideo löscht ein Video (DELETE /api/videos/{id}) — genutzt für die
+// "Ersetzen"-Option beim Upload: das alte Video wird erst gelöscht, nachdem
+// der neue Upload sicher abgeschlossen ist
+// (video-upload-anhaengen-oder-ersetzen). Berechtigung ist dieselbe wie beim
+// Löschen über die Web-Oberfläche (Trainer des Teams, Vorstand, Admin) — ein
+// Konto, das nur hochladen darf (z.B. sportliche_leitung), bekommt hier 403.
+func (c *Client) DeleteVideo(ctx context.Context, videoID int) error {
+	resp, err := c.do(ctx, func() (*http.Request, error) {
+		return c.newRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/videos/%d", videoID), nil)
+	})
+	if err != nil {
+		return err
+	}
+	defer drain(resp)
+	if resp.StatusCode != http.StatusOK {
+		return statusError("Video löschen", resp)
+	}
+	return nil
+}
+
 // NewVideo ist der Body von POST /api/videos.
 type NewVideo struct {
 	Title       string  `json:"title"`

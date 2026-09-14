@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -430,5 +431,113 @@ func TestAPI_CreateVideoSeasonsGames(t *testing.T) {
 	seasonsStatus = http.StatusForbidden
 	if _, err := c.ActiveSeasonID(ctx); !errors.Is(err, ErrNoUploadPermission) {
 		t.Fatalf("403 on seasons must mean no upload permission, got %v", err)
+	}
+}
+
+// TestVideosByGame: liefert je Spiel mit vorhandenem Video ALLE Video-IDs
+// (video-upload-anhaengen-oder-ersetzen braucht sie für "Ersetzen") sowie
+// Status + Größe des für die Anzeige "aussagekräftigsten" Videos; mehrere
+// Videos zum selben Spiel (gescheiterter + erneuter Versuch) lassen 'ready'
+// für Status/Größe gewinnen, weil das die für den Nutzer relevante Aussage
+// ist — die ID-Liste selbst sammelt trotzdem beide.
+func TestVideosByGame(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/videos", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("team_id") != "7" {
+			t.Errorf("must filter by team_id, got %q", r.URL.RawQuery)
+		}
+		gid4, gid5 := 4, 5
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{
+			{"id": 101, "game_id": gid4, "status": "failed", "disk_bytes": nil},
+			{"id": 102, "game_id": gid4, "status": "ready", "disk_bytes": 1500000000},
+			{"id": 103, "game_id": gid5, "status": "processing", "disk_bytes": 900000000},
+			{"id": 104, "game_id": nil, "status": "ready", "disk_bytes": 42},
+		}})
+	})
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+	c, _ := New(srv.URL, srv.Client())
+
+	got, err := c.VideosByGame(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("VideosByGame: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("VideosByGame = %+v, want 2 entries", got)
+	}
+	if v := got[4]; v.Status != "ready" || v.DiskBytes == nil || *v.DiskBytes != 1500000000 {
+		t.Errorf("game 4 = %+v, want ready/1500000000 (ready must win over failed)", v)
+	}
+	if v := got[4]; !slicesEqualInt(v.IDs, []int{101, 102}) {
+		t.Errorf("game 4 IDs = %v, want [101 102] (both videos, not just the 'ready' one)", v.IDs)
+	}
+	if v := got[5]; v.Status != "processing" || v.DiskBytes == nil || *v.DiskBytes != 900000000 {
+		t.Errorf("game 5 = %+v, want processing/900000000", v)
+	}
+	if v := got[5]; !slicesEqualInt(v.IDs, []int{103}) {
+		t.Errorf("game 5 IDs = %v, want [103]", v.IDs)
+	}
+
+	desc := got[4].Describe(func(n int64) string { return fmt.Sprintf("%dB", n) })
+	if desc != "2 Videos vorhanden: bereit (1500000000B)" {
+		t.Errorf("Describe = %q", desc)
+	}
+	desc = got[5].Describe(func(n int64) string { return fmt.Sprintf("%dB", n) })
+	if desc != "Video vorhanden: wird verarbeitet (900000000B)" {
+		t.Errorf("Describe = %q", desc)
+	}
+}
+
+func slicesEqualInt(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// TestDeleteVideo_HappyPath: DELETE /api/videos/{id} mit HTTP 200 gilt als
+// erfolgreich (video-upload-anhaengen-oder-ersetzen: löscht das alte Video
+// erst nach einem bereits erfolgreichen neuen Upload).
+func TestDeleteVideo_HappyPath(t *testing.T) {
+	var gotPath, gotMethod string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/videos/42", func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotMethod = r.URL.Path, r.Method
+		w.WriteHeader(http.StatusOK)
+	})
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+	c, _ := New(srv.URL, srv.Client())
+
+	if err := c.DeleteVideo(context.Background(), 42); err != nil {
+		t.Fatalf("DeleteVideo: %v", err)
+	}
+	if gotMethod != http.MethodDelete || gotPath != "/api/videos/42" {
+		t.Errorf("got %s %s, want DELETE /api/videos/42", gotMethod, gotPath)
+	}
+}
+
+// TestDeleteVideo_Forbidden: ein 403 (z.B. sportliche_leitung darf hochladen,
+// aber laut video-management keine Videos löschen) wird als Fehler
+// zurückgegeben — das Tool wertet das als Warnhinweis, keinen Gesamtfehlschlag
+// des Uploads (Entscheidung in design.md).
+func TestDeleteVideo_Forbidden(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/videos/42", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+	})
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+	c, _ := New(srv.URL, srv.Client())
+
+	err := c.DeleteVideo(context.Background(), 42)
+	var se *StatusError
+	if !errors.As(err, &se) || se.Status != http.StatusForbidden {
+		t.Fatalf("DeleteVideo error = %v, want a 403 StatusError", err)
 	}
 }

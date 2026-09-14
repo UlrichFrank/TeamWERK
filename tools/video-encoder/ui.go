@@ -26,6 +26,15 @@ import (
 
 const noGame = "Freier Titel"
 
+// optAppend/optReplace sind die Optionen der Hinzufügen-oder-Ersetzen-Auswahl
+// (video-upload-anhaengen-oder-ersetzen), sichtbar nur wenn zum gewählten
+// Spiel schon (ein) Video(s) existieren. "Hinzufügen" ist der sichere
+// Default und entspricht dem bisherigen Verhalten unverändert.
+const (
+	optAppend  = "Hinzufügen (weiteres Video, z. B. 2. Halbzeit)"
+	optReplace = "Ersetzen (vorhandenes Video wird gelöscht)"
+)
+
 var videoExtensions = []string{".mp4", ".mov", ".m4v", ".mkv", ".avi", ".mts", ".m2ts", ".mpg", ".mpeg", ".wmv", ".webm", ".3gp"}
 
 // meta sind die Formularangaben eines Laufs. Vergleichbar, damit ein zweiter
@@ -40,13 +49,21 @@ type meta struct {
 // Spiel braucht leicht eine halbe Stunde) und — sobald angelegt — die
 // Video-Zeile samt tus-Session. Während eines Laufs schreibt nur dessen
 // Goroutine hinein; die UI liest erst wieder, wenn er beendet ist.
+//
+// replace/replaceIDs (video-upload-anhaengen-oder-ersetzen) stehen bewusst
+// NICHT in meta: sie werden bei jedem start() frisch aus der aktuellen
+// UI-Auswahl gesetzt, unabhängig davon, ob meta unverändert ist — ein
+// Moduswechsel zwischen zwei Versuchen desselben Uploads soll keinen
+// Job-Reset (neue Video-Zeile, neue tus-Session) auslösen.
 type job struct {
-	src      string
-	encoded  string // "" solange nicht fertig encodiert
-	account  string // Server + E-Mail der Anmeldung, unter der videoID angelegt wurde
-	meta     meta
-	videoID  int
-	location string
+	src        string
+	encoded    string // "" solange nicht fertig encodiert
+	account    string // Server + E-Mail der Anmeldung, unter der videoID angelegt wurde
+	meta       meta
+	videoID    int
+	location   string
+	replace    bool  // "Ersetzen" gewählt: nach Upload-Erfolg werden replaceIDs gelöscht
+	replaceIDs []int // Video-IDs, die bei replace=true nach dem Upload gelöscht werden
 }
 
 type ui struct {
@@ -54,25 +71,29 @@ type ui struct {
 	win      fyne.Window
 	cacheDir string
 
-	client   *client.Client
-	email    string
-	seasonID int
-	teamIDs  map[string]int
-	gameIDs  map[string]int
+	client       *client.Client
+	email        string
+	seasonID     int
+	teamIDs      map[string]int
+	gameIDs      map[string]int
+	videosByGame map[int]client.ExistingVideo // gameID → bereits vorhandene(s) Video(s), für die Ersetzen-Auswahl
 
-	srcPath    string
-	fileLabel  *widget.Label
-	chooseBtn  *widget.Button
-	teamSelect *widget.Select
-	gameSelect *widget.Select
-	titleEntry *widget.Entry
-	descEntry  *widget.Entry
-	startBtn   *widget.Button
-	cancelBtn  *widget.Button
-	bar        *widget.ProgressBar
-	status     *widget.Label
-	link       *widget.Hyperlink
-	account    *widget.Label
+	srcPath      string
+	fileLabel    *widget.Label
+	chooseBtn    *widget.Button
+	teamSelect   *widget.Select
+	gameSelect   *widget.Select
+	titleEntry   *widget.Entry
+	descEntry    *widget.Entry
+	replaceHint  *widget.Label
+	replaceGroup *widget.RadioGroup
+	replaceBox   *fyne.Container // umschließt Hinweis+Auswahl, nur sichtbar bei vorhandenem Video zum gewählten Spiel
+	startBtn     *widget.Button
+	cancelBtn    *widget.Button
+	bar          *widget.ProgressBar
+	status       *widget.Label
+	link         *widget.Hyperlink
+	account      *widget.Label
 
 	busy   bool
 	cancel context.CancelFunc
@@ -108,7 +129,7 @@ func (u *ui) build() fyne.CanvasObject {
 
 	u.teamSelect = widget.NewSelect(nil, u.onTeamChanged)
 	u.teamSelect.PlaceHolder = "Mannschaft auswählen …"
-	u.gameSelect = widget.NewSelect([]string{noGame}, nil)
+	u.gameSelect = widget.NewSelect([]string{noGame}, u.onGameChanged)
 	u.gameSelect.SetSelected(noGame)
 	u.titleEntry = widget.NewEntry()
 	u.titleEntry.SetPlaceHolder("z. B. Heimspiel gegen TV Musterstadt")
@@ -124,6 +145,20 @@ func (u *ui) build() fyne.CanvasObject {
 		widget.NewFormItem("Titel", u.titleEntry),
 		widget.NewFormItem("Beschreibung", u.descEntry),
 	)
+
+	// Hinzufügen-oder-Ersetzen-Auswahl (video-upload-anhaengen-oder-ersetzen):
+	// nur sichtbar, wenn zum gewählten Spiel schon (ein) Video(s) existieren
+	// (onGameChanged steuert Show/Hide). Ein eigener Container statt eines
+	// Form-Items, weil widget.Form in dieser Fyne-Version keine ausblendbaren
+	// Zeilen kennt — ein normaler Container lässt sich dagegen komplett
+	// verbergen, inklusive seiner Beschriftung.
+	u.replaceHint = widget.NewLabel("")
+	u.replaceHint.Wrapping = fyne.TextWrapWord
+	u.replaceGroup = widget.NewRadioGroup([]string{optAppend, optReplace}, nil)
+	u.replaceGroup.Horizontal = true
+	u.replaceGroup.SetSelected(optAppend)
+	u.replaceBox = container.NewVBox(u.replaceHint, u.replaceGroup)
+	u.replaceBox.Hide()
 
 	u.startBtn = widget.NewButtonWithIcon("Encodieren und hochladen", theme.UploadIcon(), u.start)
 	u.startBtn.Importance = widget.HighImportance
@@ -144,7 +179,7 @@ func (u *ui) build() fyne.CanvasObject {
 
 	content := container.NewVBox(
 		widget.NewCard("1. Videodatei", "", container.NewVBox(u.fileLabel, container.NewHBox(u.chooseBtn))),
-		widget.NewCard("2. Angaben", "", container.NewVBox(form, hint)),
+		widget.NewCard("2. Angaben", "", container.NewVBox(form, hint, u.replaceBox)),
 		widget.NewCard("3. Encodieren und hochladen", "",
 			container.NewVBox(container.NewHBox(u.startBtn, u.cancelBtn), u.bar, u.status, u.link)),
 	)
@@ -260,8 +295,10 @@ func (u *ui) setTeams(teams []client.Team) {
 
 func (u *ui) onTeamChanged(label string) {
 	u.gameIDs = nil
+	u.videosByGame = nil
 	u.gameSelect.SetOptions([]string{noGame})
 	u.gameSelect.SetSelected(noGame)
+	u.replaceBox.Hide()
 	teamID, ok := u.teamIDs[label]
 	if !ok || u.client == nil {
 		return
@@ -271,6 +308,10 @@ func (u *ui) onTeamChanged(label string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		games, err := c.Games(ctx, seasonID, teamID)
+		// Video-Info je Spiel ist eine Zugabe, kein Kernbestandteil der Auswahl:
+		// schlägt der Abruf fehl, bleibt die Liste einfach ohne Hinweistext
+		// nutzbar statt die ganze Spiel-Auswahl scheitern zu lassen.
+		videosByGame, _ := c.VideosByGame(ctx, teamID)
 		fyne.Do(func() {
 			if u.teamSelect.Selected != label {
 				return // inzwischen andere Mannschaft gewählt
@@ -279,10 +320,14 @@ func (u *ui) onTeamChanged(label string) {
 				u.status.SetText("Spiele konnten nicht geladen werden: " + userMessage(err))
 				return
 			}
+			u.videosByGame = videosByGame
 			u.gameIDs = map[string]int{}
 			opts := []string{noGame}
 			for _, g := range games {
 				l := g.Label()
+				if v, ok := videosByGame[g.ID]; ok {
+					l += " · " + v.Describe(formatSize)
+				}
 				if _, dup := u.gameIDs[l]; dup {
 					l = fmt.Sprintf("%s (#%d)", l, g.ID)
 				}
@@ -292,6 +337,23 @@ func (u *ui) onTeamChanged(label string) {
 			u.gameSelect.SetOptions(opts)
 		})
 	}()
+}
+
+// onGameChanged zeigt die Hinzufügen-oder-Ersetzen-Auswahl nur, wenn zum
+// gewählten Spiel laut videosByGame schon (ein) Video(s) existieren
+// (video-upload-anhaengen-oder-ersetzen). Bei "Freier Titel" oder einem Spiel
+// ohne vorhandenes Video bleibt sie verborgen und die Auswahl auf "Hinzufügen"
+// zurückgesetzt — das ist das unveränderte bisherige Verhalten.
+func (u *ui) onGameChanged(label string) {
+	gameID := u.gameIDs[label]
+	existing, ok := u.videosByGame[gameID]
+	if gameID == 0 || !ok || len(existing.IDs) == 0 {
+		u.replaceGroup.SetSelected(optAppend)
+		u.replaceBox.Hide()
+		return
+	}
+	u.replaceHint.SetText(existing.Describe(formatSize) + " — wie soll mit dem neuen Video verfahren werden?")
+	u.replaceBox.Show()
 }
 
 // --- Dateiauswahl ------------------------------------------------------------
@@ -397,6 +459,43 @@ func (u *ui) start() {
 		return
 	}
 
+	replace, replaceIDs := u.pendingReplace(m.gameID)
+	if !replace {
+		u.startJob(m, false, nil)
+		return
+	}
+	// Löschen ist unwiderruflich — eine zusätzliche Bestätigung direkt vor dem
+	// Start, weil die Radio-Auswahl selbst (bei der Spiel-Auswahl getroffen,
+	// oft Minuten vor dem Klick auf "Encodieren und hochladen") dafür allein
+	// nicht genug Gewicht hat (video-upload-anhaengen-oder-ersetzen).
+	body := "Das vorhandene Video zu diesem Spiel wird nach erfolgreichem Hochladen unwiderruflich gelöscht."
+	if len(replaceIDs) > 1 {
+		body = fmt.Sprintf("Die %d vorhandenen Videos zu diesem Spiel werden nach erfolgreichem Hochladen unwiderruflich gelöscht.", len(replaceIDs))
+	}
+	dialog.ShowConfirm("Vorhandenes Video ersetzen?", body, func(ok bool) {
+		if ok {
+			u.startJob(m, true, replaceIDs)
+		}
+	}, u.win)
+}
+
+// pendingReplace liefert, ob "Ersetzen" gewählt ist und — falls ja — welche
+// Video-IDs danach gelöscht werden sollen. gameID == 0 ("Freier Titel") oder
+// kein vorhandenes Video für dieses Spiel bedeuten immer "Hinzufügen"
+// (video-upload-anhaengen-oder-ersetzen: die Auswahl gilt bewusst nur für
+// Spiel-gebundene Videos, siehe design.md).
+func (u *ui) pendingReplace(gameID int) (bool, []int) {
+	if gameID == 0 || u.replaceGroup.Selected != optReplace {
+		return false, nil
+	}
+	existing, ok := u.videosByGame[gameID]
+	if !ok || len(existing.IDs) == 0 {
+		return false, nil
+	}
+	return true, append([]int(nil), existing.IDs...)
+}
+
+func (u *ui) startJob(m meta, replace bool, replaceIDs []int) {
 	if u.job == nil {
 		u.job = &job{src: u.srcPath}
 	}
@@ -407,6 +506,7 @@ func (u *ui) start() {
 		j.videoID, j.location = 0, ""
 	}
 	j.meta, j.account = m, u.accountKey()
+	j.replace, j.replaceIDs = replace, replaceIDs
 
 	ctx, cancel := context.WithCancel(context.Background())
 	u.cancel, u.done = cancel, make(chan struct{})
@@ -414,26 +514,30 @@ func (u *ui) start() {
 	c, seasonID, done := u.client, u.seasonID, u.done
 	go func() {
 		defer close(done)
-		id, err := u.run(ctx, c, seasonID, j)
-		fyne.Do(func() { u.finish(c, id, err) })
+		id, warn, err := u.run(ctx, c, seasonID, j)
+		fyne.Do(func() { u.finish(c, id, warn, err) })
 	}()
 }
 
 // run encodiert (sofern noch nicht geschehen), legt die Video-Zeile an und lädt
-// hoch. Läuft in einer eigenen Goroutine; UI-Änderungen nur über fyne.Do.
-func (u *ui) run(ctx context.Context, c *client.Client, seasonID int, j *job) (int, error) {
+// hoch. Läuft in einer eigenen Goroutine; UI-Änderungen nur über fyne.Do. Der
+// zweite Rückgabewert ist ein optionaler Warnhinweis (video-speicherplatz
+// bereits gelöscht? Nein: video-upload-anhaengen-oder-ersetzen) — gesetzt,
+// wenn der Upload zwar erfolgreich war, das Löschen eines Ersetzen-Kandidaten
+// aber fehlschlug; das ist ausdrücklich KEIN Fehler (err bleibt nil).
+func (u *ui) run(ctx context.Context, c *client.Client, seasonID int, j *job) (int, string, error) {
 	if j.encoded == "" || !fileExists(j.encoded) {
 		u.showStep("ffmpeg wird vorbereitet (beim ersten Start einige Sekunden) …")
 		ffmpeg, err := ffmpegbin.Path(u.ffmpegDir())
 		if err != nil {
-			return 0, err
+			return 0, "", err
 		}
 		src, err := encode.Probe(ctx, ffmpeg, j.src)
 		if err != nil {
-			return 0, fmt.Errorf("die Datei lässt sich nicht als Video lesen: %w", err)
+			return 0, "", fmt.Errorf("die Datei lässt sich nicht als Video lesen: %w", err)
 		}
 		if err := os.MkdirAll(u.workDir(), 0o755); err != nil {
-			return 0, err
+			return 0, "", err
 		}
 		stem := strings.TrimSuffix(filepath.Base(j.src), filepath.Ext(j.src))
 		out := filepath.Join(u.workDir(), stem+"-720p.mp4")
@@ -442,17 +546,17 @@ func (u *ui) run(ctx context.Context, c *client.Client, seasonID int, j *job) (i
 		u.showProgress("Schritt 1 von 2: Encodieren", 0, "")
 		if err := encode.Run(ctx, ffmpeg, encode.BuildArgs(j.src, part, src), src.Duration, func(f float64) { report(f, f) }); err != nil {
 			_ = os.Remove(part)
-			return 0, err
+			return 0, "", err
 		}
 		if err := os.Rename(part, out); err != nil {
-			return 0, err
+			return 0, "", err
 		}
 		j.encoded = out
 	}
 
 	fi, err := os.Stat(j.encoded)
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	if j.videoID == 0 {
 		u.showStep("Video wird in TeamWERK angelegt …")
@@ -464,7 +568,7 @@ func (u *ui) run(ctx context.Context, c *client.Client, seasonID int, j *job) (i
 			nv.GameID = &j.meta.gameID
 		}
 		if j.videoID, err = c.CreateVideo(ctx, nv); err != nil {
-			return 0, err
+			return 0, "", err
 		}
 	}
 
@@ -490,10 +594,29 @@ func (u *ui) run(ctx context.Context, c *client.Client, seasonID int, j *job) (i
 		},
 	})
 	if err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	_ = os.Remove(j.encoded)
-	return j.videoID, nil
+
+	// "Ersetzen": erst jetzt, nach gesichertem Upload-Erfolg, die zuvor
+	// vorhandenen Videos löschen (nie davor — design.md "Löschen erst NACH
+	// erfolgreichem Upload"). Ein Löschfehler wird als Warnhinweis
+	// zurückgegeben, bricht den Erfolg des Uploads aber nicht.
+	var warn string
+	if j.replace {
+		u.showStep("Vorheriges Video wird gelöscht …")
+		for _, oldID := range j.replaceIDs {
+			if oldID == j.videoID {
+				continue // Sicherheitsnetz: niemals das gerade hochgeladene Video löschen
+			}
+			if delErr := c.DeleteVideo(ctx, oldID); delErr != nil {
+				warn = "Das neue Video wurde hochgeladen, das vorherige konnte aber nicht automatisch " +
+					"gelöscht werden (" + userMessage(delErr) + ") — bitte manuell in TeamWERK löschen."
+				break
+			}
+		}
+	}
+	return j.videoID, warn, nil
 }
 
 // progressReporter liefert einen gedrosselten Fortschritts-Callback (max. 4×/s
@@ -531,7 +654,7 @@ func (u *ui) setProgress(phase string, f float64, rem string) {
 	u.status.SetText(text)
 }
 
-func (u *ui) finish(c *client.Client, videoID int, err error) {
+func (u *ui) finish(c *client.Client, videoID int, deleteWarn string, err error) {
 	u.setBusy(false)
 	u.cancel, u.done = nil, nil
 	switch {
@@ -540,8 +663,16 @@ func (u *ui) finish(c *client.Client, videoID int, err error) {
 		u.srcPath = ""
 		u.fileLabel.SetText("Noch keine Datei gewählt — Datei auswählen oder ins Fenster ziehen.")
 		u.bar.SetValue(1)
-		u.status.SetText("Fertig! Das Video wird jetzt auf dem Server verarbeitet und erscheint danach in TeamWERK. " +
-			"Alle Berechtigten bekommen eine Benachrichtigung.")
+		// Radio auf den sicheren Default zurücksetzen: die Auswahl gilt sonst
+		// weiter für den nächsten Upload zum selben Spiel, obwohl "Ersetzen"
+		// bereits ausgeführt wurde (video-upload-anhaengen-oder-ersetzen).
+		u.replaceGroup.SetSelected(optAppend)
+		msg := "Fertig! Das Video wird jetzt auf dem Server verarbeitet und erscheint danach in TeamWERK. " +
+			"Alle Berechtigten bekommen eine Benachrichtigung."
+		if deleteWarn != "" {
+			msg += "\n\n" + deleteWarn
+		}
+		u.status.SetText(msg)
 		if link, perr := url.Parse(c.VideoURL(videoID)); perr == nil {
 			u.link.SetText("Video in TeamWERK öffnen")
 			u.link.SetURL(link)
@@ -563,7 +694,7 @@ func (u *ui) finish(c *client.Client, videoID int, err error) {
 
 func (u *ui) setBusy(b bool) {
 	u.busy = b
-	for _, w := range []fyne.Disableable{u.chooseBtn, u.teamSelect, u.gameSelect, u.titleEntry, u.descEntry, u.startBtn} {
+	for _, w := range []fyne.Disableable{u.chooseBtn, u.teamSelect, u.gameSelect, u.titleEntry, u.descEntry, u.replaceGroup, u.startBtn} {
 		if b {
 			w.Disable()
 		} else {
