@@ -74,27 +74,27 @@ export default function MatchReportListPage() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto p-4 sm:p-8 space-y-6">
-            <div className="flex items-center justify-between">
+        <div>
+            <div className="mb-4 sm:mb-6">
                 <h1 className="text-2xl font-bold text-brand-text">Spielberichte</h1>
             </div>
 
             {error && (
-                <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+                <div className="mb-4 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
                     {error}
                 </div>
             )}
 
             {/* Offene Slots — Einstiegs-CTA */}
-            <section className="space-y-3">
+            <section className="space-y-3 mb-6">
                 <h2 className="text-sm font-medium text-brand-text-muted uppercase">
                     Offene Aufträge ({openSlots.length})
                 </h2>
                 {openSlots.length === 0 ? (
-                    <p className="text-sm text-brand-text-muted">
+                    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 text-sm text-brand-text-muted">
                         Keine offenen Spielbericht-Aufträge. Übernimm einen Slot in der{' '}
                         <a href="/dienste" className="underline text-brand-text">Dienstbörse</a>.
-                    </p>
+                    </div>
                 ) : (
                     <ul className="space-y-2">
                         {openSlots.map(slot => (
@@ -130,7 +130,9 @@ export default function MatchReportListPage() {
                 {loading ? (
                     <p className="text-sm text-brand-text-muted">Lade…</p>
                 ) : reports.length === 0 ? (
-                    <p className="text-sm text-brand-text-muted">Noch keine Berichte angelegt.</p>
+                    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 text-sm text-brand-text-muted">
+                        Noch keine Berichte angelegt.
+                    </div>
                 ) : (
                     <ul className="space-y-2">
                         {reports.map(r => (
