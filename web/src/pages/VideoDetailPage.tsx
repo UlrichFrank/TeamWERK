@@ -7,7 +7,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import VideoStatusPill from '../components/VideoStatusPill'
 import CastButton from '../components/CastButton'
 import { fmtBytes, fmtDuration, fmtVideoDate } from '../lib/videoFormat'
-import { BTN_DANGER, BTN_PRIMARY, HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL } from '../lib/buttonStyles'
 
 interface VideoDetail {
   id: number
@@ -239,9 +239,10 @@ function VideoPlayer({ id, title }: { id: number; title: string }) {
       {masterURL && (
         <div className="mt-2 flex justify-end gap-2">
           <button
+            type="button"
             onClick={handleDownload}
             disabled={downloading}
-            className={`${HEADER_CTRL} ${HEADER_NEUTRAL}`}
+            className={`${BTN_SMALL} inline-flex items-center gap-1.5`}
           >
             <Download className="w-4 h-4" />
             {downloading ? 'Lädt herunter…' : 'Herunterladen'}
