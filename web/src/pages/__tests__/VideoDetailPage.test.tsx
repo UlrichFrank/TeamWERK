@@ -100,6 +100,63 @@ describe('VideoDetailPage – Player-Auswahl (AirPlay)', () => {
   })
 })
 
+describe('VideoDetailPage – Download-Button', () => {
+  const PLAY = { token: 'tok', master_url: '/api/videos/42/hls/master.m3u8' }
+
+  function renderReadyWithDownloadMock() {
+    URL.createObjectURL = vi.fn(() => 'blob:test')
+    URL.revokeObjectURL = vi.fn()
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('maybe')
+    return renderAsPersona(
+      <Routes>
+        <Route path="/videos/:id" element={<VideoDetailPage />} />
+      </Routes>,
+      'trainer',
+      {
+        initialEntries: ['/videos/42'],
+        mocks: [
+          { url: /\/videos\/42\/play$/, data: PLAY },
+          { url: /\/videos\/42\/download$/, data: new Blob(['fake mp4 bytes']) },
+          { url: /\/videos\/42$/, data: { ...VIDEO, status: 'ready' } },
+        ],
+      },
+    )
+  }
+
+  test('Button erscheint erst, wenn der Player bereit ist, und löst den Download-Request aus', async () => {
+    renderReadyWithDownloadMock()
+
+    const button = await screen.findByRole('button', { name: /Herunterladen/i })
+    fireEvent.click(button)
+
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+  })
+
+  test('Fehlgeschlagener Download zeigt eine Fehlermeldung', async () => {
+    vi.spyOn(HTMLMediaElement.prototype, 'canPlayType').mockReturnValue('maybe')
+    const getSpy = vi.spyOn(api, 'get').mockImplementation((url: string, config?: unknown) => {
+      if (url === '/videos/42/play') return Promise.resolve({ data: PLAY })
+      if (url === '/videos/42' && !config) return Promise.resolve({ data: { ...VIDEO, status: 'ready' } })
+      if (url === '/videos/42/download') return Promise.reject(new Error('network error'))
+      return Promise.resolve({ data: [] })
+    })
+
+    renderAsPersona(
+      <Routes>
+        <Route path="/videos/:id" element={<VideoDetailPage />} />
+      </Routes>,
+      'trainer',
+      { initialEntries: ['/videos/42'] },
+    )
+
+    const button = await screen.findByRole('button', { name: /Herunterladen/i })
+    fireEvent.click(button)
+
+    expect(await screen.findByText(/Download ist fehlgeschlagen/i)).toBeInTheDocument()
+    getSpy.mockRestore()
+  })
+})
+
 describe('VideoDetailPage – Fehlergrund', () => {
   test('unsupported_input_format wird als Hinweis auf das Tool angezeigt', async () => {
     renderAsPersona(

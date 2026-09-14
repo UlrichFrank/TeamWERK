@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AlertTriangle, Clock, Pencil, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Clock, Download, Pencil, Trash2, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -60,14 +60,33 @@ function failureReasonText(reason: string): string {
   return reason
 }
 
-function VideoPlayer({ id }: { id: number }) {
+function VideoPlayer({ id, title }: { id: number; title: string }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState('')
   const [unsupported, setUnsupported] = useState(false)
   // masterURL wird für Chromecast-Wurf gebraucht — CastButton übergibt die
   // komplette URL inkl. ?st=-Token an den Receiver, der direkt vom Server holt.
   const [masterURL, setMasterURL] = useState('')
+  const [downloading, setDownloading] = useState(false)
   const { keepAlive } = useAuth()
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    setError('')
+    try {
+      const res = await api.get(`/videos/${id}/download`, { responseType: 'blob' })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${title}.mp4`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError('Der Download ist fehlgeschlagen.')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -218,7 +237,15 @@ function VideoPlayer({ id }: { id: number }) {
         className="w-full rounded-lg bg-brand-black aspect-video"
       />
       {masterURL && (
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex justify-end gap-2">
+          <button
+            onClick={handleDownload}
+            disabled={downloading}
+            className={`${HEADER_CTRL} ${HEADER_NEUTRAL}`}
+          >
+            <Download className="w-4 h-4" />
+            {downloading ? 'Lädt herunter…' : 'Herunterladen'}
+          </button>
           <CastButton masterURL={masterURL} />
         </div>
       )}
@@ -385,7 +412,7 @@ export default function VideoDetailPage() {
       {/* Player / Status-Hinweis */}
       <div className="mb-6">
         {video.status === 'ready' ? (
-          <VideoPlayer id={video.id} />
+          <VideoPlayer id={video.id} title={video.title} />
         ) : video.status === 'failed' ? (
           <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
