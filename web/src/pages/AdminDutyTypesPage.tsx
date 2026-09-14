@@ -30,6 +30,9 @@ interface DutyType {
   // Die Liste liefert nur noch das Flag; der Volltext kommt aus dem Detail-Pfad.
   has_instruction?: boolean
   instruction_updated_at?: string
+  // video-download-duty-upload: wer für diesen Diensttyp eine Zuweisung für ein
+  // konkretes Spiel hat, darf für genau dieses Spiel ein Video hochladen.
+  grants_video_upload?: boolean
 }
 
 interface EditState {
@@ -46,6 +49,7 @@ interface EditState {
   adjacent_day_behavior: string
   adjacent_day_variant_id: string
   audiences: string[]
+  grants_video_upload: boolean
 }
 
 function toEditState(t: DutyType): EditState {
@@ -63,6 +67,7 @@ function toEditState(t: DutyType): EditState {
     adjacent_day_behavior: t.adjacent_day_behavior || 'normal',
     adjacent_day_variant_id: t.adjacent_day_variant_id ? t.adjacent_day_variant_id.toString() : '',
     audiences: t.audiences ?? [],
+    grants_video_upload: t.grants_video_upload ?? false,
   }
 }
 
@@ -72,6 +77,7 @@ const emptyCreate = (): EditState => ({
   same_day_behavior: 'normal', same_day_variant_id: '',
   adjacent_day_behavior: 'normal', adjacent_day_variant_id: '',
   audiences: [],
+  grants_video_upload: false,
 })
 
 // Feste Beispielwerte für die Vorschau im dynamischen Modus (5.3): eine
@@ -253,6 +259,25 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
         </div>
       </div>
 
+      {/* video-download-duty-upload: wer für einen so markierten Diensttyp eine
+          Zuweisung für ein konkretes Spiel hat, darf für genau dieses Spiel ein
+          Video hochladen — zusätzlich zu Trainer/sportl. Leitung/Vorstand/Admin. */}
+      <label className="flex items-start gap-2 text-sm cursor-pointer">
+        <input
+          type="checkbox"
+          checked={state.grants_video_upload}
+          onChange={e => onChange({ ...state, grants_video_upload: e.target.checked })}
+          className="mt-0.5 accent-brand-yellow"
+        />
+        <span>
+          Berechtigt zum Video-Upload
+          <span className="block text-xs text-brand-text-subtle">
+            Wer für diesen Diensttyp bei einem Spiel eingeteilt ist/war, darf für genau
+            dieses Spiel ein Video hochladen — unabhängig von Vereinsfunktion.
+          </span>
+        </span>
+      </label>
+
       <div className="border-t border-brand-border-subtle pt-3 mt-1">
         <p className="text-xs font-semibold text-brand-text-muted mb-2">Spieltag-Verhalten</p>
         <div className="space-y-3">
@@ -327,6 +352,7 @@ export default function AdminDutyTypesPage() {
       adjacent_day_behavior: create.adjacent_day_behavior,
       adjacent_day_variant_id: create.adjacent_day_variant_id ? parseInt(create.adjacent_day_variant_id) : null,
       audiences: create.audiences.length > 0 ? create.audiences : null,
+      grants_video_upload: create.grants_video_upload,
     })
     setCreate(emptyCreate())
     setShowCreateModal(false)
@@ -354,6 +380,7 @@ export default function AdminDutyTypesPage() {
       adjacent_day_behavior: edit.adjacent_day_behavior,
       adjacent_day_variant_id: edit.adjacent_day_variant_id ? parseInt(edit.adjacent_day_variant_id) : null,
       audiences: edit.audiences.length > 0 ? edit.audiences : null,
+      grants_video_upload: edit.grants_video_upload,
     })
     setEdit(null); setModalId(null)
     load()
