@@ -327,7 +327,7 @@ export default function BeitragslaufPage() {
 
       {preview && (
         <>
-          <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow shadow px-5 py-3 mb-4 text-sm text-brand-text flex flex-wrap gap-x-6 gap-y-1">
+          <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow transform-gpu shadow px-5 py-3 mb-4 text-sm text-brand-text flex flex-wrap gap-x-6 gap-y-1">
             <span className="inline-flex items-center gap-1"><CheckSquare className="w-4 h-4 shrink-0" /> {summary.count} angehakt</span>
             <span className="inline-flex items-center gap-1 text-brand-text-muted"><AlertTriangle className="w-4 h-4 shrink-0" /> {summary.warn} Warnungen</span>
             <span className="inline-flex items-center gap-1 text-brand-text-muted"><Ban className="w-4 h-4 shrink-0" /> {summary.excl} ausgeschlossen</span>
@@ -358,7 +358,7 @@ export default function BeitragslaufPage() {
           </div>
 
           {/* Desktop-Tabelle */}
-          <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mb-4">
+          <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-4">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-brand-surface-card text-brand-text-muted text-xs uppercase">
@@ -418,7 +418,7 @@ export default function BeitragslaufPage() {
           {/* Mobile-Cards */}
           <div className="sm:hidden space-y-2 mb-4">
             {filteredItems.map(it => (
-              <div key={it.member_id} className={`bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-4 py-3 ${!it.included ? 'opacity-60' : ''}`}>
+              <div key={it.member_id} className={`bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-4 py-3 ${!it.included ? 'opacity-60' : ''}`}>
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-medium text-brand-text">
                     <input type="checkbox" disabled={!it.included} checked={selected.has(it.member_id)} onChange={() => toggle(it.member_id)} />
@@ -618,7 +618,7 @@ function ExportScopeDialog({ preview, selected, initialScope, onClose, onConfirm
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-brand-text">{title}</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text">

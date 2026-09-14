@@ -68,7 +68,7 @@ export default function ChangelogModal({ onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white rounded-t-xl sm:rounded-xl shadow-xl border-t-4 border-brand-yellow w-full sm:max-w-lg max-h-[80vh] flex flex-col"
+        className="bg-white rounded-t-xl sm:rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full sm:max-w-lg max-h-[80vh] flex flex-col"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle shrink-0">
           <h2 id={titleId} className="text-base font-bold text-brand-text">Versionshistorie</h2>

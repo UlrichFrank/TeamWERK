@@ -400,7 +400,7 @@ export default function AdminDutyTypesPage() {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg text-brand-text">Neuer Diensttyp</h2>
               <button
@@ -437,7 +437,7 @@ export default function AdminDutyTypesPage() {
       )}
 
       {/* Table — responsive column hiding */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden mt-4">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden mt-4">
         {types.length === 0 ? (
           <p className="text-sm text-brand-text-muted italic px-4 py-6 text-center">Keine Diensttypen vorhanden.</p>
         ) : (

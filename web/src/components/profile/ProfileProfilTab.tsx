@@ -278,7 +278,7 @@ export default function ProfileProfilTab({
       )}
 
       {/* Profilbild */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Profilbild</h2>
         <div className="flex gap-4 items-start">
           {photoURL ? (
@@ -328,7 +328,7 @@ export default function ProfileProfilTab({
       </div>
 
       {/* Persönliche Daten */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Persönliche Daten</h2>
         <form onSubmit={handleSave} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -395,7 +395,7 @@ export default function ProfileProfilTab({
       </div>
 
       {/* Telefonnummern — nur wenn User-Strang vorhanden */}
-      {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Telefonnummern</h2>
         <div className="space-y-3">
           {phones.length > 0 && (
@@ -463,7 +463,7 @@ export default function ProfileProfilTab({
       </div>}
 
       {/* Sichtbarkeit — nur wenn User-Strang vorhanden */}
-      {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <div className="p-6 pb-2">
           <h2 className="font-semibold text-brand-text-muted mb-1">Sichtbarkeit für Mitglieder</h2>
           <p className="text-xs text-brand-text-subtle mb-3">Wähle, welche Kontaktdaten andere Mitglieder sehen dürfen.</p>
@@ -490,7 +490,7 @@ export default function ProfileProfilTab({
 
       {/* Familie */}
       {(children.length > 0 || parents.length > 0) && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
           <h2 className="font-semibold text-brand-text-muted mb-4">Familie</h2>
           {children.length > 0 && (
             <div className="mb-4">

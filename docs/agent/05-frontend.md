@@ -33,8 +33,8 @@ Marke: Schwarz `#181310`, Gelb `#FDE400`, Weiß `#FFFFFF`; sekundär Blau `#3E4A
 - **Button Small (Tabellen):** `bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
 - **Button Danger:** `bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
 - **Input:** `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
-- **Card:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6` (Tabellen-Container: `… overflow-hidden`)
-- **Modal:** `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6`
+- **Card:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6` (Tabellen-Container: `… overflow-hidden`)
+- **Modal:** `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6`
 - **Alert Info:** `p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text`
 - **Alert Fehler:** `p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger`
 - **Tabellen-Header (th):** `bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left`

@@ -63,7 +63,7 @@ function StackedBar({ present, excused, missed }: { present: number; excused: nu
 
 function PillarBlock({ title, present, excused, missed }: { title: string; present: number; excused: number; missed: number }) {
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="font-semibold text-brand-text">{title}</h3>
         <span className="text-sm text-brand-text-muted">Quote {quote(present, missed)}</span>
@@ -100,7 +100,7 @@ function CategoryBadge({ category }: { category: Category }) {
 function EventTable({ title, events }: { title: string; events: EventDetail[] }) {
   const hasUnavailable = events.some(e => e.category === 'unavailable')
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-6 py-4 border-b border-brand-border-subtle">
         <h3 className="font-semibold text-brand-text">{title}</h3>
       </div>

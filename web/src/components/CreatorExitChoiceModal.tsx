@@ -63,7 +63,7 @@ export default function CreatorExitChoiceModal({ convId, ownerId, members, onClo
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md"
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md"
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id={titleId} className="text-lg font-bold text-brand-text">Gruppe verlassen</h2>

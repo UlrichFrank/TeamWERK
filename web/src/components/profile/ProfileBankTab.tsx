@@ -75,7 +75,7 @@ export default function ProfileBankTab({ ownMember }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
 
         {/* Statusanzeige */}

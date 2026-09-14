@@ -149,7 +149,7 @@ export default function UebungsgruppenPage() {
       {loading && <p className="text-sm text-brand-text-muted">Laden…</p>}
 
       {!loading && groups.length === 0 && (
-        <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow p-8 text-center">
+        <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow transform-gpu p-8 text-center">
           <p className="text-brand-text-muted text-sm">
             Noch keine Übungsgruppen in der aktiven Saison. Eine Übungsgruppe ist ein
             benanntes Trainingsgefäß ohne Altersklasse und Jahrgang — für Torwart-,
@@ -159,7 +159,7 @@ export default function UebungsgruppenPage() {
       )}
 
       {groups.map(g => (
-        <div key={g.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow mb-3">
+        <div key={g.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu mb-3">
           <div className="px-5 py-3 border-b border-brand-border-subtle flex items-center justify-between gap-2">
             <button
               onClick={() => { setRenaming(g); setRenameValue(g.name) }}
@@ -223,7 +223,7 @@ export default function UebungsgruppenPage() {
 
       {showCreate && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className="text-lg font-semibold text-brand-text mb-4">Neue Übungsgruppe</h2>
             <label className="block text-xs font-medium text-brand-text-muted mb-1">Name</label>
             <input
@@ -251,7 +251,7 @@ export default function UebungsgruppenPage() {
 
       {renaming && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className="text-lg font-semibold text-brand-text mb-4">Übungsgruppe umbenennen</h2>
             <input
               autoFocus
@@ -277,7 +277,7 @@ export default function UebungsgruppenPage() {
 
       {deleteConfirm && (
         <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className="text-lg font-semibold text-brand-text mb-2">Übungsgruppe löschen</h2>
             <p className="text-sm text-brand-text-muted mb-5">
               „{deleteConfirm.name}" wird gelöscht. Solange Trainingstermine an der Gruppe

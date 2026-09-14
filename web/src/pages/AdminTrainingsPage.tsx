@@ -380,7 +380,7 @@ export default function AdminTrainingsPage() {
       {/* Delete confirmation modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => closeDeleteConfirm()}>
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">
                 {deleteConfirm.type === 'series' ? 'Serie löschen' : 'Einzeltermin löschen'}
@@ -445,14 +445,14 @@ export default function AdminTrainingsPage() {
           </div>
 
           {series.length === 0 ? (
-            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
+            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
               <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
               <p className="text-brand-text-muted">Noch keine Trainingsserien angelegt.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {series.map(s => (
-                <div key={s.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+                <div key={s.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
                   <div className="p-4 cursor-pointer hover:bg-white/40 transition-colors" onClick={() => toggleExpand(s)}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
@@ -541,12 +541,12 @@ export default function AdminTrainingsPage() {
           </div>
 
           {standalone.length === 0 ? (
-            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
+            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
               <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
               <p className="text-brand-text-muted">Keine Einzeltermine vorhanden.</p>
             </div>
           ) : (
-            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
               <ul className="divide-y divide-brand-border-subtle">
                 {standalone.map(s => (
                   <li key={s.id}
@@ -582,7 +582,7 @@ export default function AdminTrainingsPage() {
       {/* === SERIES MODAL === */}
       {seriesModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSeriesModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">
                 {isNewSeries ? 'Neue Trainingsserie' : 'Serie bearbeiten'}
@@ -714,7 +714,7 @@ export default function AdminTrainingsPage() {
       {/* === ABMELDE MODAL === */}
       {abmeldModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setAbmeldModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">Spieler abmelden</h2>
               <button onClick={() => setAbmeldModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
@@ -778,7 +778,7 @@ export default function AdminTrainingsPage() {
       {/* === SESSION MODAL === */}
       {sessionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSessionModal(null)}>
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">
                 {isNewSession ? 'Neuer Einzeltermin' : 'Termin bearbeiten'}

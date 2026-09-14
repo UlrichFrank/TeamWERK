@@ -126,7 +126,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
 
   return (
     <div className="space-y-6">
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Stammdaten</h2>
         {onSaveDirect ? (
           <div className="space-y-3">
@@ -198,7 +198,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
 
       {/* Familie */}
       {(children.length > 0 || parents.length > 0) && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
           <h2 className="font-semibold text-brand-text-muted mb-4">Familie</h2>
           <div className="space-y-3 text-sm">
             {parents.length > 0 && (
@@ -227,7 +227,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
 
       {/* Ausstehende Anfrage */}
       {profilDraft && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
           <h2 className="font-semibold text-brand-text-muted mb-4">Ausstehende Anfrage</h2>
           <p className="text-xs text-brand-text-subtle mb-4">Diese Änderungen warten auf Freigabe durch den Verein.</p>
           <div className="space-y-2 text-sm mb-4">

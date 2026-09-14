@@ -796,7 +796,7 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
       {/* Vorschau-Modal für den Einheiten-Wechsel */}
       {unitPreview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4" onClick={() => setUnitPreview(null)}>
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-bold text-brand-text">
                 Einheit wechseln: {unitPreview.from === 'euro' ? 'Euro' : 'Striche'} → {unitPreview.to === 'euro' ? 'Euro' : 'Striche'}
@@ -1018,7 +1018,7 @@ export default function MeinTeamPage() {
             const roster = rosters[team.id]
             const rosterError = rosterErrors[team.id]
             return (
-              <div key={team.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+              <div key={team.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
                 <button
                   onClick={() => toggleTeam(team.id)}
                   aria-expanded={isOpen}

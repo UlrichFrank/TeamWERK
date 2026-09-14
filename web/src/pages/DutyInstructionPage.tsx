@@ -88,7 +88,7 @@ export default function DutyInstructionPage() {
       )}
 
       {item.instruction_md ? (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
           <MarkdownRenderer markdown={item.instruction_md} />
         </div>
       ) : (

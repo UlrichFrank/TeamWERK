@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { BTN_DANGER, BTN_PRIMARY } from '../../lib/buttonStyles'
 
-const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6'
+const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6'
 const ALERT_INFO = 'p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text'
 const ALERT_ERR = 'p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger'
 

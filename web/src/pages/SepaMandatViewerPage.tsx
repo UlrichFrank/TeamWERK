@@ -78,7 +78,7 @@ export default function SepaMandatViewerPage() {
           </button>
           <h1 className="text-base font-medium text-brand-text">SEPA-Mandat</h1>
         </div>
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 max-w-md mx-auto text-center">
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 max-w-md mx-auto text-center">
           <Lock className="w-8 h-8 text-brand-text-muted mx-auto mb-3" />
           <p className="text-sm text-brand-text mb-2">Bankdaten-Tresor gesperrt.</p>
           <p className="text-sm text-brand-text-muted">

@@ -111,7 +111,7 @@ export default function MemberAdminTab({
   return (
     <div className="space-y-6">
       {/* Nutzer verknüpfen */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text mb-4">Nutzer verknüpfen</h2>
 
         {(currentUser || linkedInvitation) && (
@@ -149,7 +149,7 @@ export default function MemberAdminTab({
       </div>
 
       {/* Willkommensmail */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text mb-4">Willkommensmail</h2>
 
         {welcomeEmailSentAt ? (

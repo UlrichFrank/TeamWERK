@@ -16,7 +16,7 @@ export default function ProfileAccountTab({ user, logout, recoveryEmail }: Props
   return (
     <div className="space-y-6">
       {/* Kontoangaben */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Kontoangaben</h2>
         <div>
           <label className="block text-sm font-medium text-brand-text-muted mb-1">E-Mail</label>
@@ -42,7 +42,7 @@ export default function ProfileAccountTab({ user, logout, recoveryEmail }: Props
       </div>
 
       {/* Sicherheit */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Sicherheit</h2>
         <div className="flex gap-3 flex-wrap">
           <button

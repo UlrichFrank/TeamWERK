@@ -22,7 +22,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-surface-card">
-      <div className="w-full max-w-sm bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8">
+      <div className="w-full max-w-sm bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
         <h1 className="text-xl font-bold mb-6 text-brand-text">Neues Passwort setzen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (

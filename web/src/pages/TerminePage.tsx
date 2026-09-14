@@ -554,7 +554,7 @@ export default function TerminePage() {
         hiddenByOtherFilters > 0 ? (
           <FilterEmptyState hiddenByOtherFilters={hiddenByOtherFilters} onResetFilters={resetFilters} />
         ) : (
-          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8 text-center">
+          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
             <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
             <p className="text-brand-text-muted">
               {query !== '' ? 'Keine Termine passen zum Filter.' : 'Keine Termine vorhanden.'}
@@ -829,7 +829,7 @@ export default function TerminePage() {
 
       {pendingRSVP && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
             <h2 className="text-base font-semibold text-brand-text mb-1">
               {pendingRSVP.status === 'declined' ? 'Absagen' : 'Vielleicht'}
               {pendingChildName && <span className="font-normal text-brand-text-muted"> – {pendingChildName}</span>}

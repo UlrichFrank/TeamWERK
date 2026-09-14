@@ -32,7 +32,7 @@ export default function EditModal({ isOpen, title, onClose, onSave, isSaving = f
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow ${maxWidthClass} mx-4 w-full max-h-[90vh] overflow-y-auto`}
+        className={`relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu ${maxWidthClass} mx-4 w-full max-h-[90vh] overflow-y-auto`}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
           <h2 id={titleId} className="text-lg font-bold text-brand-text">{title}</h2>

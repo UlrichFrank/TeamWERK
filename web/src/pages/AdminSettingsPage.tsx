@@ -114,7 +114,7 @@ function VereinTab() {
   }
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-5 max-w-lg">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-brand-text-muted mb-1">Vereinsname</label>
@@ -311,7 +311,7 @@ function SaisonsTab() {
       {/* Create Modal */}
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg text-brand-text">Neue Saison</h2>
               <button onClick={() => setShowCreate(false)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -430,7 +430,7 @@ function SaisonsTab() {
       </div>
 
       {/* Desktop: Table */}
-      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         {loading ? (
           <div className="px-5 py-8 text-sm text-brand-text-muted text-center">Laden…</div>
         ) : seasons.length === 0 ? (
@@ -544,7 +544,7 @@ function AltersklassenTab() {
 
   return (
     <div>
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <table className="w-full">
           <thead>
             <tr>
@@ -664,7 +664,7 @@ function BeitraegeTab() {
           .sort((a, b) => b.valid_from.slice(0, 10).localeCompare(a.valid_from.slice(0, 10)))
         const f = forms[kat] ?? { datum: '', betrag: '' }
         return (
-          <div key={kat} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-4">
+          <div key={kat} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-4">
             <h3 className="text-sm font-semibold text-brand-text mb-3">{kategorieLabel(kat)}</h3>
             <table className="w-full text-sm mb-3">
               <thead>
@@ -779,7 +779,7 @@ function BewirtungKachel() {
   }
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-5 max-w-lg">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
       <h2 className="text-sm font-semibold text-brand-text mb-4">Bewirtung</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -949,7 +949,7 @@ function AusrichterKachel() {
   useEscapeKey(deleteTarget ? closeDeleteConfirm : null)
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow px-5 py-5">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5">
       <h2 className="text-sm font-semibold text-brand-text mb-4">Ausrichter</h2>
       {error && (
         <div className="mb-3 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
@@ -979,7 +979,7 @@ function AusrichterKachel() {
         ) : (
           ausrichter.map(a => (
             editId === a.id ? (
-              <div key={a.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4 mb-3 space-y-3">
+              <div key={a.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 mb-3 space-y-3">
                 <input
                   type="text"
                   value={editName}
@@ -1088,7 +1088,7 @@ function AusrichterKachel() {
       {/* Löschen-Bestätigung mit Vorab-Bilanz (Spieltage + gebundene Vorlagen-Zeilen) */}
       {deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg text-brand-text">Ausrichter löschen?</h2>
               <button onClick={closeDeleteConfirm} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -1269,7 +1269,7 @@ function StammvereineTab() {
         ) : (
           vereine.map(v => (
             editId === v.id ? (
-              <div key={v.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4 mb-3 space-y-3">
+              <div key={v.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 mb-3 space-y-3">
                 <input
                   type="text"
                   value={editName}
@@ -1301,7 +1301,7 @@ function StammvereineTab() {
       </div>
 
       {/* Desktop: Table */}
-      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-brand-surface-card text-brand-text-muted text-xs uppercase text-left">

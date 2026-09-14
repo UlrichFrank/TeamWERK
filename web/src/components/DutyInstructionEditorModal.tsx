@@ -74,7 +74,7 @@ export default function DutyInstructionEditorModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]"
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]"
       >
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
           <h2 id={titleId} className="font-semibold text-lg text-brand-text">Anleitung: {dutyTypeName}</h2>

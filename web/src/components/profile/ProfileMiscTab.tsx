@@ -135,7 +135,7 @@ export default function ProfileMiscTab() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <div className="p-6 pb-2">
           <h2 className="font-semibold text-brand-text-muted mb-4">Benachrichtigungen</h2>
           <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-6 gap-y-0 text-xs text-brand-text-muted uppercase mb-2 px-0">
@@ -169,7 +169,7 @@ export default function ProfileMiscTab() {
       </div>
 
       {isSpieler && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
           <div className="p-6 pb-2">
             <h2 className="font-semibold text-brand-text-muted mb-1">Sichtbarkeit für Mitglieder</h2>
             <p className="text-xs text-brand-text-subtle mb-3">Wenn aktiv, sehen Trainer deine Abwesenheiten im Kalender.</p>
@@ -187,7 +187,7 @@ export default function ProfileMiscTab() {
         </div>
       )}
 
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <div className="p-6 pb-2">
           <h2 className="font-semibold text-brand-text-muted mb-1">Kartendienst</h2>
           <p className="text-xs text-brand-text-subtle mb-3">Welche Karten-App beim Klick auf einen Ort geöffnet werden soll.</p>

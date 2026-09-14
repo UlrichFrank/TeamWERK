@@ -84,7 +84,7 @@ export default function DutyExportModal({ isOpen, monthStart, monthEnd, onClose 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow max-w-lg mx-4 w-full"
+        className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu max-w-lg mx-4 w-full"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
           <h2 id={titleId} className="text-lg font-bold text-brand-text">Dienste als CSV</h2>

@@ -137,7 +137,7 @@ export default function ChildProfilePage() {
             children={[]}
             parents={parents}
           />
-          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 mt-6">
+          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 mt-6">
             <div className="flex items-center gap-2 mb-2">
               <Mail className="w-5 h-5 text-brand-text-muted" />
               <h2 className="text-lg font-semibold text-brand-text">Eltern-E-Mail (Passwort-Reset)</h2>

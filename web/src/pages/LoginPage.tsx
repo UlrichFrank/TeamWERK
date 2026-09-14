@@ -46,7 +46,7 @@ export default function LoginPage() {
             <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
           </div>
 
-          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-8">
+          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
             <h2 className="text-xl font-bold text-brand-black mb-6">Anmelden</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && <p className="text-brand-danger text-sm">{error}</p>}

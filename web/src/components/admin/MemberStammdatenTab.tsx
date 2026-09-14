@@ -175,7 +175,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   return (
     <div className="space-y-6">
       {/* Persönliche Daten */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-gray-700 mb-4">Persönliche Daten</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -487,7 +487,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
       </div>
 
       {/* Foto */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-gray-700 mb-4">Passfoto</h2>
         <div className="flex items-center gap-4">
           {photoURL && <img src={photoURL} alt="Passfoto" className="w-20 h-20 rounded-full object-cover" />}

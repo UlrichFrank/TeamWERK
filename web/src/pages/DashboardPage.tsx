@@ -159,7 +159,7 @@ function Accordion({
   onToggle: () => void; badge?: number; children: React.ReactNode
 }) {
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-brand-border-subtle transition-colors min-h-[56px]"

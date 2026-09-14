@@ -62,11 +62,11 @@ export default function MatchReportPendingListPage() {
                     {error}
                 </div>
             ) : items.length === 0 ? (
-                <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6 text-brand-text-muted">
+                <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 text-brand-text-muted">
                     Aktuell wartet kein Bericht auf Freigabe.
                 </div>
             ) : (
-                <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+                <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
                     <ul className="divide-y divide-brand-border-subtle">
                         {items.map(item => {
                             const age = daysSince(item.submitted_at)

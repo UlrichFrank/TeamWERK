@@ -16,7 +16,7 @@ function EventNoteSection({ note }: { note?: string }) {
   const text = note ?? ''
   if (text.trim() === '') return null
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
       <EventNoteIndicator variant="inline" note={text} />
     </div>
   )
@@ -378,7 +378,7 @@ export default function TermineDetailPage() {
 
   const declineModal = declineTarget ? (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDeclineTarget(null)}>
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
         <h2 className="font-semibold text-brand-text mb-1">Absagen für {declineTarget.name}</h2>
         <p className="text-sm text-brand-text-muted mb-4">Grund angeben (optional)</p>
         <input
@@ -562,7 +562,7 @@ export default function TermineDetailPage() {
     <>
       {declineModal}
     <div className="max-w-2xl space-y-4">
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <div className="flex items-start gap-3">
           <Icon className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
           <div className="flex-1 min-w-0">

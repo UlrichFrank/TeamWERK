@@ -109,7 +109,7 @@ export default function ChatSearchModal({ onClose, onSelect }: Props) {
         role="dialog"
         aria-modal="true"
         aria-label="Nachrichten durchsuchen"
-        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-lg max-h-[80vh] flex flex-col"
+        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-lg max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2 shrink-0">

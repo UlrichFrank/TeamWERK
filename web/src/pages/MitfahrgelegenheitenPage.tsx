@@ -307,7 +307,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-brand-text">Mitfahrgelegenheit eintragen</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -446,7 +446,7 @@ function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow p-6 w-full max-w-md">
+      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-brand-text">{isRide ? 'Mitfahren' : 'Platz anbieten'}</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">

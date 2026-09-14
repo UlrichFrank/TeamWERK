@@ -11,7 +11,7 @@ interface Props {
 
 export default function Accordion({ id: _id, title, icon: Icon, isOpen, onToggle, children }: Props) {
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-brand-border-subtle transition-colors min-h-[44px]"

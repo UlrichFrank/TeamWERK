@@ -155,7 +155,7 @@ export function ProfilTrainingstagebuchContent({ forcedMemberId }: { forcedMembe
       )}
 
       {formOpen && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-6">
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
           <TrainingDiaryEntryForm
             initial={editing ?? undefined}
             busy={busy}
@@ -180,7 +180,7 @@ export function ProfilTrainingstagebuchContent({ forcedMemberId }: { forcedMembe
         {entries.map(entry => (
           <div
             key={entry.id}
-            className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow p-4"
+            className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4"
           >
             <div className="flex items-start justify-between gap-2">
               <div>
