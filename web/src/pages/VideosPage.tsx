@@ -65,11 +65,11 @@ export default function VideosPage() {
   const { user } = useAuth()
   const isMobile = useMediaQuery('(max-width: 639px)')
 
-  // Upload nur für Trainer/sportl. Leitung/Vorstand/Admin (Server erzwingt zusätzlich).
-  const canUpload = !!user && (
-    user.role === 'admin' ||
-    user.clubFunctions.some(f => f === 'trainer' || f === 'sportliche_leitung' || f === 'vorstand')
-  )
+  // Der Button zeigt nur Download-Links fürs Encoder-Tool, kein Browser-Upload —
+  // die eigentliche Upload-Berechtigung (Rolle ODER Dienst mit grants_video_upload)
+  // prüft ausschließlich der Server (CanUploadForGameViaDuty). Für alle sichtbar,
+  // sonst sehen Standard-Nutzer mit Video-Dienst den Weg zum Tool gar nicht erst.
+  const canUpload = !!user
 
   const [teams, setTeams] = useState<Team[]>([])
   const [teamFilter, setTeamFilter] = useState('')
