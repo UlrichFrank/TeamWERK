@@ -1,0 +1,14 @@
+-- 063_video_disk_bytes: tatsächlicher Plattenplatz eines Videos (video-speicherplatz).
+--
+-- `videos.size_bytes` ist und bleibt die ursprüngliche Upload-Größe (Kommentar
+-- "finale Originalgröße", von finishUpload/estimateNeeded als Disk-Guard-Basis
+-- gebraucht) — sie bleibt nach dem Transcode unverändert stehen, obwohl die
+-- Rohdatei danach gelöscht wird (worker.go succeed()). Für den tatsächlich
+-- belegten Platz eines fertigen Videos zählt aber die HLS-Ausgabe, nicht die
+-- (nicht mehr vorhandene) Rohdatei. `disk_bytes` trägt deshalb separat die
+-- Größe von processed/{id}/, einmalig beim Transcode-Abschluss ermittelt statt
+-- bei jedem GET/List-Aufruf das Verzeichnis abzulaufen (ein Spiel hat leicht
+-- tausende Segment-Dateien). NULL für alle nicht-'ready'-Videos — dort ist
+-- `size_bytes` bereits die tatsächliche Rohdatei-Größe (finishUpload setzt sie
+-- auf die verifizierte tus-Upload-Größe) und damit ausreichend genau.
+ALTER TABLE videos ADD COLUMN disk_bytes INTEGER;

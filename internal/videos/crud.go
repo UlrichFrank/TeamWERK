@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -29,6 +30,11 @@ type videoListItem struct {
 	CreatedBy   int     `json:"created_by"`
 	CreatedAt   string  `json:"created_at"`
 	ReadyAt     *string `json:"ready_at"`
+	// DiskBytes ist der genutzte Plattenplatz (video-speicherplatz): für
+	// 'ready'-Videos die HLS-Ausgabe (v.disk_bytes), sonst die tatsächliche
+	// Rohdatei-Größe (v.size_bytes, siehe effectiveDiskBytes). nil, wenn beides
+	// fehlt (z.B. 'ready' vor dem Disk-Usage-Backfill).
+	DiskBytes *int64 `json:"disk_bytes"`
 }
 
 // videoDetail ist die Detail-Antwort (GET /api/videos/{id}). Sie erweitert den
@@ -38,6 +44,28 @@ type videoDetail struct {
 	UploadID      *string `json:"upload_id"`
 	SizeBytes     *int64  `json:"size_bytes"`
 	FailureReason *string `json:"failure_reason"`
+}
+
+// effectiveDiskBytes liefert den tatsächlich belegten Plattenplatz eines
+// Videos. Für 'ready' zählt die HLS-Ausgabe (disk_bytes, einmalig beim
+// Transcode-Abschluss ermittelt, siehe worker.succeed()); für alle anderen
+// Status ist size_bytes bereits die tatsächliche Rohdatei-Größe
+// (finishUpload setzt sie auf die verifizierte tus-Upload-Größe) — kein
+// zweites Feld, keine Verzeichnis-Messung pro Request nötig. Ist der
+// jeweils zuständige Wert (noch) nicht bekannt, nil.
+func effectiveDiskBytes(status string, sizeBytes, diskBytes sql.NullInt64) *int64 {
+	if status == "ready" {
+		if diskBytes.Valid {
+			v := diskBytes.Int64
+			return &v
+		}
+		return nil
+	}
+	if sizeBytes.Valid {
+		v := sizeBytes.Int64
+		return &v
+	}
+	return nil
 }
 
 // visibilityFilter liefert ein SQL-Fragment (ohne führendes AND/WHERE) plus die
@@ -136,7 +164,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(`
 		SELECT v.id, v.title, v.description, v.team_id, t.name, v.season_id,
-		       v.game_id, v.status, v.duration_sec, v.created_by, v.created_at, v.ready_at
+		       v.game_id, v.status, v.duration_sec, v.created_by, v.created_at, v.ready_at,
+		       v.size_bytes, v.disk_bytes
 		FROM videos v
 		JOIN teams t ON t.id = v.team_id
 		`+whereClause+`
@@ -153,11 +182,11 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var it videoListItem
 		var desc sql.NullString
-		var gameID, durationSec sql.NullInt64
+		var gameID, durationSec, sizeBytes, diskBytes sql.NullInt64
 		var readyAt sql.NullString
 		if err := rows.Scan(&it.ID, &it.Title, &desc, &it.TeamID, &it.TeamName,
 			&it.SeasonID, &gameID, &it.Status, &durationSec, &it.CreatedBy,
-			&it.CreatedAt, &readyAt); err != nil {
+			&it.CreatedAt, &readyAt, &sizeBytes, &diskBytes); err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
@@ -175,6 +204,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		if readyAt.Valid {
 			it.ReadyAt = &readyAt.String
 		}
+		it.DiskBytes = effectiveDiskBytes(it.Status, sizeBytes, diskBytes)
 		items = append(items, it)
 	}
 	if err := rows.Err(); err != nil {
@@ -182,7 +212,17 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, map[string]any{"items": items, "total": total})
+	resp := map[string]any{"items": items, "total": total}
+	if free, diskTotal, err := StorageStats(h.cfg.VideoStorageDir); err != nil {
+		// Storage-Info ist eine Zugabe, kein Kernstück der Liste — bei Fehler
+		// (z.B. Verzeichnis in einem Test nicht angelegt) bleibt sie einfach weg,
+		// statt die ganze Liste mit 500 zu quittieren.
+		slog.Warn("videos list: storage stats unavailable", "error", err)
+	} else {
+		resp["storage"] = map[string]uint64{"free_bytes": free, "total_bytes": diskTotal}
+	}
+
+	writeJSON(w, resp)
 }
 
 // Get liefert die Detail-Daten eines Videos. 404 sowohl wenn das Video nicht
@@ -202,17 +242,17 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	var d videoDetail
 	var desc, readyAt, uploadID, failureReason sql.NullString
-	var gameID, durationSec, sizeBytes sql.NullInt64
+	var gameID, durationSec, sizeBytes, diskBytes sql.NullInt64
 	err = h.db.QueryRow(`
 		SELECT v.id, v.title, v.description, v.team_id, t.name, v.season_id,
 		       v.game_id, v.status, v.duration_sec, v.created_by, v.created_at, v.ready_at,
-		       v.upload_id, v.size_bytes, v.failure_reason
+		       v.upload_id, v.size_bytes, v.failure_reason, v.disk_bytes
 		FROM videos v
 		JOIN teams t ON t.id = v.team_id
 		WHERE v.id = ?`, id).Scan(
 		&d.ID, &d.Title, &desc, &d.TeamID, &d.TeamName, &d.SeasonID,
 		&gameID, &d.Status, &durationSec, &d.CreatedBy, &d.CreatedAt, &readyAt,
-		&uploadID, &sizeBytes, &failureReason)
+		&uploadID, &sizeBytes, &failureReason, &diskBytes)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -256,6 +296,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	if failureReason.Valid {
 		d.FailureReason = &failureReason.String
 	}
+	d.DiskBytes = effectiveDiskBytes(d.Status, sizeBytes, diskBytes)
 
 	writeJSON(w, d)
 }

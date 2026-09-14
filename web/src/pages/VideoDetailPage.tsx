@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import VideoStatusPill from '../components/VideoStatusPill'
 import CastButton from '../components/CastButton'
-import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
+import { fmtBytes, fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 import { BTN_DANGER, BTN_PRIMARY, HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL } from '../lib/buttonStyles'
 
 interface VideoDetail {
@@ -23,6 +23,7 @@ interface VideoDetail {
   created_at: string
   ready_at?: string | null
   failure_reason?: string | null
+  disk_bytes?: number | null
 }
 
 interface PlayResponse {
@@ -398,6 +399,10 @@ export default function VideoDetailPage() {
           <div>
             <div className="text-xs uppercase text-brand-text-muted mb-1">Dauer</div>
             <div className="text-sm text-brand-text">{fmtDuration(video.duration_sec)}</div>
+          </div>
+          <div>
+            <div className="text-xs uppercase text-brand-text-muted mb-1">Speicherplatz</div>
+            <div className="text-sm text-brand-text">{fmtBytes(video.disk_bytes)}</div>
           </div>
           {video.game_id != null && (
             <div>

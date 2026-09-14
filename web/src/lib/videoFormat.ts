@@ -15,3 +15,14 @@ export function fmtDuration(sec?: number | null): string {
   const s = sec % 60
   return `${m}:${s.toString().padStart(2, '0')} min`
 }
+
+// fmtBytes formatiert eine Byte-Zahl als GB/MB (1 Nachkommastelle) — für
+// Videogröße und Speicherplatz-Anzeige (video-speicherplatz). null/undefined
+// (Größe noch nicht bekannt, z.B. 'ready' vor dem Disk-Usage-Backfill) → "–".
+export function fmtBytes(bytes?: number | null): string {
+  if (bytes == null || bytes < 0) return '–'
+  const gb = bytes / 1024 ** 3
+  if (gb >= 1) return `${gb.toFixed(1)} GB`
+  const mb = bytes / 1024 ** 2
+  return `${mb.toFixed(1)} MB`
+}

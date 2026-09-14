@@ -9,7 +9,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { VIDEO_ENCODER_DOWNLOADS } from '../lib/videoEncoderDownloads'
 import MobileCard from '../components/MobileCard'
 import VideoStatusPill from '../components/VideoStatusPill'
-import { fmtDuration, fmtVideoDate } from '../lib/videoFormat'
+import { fmtBytes, fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 import { buildTeamShortNames } from '../lib/teamName'
 import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_PRIMARY } from '../lib/buttonStyles'
 
@@ -26,11 +26,18 @@ interface VideoItem {
   created_by: number
   created_at: string
   ready_at?: string | null
+  disk_bytes?: number | null
+}
+
+interface StorageInfo {
+  free_bytes: number
+  total_bytes: number
 }
 
 interface VideoListResponse {
   items: VideoItem[]
   total: number
+  storage?: StorageInfo
 }
 
 interface Team {
@@ -73,6 +80,7 @@ export default function VideosPage() {
   const [offset, setOffset] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [storage, setStorage] = useState<StorageInfo | null>(null)
   // Anzahl neuer, noch nicht geladener Videos (via video-queued) → „N neue"-Chip.
   const [newCount, setNewCount] = useState(0)
 
@@ -114,6 +122,7 @@ export default function VideosPage() {
       setTotal(res.data.total)
       setOffset(nextOffset + res.data.items.length)
       setItems(prev => replace ? res.data.items : [...prev, ...res.data.items])
+      if (res.data.storage) setStorage(res.data.storage)
     } catch {
       setError('Videos konnten nicht geladen werden.')
     } finally {
@@ -161,6 +170,7 @@ export default function VideosPage() {
       setTotal(res.data.total)
       setItems(reconciled)
       setOffset(reconciled.length)
+      if (res.data.storage) setStorage(res.data.storage)
     } catch {
       // Bei Fehler bleibt der bisherige Bestand konsistent-genug stehen.
     }
@@ -250,6 +260,28 @@ export default function VideosPage() {
         </div>
       </div>
 
+      {storage && (
+        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 mb-4">
+          <div className="flex items-center justify-between text-xs text-brand-text-muted mb-1.5">
+            <span>Speicherplatz</span>
+            <span>
+              {fmtBytes(storage.total_bytes - storage.free_bytes)} von {fmtBytes(storage.total_bytes)} belegt ·{' '}
+              {fmtBytes(storage.free_bytes)} frei
+            </span>
+          </div>
+          <div className="w-full bg-brand-border-subtle rounded-full h-2">
+            <div
+              className="bg-brand-yellow h-2 rounded-full transition-all"
+              style={{
+                width: `${Math.min(100, storage.total_bytes > 0
+                  ? ((storage.total_bytes - storage.free_bytes) / storage.total_bytes) * 100
+                  : 0)}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {newCount > 0 && (
         <div className="flex justify-center mb-4">
           <button
@@ -289,6 +321,7 @@ export default function VideosPage() {
                 <VideoStatusPill status={v.status} />
                 <span className="text-brand-text-muted">{fmtDuration(v.duration_sec)}</span>
               </div>
+              <div className="text-brand-text-muted mt-1">{fmtBytes(v.disk_bytes)}</div>
             </MobileCard>
           ))}
         </div>
@@ -302,6 +335,7 @@ export default function VideosPage() {
                   <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Team</th>
                   <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Datum</th>
                   <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Dauer</th>
+                  <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Speicher</th>
                   <th className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left">Status</th>
                 </tr>
               </thead>
@@ -316,6 +350,7 @@ export default function VideosPage() {
                     <td className="px-4 py-3 text-brand-text-muted">{v.team_name}</td>
                     <td className="px-4 py-3 text-brand-text-muted">{fmtVideoDate(v.created_at)}</td>
                     <td className="px-4 py-3 text-brand-text-muted">{fmtDuration(v.duration_sec)}</td>
+                    <td className="px-4 py-3 text-brand-text-muted">{fmtBytes(v.disk_bytes)}</td>
                     <td className="px-4 py-3"><VideoStatusPill status={v.status} /></td>
                   </tr>
                 ))}

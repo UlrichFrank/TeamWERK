@@ -2,6 +2,8 @@ package videos
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -54,5 +56,56 @@ func TestRequireFreeBytes_NonexistentDirReturnsStatError(t *testing.T) {
 	}
 	if errors.Is(err, ErrInsufficientDiskSpace) {
 		t.Errorf("a stat error must not be reported as ErrInsufficientDiskSpace, got %v", err)
+	}
+}
+
+func TestStorageStats_RealTempDir(t *testing.T) {
+	dir := t.TempDir()
+	free, total, err := StorageStats(dir)
+	if err != nil {
+		t.Fatalf("StorageStats: %v", err)
+	}
+	if free == 0 || total == 0 {
+		t.Fatalf("StorageStats returned free=%d total=%d for a real temp dir; expected both > 0", free, total)
+	}
+	if free > total {
+		t.Errorf("free (%d) must not exceed total (%d)", free, total)
+	}
+}
+
+func TestStorageStats_NonexistentDir(t *testing.T) {
+	if _, _, err := StorageStats("/this/path/does/not/exist/teamwerk-test"); err == nil {
+		t.Fatal("StorageStats on a nonexistent path must return an error")
+	}
+}
+
+func TestDirSize_SummiertRekursiv(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.ts"), []byte("1234"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "nested", "b.ts"), []byte("12345678"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := DirSize(dir)
+	if err != nil {
+		t.Fatalf("DirSize: %v", err)
+	}
+	if want := int64(4 + 8); got != want {
+		t.Errorf("DirSize = %d, want %d", got, want)
+	}
+}
+
+func TestDirSize_NonexistentDirReturnsZero(t *testing.T) {
+	got, err := DirSize(filepath.Join(t.TempDir(), "does-not-exist"))
+	if err != nil {
+		t.Fatalf("DirSize on a missing dir should not error, got %v", err)
+	}
+	if got != 0 {
+		t.Errorf("DirSize on a missing dir = %d, want 0", got)
 	}
 }

@@ -285,10 +285,19 @@ func (wk *Worker) estimateNeeded(id int) uint64 {
 // "video-ready" und stößt die Push-Notification an (4.6/4.8). codecs (kann leer
 // sein, wenn ffprobe scheiterte) wird in videos.codecs persistiert — nötig für
 // die CODECS-Attribute im master.m3u8, ohne die AirPlay nur Ton, kein Bild liefert.
+// disk_bytes (video-speicherplatz) wird hier EINMALIG aus der HLS-Ausgabe
+// ermittelt statt bei jedem Read das Verzeichnis abzulaufen; schlägt die
+// Messung fehl, bleibt die Spalte NULL (Anzeige fällt auf size_bytes zurück).
 func (wk *Worker) succeed(id int, codecs string) {
+	var diskBytes any
+	if n, err := DirSize(ProcessedDir(wk.cfg.storageDir(), id)); err != nil {
+		slog.Warn("video worker: could not measure processed dir size", "video_id", id, "error", err)
+	} else {
+		diskBytes = n
+	}
 	if _, err := wk.db.Exec(
-		`UPDATE videos SET status='ready', ready_at=CURRENT_TIMESTAMP, failure_reason=NULL, codecs=? WHERE id=?`,
-		nullIfEmpty(codecs), id); err != nil {
+		`UPDATE videos SET status='ready', ready_at=CURRENT_TIMESTAMP, failure_reason=NULL, codecs=?, disk_bytes=? WHERE id=?`,
+		nullIfEmpty(codecs), diskBytes, id); err != nil {
 		slog.Error("video worker mark ready failed", "video_id", id, "error", err)
 		return
 	}

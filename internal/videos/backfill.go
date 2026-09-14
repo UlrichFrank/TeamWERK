@@ -114,3 +114,56 @@ func chooseCodecProbeSegment(processedDir string) string {
 	}
 	return ""
 }
+
+// RunDiskUsageBackfill trägt einmalig `disk_bytes` (video-speicherplatz) für
+// Bestandsvideos nach, die 'ready' sind, aber vor dieser Änderung transcodiert
+// wurden (worker.succeed() setzt die Spalte seitdem selbst). Idempotent via
+// `status='ready' AND disk_bytes IS NULL`; Einzelfehler (fehlendes
+// processed/{id}/, z.B. nach manuellem Cleanup) werden geloggt und
+// übersprungen, der Gesamtlauf bricht nicht ab.
+func RunDiskUsageBackfill(ctx context.Context, db *sql.DB, storageDir string) error {
+	rows, err := db.Query(
+		`SELECT id FROM videos WHERE status='ready' AND disk_bytes IS NULL ORDER BY id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	var ids []int
+	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	slog.Info("video disk-usage backfill starting", "count", len(ids))
+
+	migrated := 0
+	for _, id := range ids {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		n, err := DirSize(ProcessedDir(storageDir, id))
+		if err != nil {
+			slog.Error("video disk-usage backfill: skipping video", "video_id", id, "error", err)
+			continue
+		}
+		if _, err := db.ExecContext(ctx, `UPDATE videos SET disk_bytes=? WHERE id=?`, n, id); err != nil {
+			slog.Error("video disk-usage backfill: write failed", "video_id", id, "error", err)
+			continue
+		}
+		migrated++
+	}
+	slog.Info("video disk-usage backfill done", "migrated", migrated, "skipped", len(ids)-migrated)
+	return nil
+}

@@ -244,6 +244,15 @@ func serve() {
 		}
 	}()
 
+	// Einmaliger, idempotenter Backfill für Bestandsvideos ohne `disk_bytes`
+	// (video-speicherplatz) — worker.succeed() setzt die Spalte seitdem selbst,
+	// ältere 'ready'-Videos brauchen den Nachtrag einmalig.
+	go func() {
+		if err := videos.RunDiskUsageBackfill(ctx, database, cfg.VideoStorageDir); err != nil && ctx.Err() == nil {
+			slog.Error("video disk-usage backfill failed", "error", err)
+		}
+	}()
+
 	// Einmaliger Cleanup verwaister Foto-Dateien nach Migration 029
 	// (unified-user-photo). Löscht Dateien im uploadDir/member-photos/, die
 	// nach der Konsolidierung auf users.photo_path von keinem User mehr

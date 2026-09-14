@@ -378,6 +378,41 @@ func TestProcess_SupportedInputFormat_Remuxes(t *testing.T) {
 	}
 }
 
+// TestProcess_Success_PersistsDiskBytes (video-speicherplatz): succeed()
+// misst die HLS-Ausgabe einmalig und trägt sie in disk_bytes ein, damit List/
+// Get den genutzten Plattenplatz eines 'ready'-Videos ohne Verzeichnis-Walk
+// pro Request beantworten können.
+func TestProcess_Success_PersistsDiskBytes(t *testing.T) {
+	db := testutil.NewDB(t)
+	user := testutil.CreateUser(t, db, "standard")
+	team := testutil.CreateTeam(t, db, "D1")
+	season := testutil.CreateSeason(t, db, "2025/26")
+	v := testutil.CreateVideo(t, db, team, season, user, "queued")
+
+	wk, _, cfg := newTestWorker(t, db, fakeHLSTranscode)
+	writeRaw(t, cfg.root, v)
+
+	wk.process(context.Background(), v)
+
+	if got := statusOf(t, db, v); got != "ready" {
+		t.Fatalf("expected status=ready, got %q", got)
+	}
+	want, err := DirSize(ProcessedDir(cfg.root, v))
+	if err != nil {
+		t.Fatalf("DirSize: %v", err)
+	}
+	if want == 0 {
+		t.Fatal("test fixture produced an empty processed dir")
+	}
+	var got sql.NullInt64
+	if err := db.QueryRow(`SELECT disk_bytes FROM videos WHERE id=?`, v).Scan(&got); err != nil {
+		t.Fatalf("select disk_bytes: %v", err)
+	}
+	if !got.Valid || got.Int64 != want {
+		t.Errorf("disk_bytes = %+v, want %d", got, want)
+	}
+}
+
 // TestProcess_ProbeError_MarksFailed: scheitert ffprobe selbst (kaputte Datei),
 // wird nicht umgepackt; der Grund trägt den Probe-Fehler statt des Format-Codes.
 func TestProcess_ProbeError_MarksFailed(t *testing.T) {

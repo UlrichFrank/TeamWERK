@@ -125,6 +125,39 @@ describe('VideosPage — Rendering und Mehr laden', () => {
     await flushAsync()
     expect((select as HTMLSelectElement).value).toBe('ready')
   })
+
+  test('zeigt Speicherplatz-Leiste aus der storage-Antwort', async () => {
+    renderAsPersona(<VideosPage />, 'vorstand', {
+      mocks: [
+        { url: /\/teams/, data: [] },
+        {
+          url: /\/videos\?/,
+          data: {
+            items: [],
+            total: 0,
+            storage: { free_bytes: 20 * 1024 ** 3, total_bytes: 100 * 1024 ** 3 },
+          },
+        },
+      ],
+    })
+    await flushAsync()
+    expect(await screen.findByText(/80\.0 GB von 100\.0 GB belegt/)).toBeInTheDocument()
+    expect(screen.getByText(/20\.0 GB frei/)).toBeInTheDocument()
+  })
+
+  test('zeigt genutzten Plattenplatz je Video in der Tabelle', async () => {
+    renderAsPersona(<VideosPage />, 'vorstand', {
+      mocks: [
+        { url: /\/teams/, data: [] },
+        {
+          url: /\/videos\?/,
+          data: { items: [makeVideo(1, { disk_bytes: 1.5 * 1024 ** 3 })], total: 1 },
+        },
+      ],
+    })
+    await flushAsync()
+    expect(await screen.findByText('1.5 GB')).toBeInTheDocument()
+  })
 })
 
 describe('VideoStatusPill', () => {

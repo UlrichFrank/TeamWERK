@@ -165,3 +165,88 @@ func TestBackfill_LaesstNichtReadyUnberuehrt(t *testing.T) {
 		t.Errorf("queued video should not be backfilled, got codecs=%q", codecs.String)
 	}
 }
+
+// TestDiskUsageBackfill_MisstUndPersistiert: ein 'ready'-Video ohne
+// disk_bytes bekommt die tatsächliche processed/{id}/-Größe eingetragen.
+func TestDiskUsageBackfill_MisstUndPersistiert(t *testing.T) {
+	db := testutil.NewDB(t)
+	user := testutil.CreateUser(t, db, "standard")
+	team := testutil.CreateTeam(t, db, "D1")
+	season := testutil.CreateSeason(t, db, "2025/26")
+	v := testutil.CreateVideo(t, db, team, season, user, "ready")
+
+	root := t.TempDir()
+	writeLegacyProcessed(t, root, v, false) // "fake" (4 bytes) + index.m3u8 (8 bytes) in 720p/, plus master.m3u8
+
+	if err := RunDiskUsageBackfill(context.Background(), db, root); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+
+	want, err := DirSize(ProcessedDir(root, v))
+	if err != nil {
+		t.Fatalf("DirSize: %v", err)
+	}
+	if want == 0 {
+		t.Fatal("test fixture produced an empty processed dir")
+	}
+
+	var got sql.NullInt64
+	if err := db.QueryRow(`SELECT disk_bytes FROM videos WHERE id=?`, v).Scan(&got); err != nil {
+		t.Fatalf("query disk_bytes: %v", err)
+	}
+	if !got.Valid || got.Int64 != want {
+		t.Errorf("disk_bytes = %+v, want %d", got, want)
+	}
+}
+
+// TestDiskUsageBackfill_Idempotent: ein zweiter Lauf lässt bereits befüllte
+// Zeilen unangetastet (die Query filtert auf disk_bytes IS NULL).
+func TestDiskUsageBackfill_Idempotent(t *testing.T) {
+	db := testutil.NewDB(t)
+	user := testutil.CreateUser(t, db, "standard")
+	team := testutil.CreateTeam(t, db, "D1")
+	season := testutil.CreateSeason(t, db, "2025/26")
+	v := testutil.CreateVideo(t, db, team, season, user, "ready")
+
+	root := t.TempDir()
+	writeLegacyProcessed(t, root, v, false)
+
+	if err := RunDiskUsageBackfill(context.Background(), db, root); err != nil {
+		t.Fatalf("first backfill: %v", err)
+	}
+	// processed/ nach dem ersten Lauf wachsen lassen — ein zweiter Lauf darf
+	// disk_bytes NICHT überschreiben, weil die Zeile nicht mehr NULL ist.
+	if err := os.WriteFile(filepath.Join(ProcessedDir(root, v), "720p", "seg_002.ts"), []byte("mehr-daten"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var before sql.NullInt64
+	_ = db.QueryRow(`SELECT disk_bytes FROM videos WHERE id=?`, v).Scan(&before)
+
+	if err := RunDiskUsageBackfill(context.Background(), db, root); err != nil {
+		t.Fatalf("second backfill: %v", err)
+	}
+	var after sql.NullInt64
+	_ = db.QueryRow(`SELECT disk_bytes FROM videos WHERE id=?`, v).Scan(&after)
+	if after.Int64 != before.Int64 {
+		t.Errorf("second backfill run must be a no-op, before=%d after=%d", before.Int64, after.Int64)
+	}
+}
+
+// TestDiskUsageBackfill_LaesstNichtReadyUnberuehrt: nur 'ready' wird gemessen.
+func TestDiskUsageBackfill_LaesstNichtReadyUnberuehrt(t *testing.T) {
+	db := testutil.NewDB(t)
+	user := testutil.CreateUser(t, db, "standard")
+	team := testutil.CreateTeam(t, db, "D1")
+	season := testutil.CreateSeason(t, db, "2025/26")
+	v := testutil.CreateVideo(t, db, team, season, user, "failed")
+
+	root := t.TempDir()
+	if err := RunDiskUsageBackfill(context.Background(), db, root); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	var got sql.NullInt64
+	_ = db.QueryRow(`SELECT disk_bytes FROM videos WHERE id=?`, v).Scan(&got)
+	if got.Valid {
+		t.Errorf("failed video should not be measured, got disk_bytes=%d", got.Int64)
+	}
+}

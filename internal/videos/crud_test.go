@@ -49,8 +49,12 @@ func patch(t *testing.T, srv *httptest.Server, path, token string, body any) *ht
 
 // listResp is the decoded shape of GET /api/videos.
 type listResp struct {
-	Items []videoListItem `json:"items"`
-	Total int             `json:"total"`
+	Items   []videoListItem `json:"items"`
+	Total   int             `json:"total"`
+	Storage *struct {
+		FreeBytes  uint64 `json:"free_bytes"`
+		TotalBytes uint64 `json:"total_bytes"`
+	} `json:"storage"`
 }
 
 func decodeList(t *testing.T, res *http.Response) listResp {
@@ -192,6 +196,108 @@ func TestList_Pagination(t *testing.T) {
 	lr = decodeList(t, res)
 	if lr.Total != 3 || len(lr.Items) != 1 {
 		t.Fatalf("page2 total=%d items=%d, want total=3 items=1", lr.Total, len(lr.Items))
+	}
+}
+
+// --- LIST: storage envelope ---------------------------------------------------
+
+// TestList_StorageEnvelope: die Antwort trägt freien/gesamten Plattenplatz
+// des konfigurierten Video-Storage-Verzeichnisses (video-speicherplatz).
+func TestList_StorageEnvelope(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := crudHandler(t, db)
+	srv := newCRUDServer(t, h)
+	admin := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+
+	res := testutil.Get(t, srv, "/api/videos", admin)
+	lr := decodeList(t, res)
+	if lr.Storage == nil {
+		t.Fatal("expected a storage envelope in the list response")
+	}
+	if lr.Storage.TotalBytes == 0 || lr.Storage.FreeBytes == 0 {
+		t.Errorf("storage = %+v, want both free_bytes and total_bytes > 0", lr.Storage)
+	}
+	if lr.Storage.FreeBytes > lr.Storage.TotalBytes {
+		t.Errorf("free_bytes (%d) must not exceed total_bytes (%d)", lr.Storage.FreeBytes, lr.Storage.TotalBytes)
+	}
+}
+
+// --- LIST/GET: genutzter Plattenplatz je Video -------------------------------
+
+// TestDiskBytes_ReadyNutztDiskBytesSpalte: für ein 'ready'-Video zählt die
+// gemessene HLS-Ausgabe (v.disk_bytes), nicht die historische Rohdatei-Größe.
+func TestDiskBytes_ReadyNutztDiskBytesSpalte(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := crudHandler(t, db)
+	srv := newCRUDServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	uploader := testutil.CreateUser(t, db, "standard")
+	v := testutil.CreateVideo(t, db, team, season, uploader, "ready")
+	if _, err := db.Exec(`UPDATE videos SET size_bytes=?, disk_bytes=? WHERE id=?`, 9_000_000, 4_200_000, v); err != nil {
+		t.Fatal(err)
+	}
+	admin := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+
+	lr := decodeList(t, testutil.Get(t, srv, "/api/videos", admin))
+	if len(lr.Items) != 1 || lr.Items[0].DiskBytes == nil || *lr.Items[0].DiskBytes != 4_200_000 {
+		t.Fatalf("list disk_bytes = %+v, want 4200000", lr.Items)
+	}
+
+	var d videoDetail
+	res := testutil.Get(t, srv, "/api/videos/"+itoa(v), admin)
+	defer res.Body.Close()
+	if err := json.NewDecoder(res.Body).Decode(&d); err != nil {
+		t.Fatalf("decode detail: %v", err)
+	}
+	if d.DiskBytes == nil || *d.DiskBytes != 4_200_000 {
+		t.Errorf("detail disk_bytes = %v, want 4200000", d.DiskBytes)
+	}
+}
+
+// TestDiskBytes_ReadyOhneDiskBytesIstNil: 'ready' vor dem Disk-Usage-Backfill
+// (disk_bytes noch NULL) liefert kein irreführendes size_bytes als Ersatz.
+func TestDiskBytes_ReadyOhneDiskBytesIstNil(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := crudHandler(t, db)
+	srv := newCRUDServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	uploader := testutil.CreateUser(t, db, "standard")
+	v := testutil.CreateVideo(t, db, team, season, uploader, "ready")
+	if _, err := db.Exec(`UPDATE videos SET size_bytes=? WHERE id=?`, 9_000_000, v); err != nil {
+		t.Fatal(err)
+	}
+	admin := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+
+	lr := decodeList(t, testutil.Get(t, srv, "/api/videos", admin))
+	if len(lr.Items) != 1 || lr.Items[0].DiskBytes != nil {
+		t.Fatalf("list disk_bytes = %+v, want nil", lr.Items)
+	}
+}
+
+// TestDiskBytes_NichtReadyNutztSizeBytes: für queued/processing/failed ist
+// size_bytes bereits die tatsächliche Rohdatei-Größe (finishUpload) — sie
+// zählt als genutzter Plattenplatz.
+func TestDiskBytes_NichtReadyNutztSizeBytes(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := crudHandler(t, db)
+	srv := newCRUDServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	uploader := testutil.CreateUser(t, db, "standard")
+	v := testutil.CreateVideo(t, db, team, season, uploader, "failed")
+	if _, err := db.Exec(`UPDATE videos SET size_bytes=? WHERE id=?`, 1_234_567, v); err != nil {
+		t.Fatal(err)
+	}
+	admin := testutil.Token(t, testutil.CreateUser(t, db, "admin"), "admin", nil)
+
+	lr := decodeList(t, testutil.Get(t, srv, "/api/videos", admin))
+	if len(lr.Items) != 1 || lr.Items[0].DiskBytes == nil || *lr.Items[0].DiskBytes != 1_234_567 {
+		t.Fatalf("list disk_bytes = %+v, want 1234567", lr.Items)
 	}
 }
 
