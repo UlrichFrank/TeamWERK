@@ -26,6 +26,7 @@ function ctxWithCaps(caps: string[], clubFunctions: string[]): AuthCtx {
     navRoutes: ['/dokumente'],
     passwordChangeRecommended: false,
     dismissPasswordChangeHint: () => {},
+    keepAlive: () => {},
     login: async () => {},
     logout: async () => {},
     startImpersonation: async () => {},

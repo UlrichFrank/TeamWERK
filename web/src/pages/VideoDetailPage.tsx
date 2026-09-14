@@ -67,12 +67,27 @@ function VideoPlayer({ id }: { id: number }) {
   // masterURL wird für Chromecast-Wurf gebraucht — CastButton übergibt die
   // komplette URL inkl. ?st=-Token an den Receiver, der direkt vom Server holt.
   const [masterURL, setMasterURL] = useState('')
+  const { keepAlive } = useAuth()
 
   useEffect(() => {
     let cancelled = false
     // hls.js wird dynamisch geladen, damit es nur auf der Detailseite ins Bundle
     // kommt — und nur dort, wo der Browser kein natives HLS kann.
     let destroy: (() => void) | undefined
+
+    // Laufende Wiedergabe zählt sonst nirgends als Aktivität (keine Maus-/
+    // Tastatur-Events) — der Idle-Timer (AuthContext) würde nach 30 min mitten
+    // im Video abmelden. `timeupdate` feuert nur, solange tatsächlich
+    // abgespielt wird (nicht im `pause`), daher genügt ein simples Throttle.
+    let lastKeepAlive = 0
+    const onTimeUpdate = () => {
+      const now = Date.now()
+      if (now - lastKeepAlive < 60_000) return
+      lastKeepAlive = now
+      keepAlive()
+    }
+    // Für die Cleanup-Funktion — videoRef.current kann sich bis dahin ändern.
+    let attachedVideo: HTMLVideoElement | null = null
 
     async function setup() {
       let play: PlayResponse
@@ -85,6 +100,10 @@ function VideoPlayer({ id }: { id: number }) {
       }
       const video = videoRef.current
       if (!video || cancelled) return
+      attachedVideo = video
+
+      video.addEventListener('play', keepAlive)
+      video.addEventListener('timeupdate', onTimeUpdate)
 
       // StreamTokenMiddleware verlangt ?st=<token> auf der Master-Playlist und
       // jeder Rendition-Anfrage. master_url kommt vom Backend ohne Query —
@@ -167,9 +186,13 @@ function VideoPlayer({ id }: { id: number }) {
     setup()
     return () => {
       cancelled = true
+      if (attachedVideo) {
+        attachedVideo.removeEventListener('play', keepAlive)
+        attachedVideo.removeEventListener('timeupdate', onTimeUpdate)
+      }
       if (destroy) destroy()
     }
-  }, [id])
+  }, [id, keepAlive])
 
   if (unsupported) {
     return (

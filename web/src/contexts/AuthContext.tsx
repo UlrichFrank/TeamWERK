@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react'
 import axios from 'axios'
 import { api, setAccessToken } from '../lib/api'
 
@@ -20,6 +20,9 @@ interface AuthCtx {
   // aktuelle Mindestlänge ist (kein Zwangs-Reset). Nur im Speicher, kein Persist.
   passwordChangeRecommended: boolean
   dismissPasswordChangeHint: () => void
+  // Setzt den Idle-Timer zurück, ohne eines der IDLE_EVENTS zu erfordern —
+  // für Aktivität, die keine Maus-/Tastatur-Events auslöst (Video-Wiedergabe).
+  keepAlive: () => void
   login: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   startImpersonation: (userId: number, name: string) => Promise<void>
@@ -98,6 +101,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     logoutTimer.current = setTimeout(logout, LOGOUT_MS)
   }
+
+  // Für Aktivität ohne Maus-/Tastatur-Events (z. B. laufende Video-Wiedergabe) —
+  // no-op, solange niemand eingeloggt ist, statt versehentlich Timer aufzuziehen.
+  // useCallback hält die Identität über Renders stabil (sonst würde sie z. B. den
+  // Video-Player-Effekt, der sie als Dependency führt, unnötig neu triggern).
+  const keepAlive = useCallback(() => {
+    if (user) resetTimer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resetTimer ist eine stabile Closure über Refs/Setter, keine Dependency nötig
+  }, [user])
 
   const bootstrapped = useRef(false)
   useEffect(() => {
@@ -185,7 +197,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, impersonating, mapsProvider, setMapsProvider, capabilities, hasCapability: (cap: string) => capabilities.includes(cap), navRoutes, passwordChangeRecommended, dismissPasswordChangeHint: () => setPasswordChangeRecommended(false), login, logout, startImpersonation, stopImpersonation }}>
+    <AuthContext.Provider value={{ user, loading, impersonating, mapsProvider, setMapsProvider, capabilities, hasCapability: (cap: string) => capabilities.includes(cap), navRoutes, passwordChangeRecommended, dismissPasswordChangeHint: () => setPasswordChangeRecommended(false), keepAlive, login, logout, startImpersonation, stopImpersonation }}>
       {children}
       {showWarning && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">

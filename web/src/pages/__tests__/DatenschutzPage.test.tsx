@@ -17,6 +17,7 @@ const anonymousCtx: AuthCtx = {
   navRoutes: [],
   passwordChangeRecommended: false,
   dismissPasswordChangeHint: () => {},
+  keepAlive: () => {},
   login: async () => {},
   logout: async () => {},
   startImpersonation: async () => {},

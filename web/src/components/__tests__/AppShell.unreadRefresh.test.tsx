@@ -93,6 +93,7 @@ const ctx: AuthCtx = {
   navRoutes: ['/', '/profil', '/kalender', '/mein-team', '/dokumente', '/dienste', '/chat'],
   passwordChangeRecommended: false,
   dismissPasswordChangeHint: () => {},
+  keepAlive: () => {},
   login: async () => {},
   logout: async () => {},
   startImpersonation: async () => {},

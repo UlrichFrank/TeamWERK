@@ -34,6 +34,7 @@ const ADMIN_CTX: AuthCtx = {
   navRoutes: ['/dokumente'],
   passwordChangeRecommended: false,
   dismissPasswordChangeHint: () => {},
+  keepAlive: () => {},
   login: async () => {},
   logout: async () => {},
   startImpersonation: async () => {},

@@ -79,6 +79,7 @@ async function renderShellWithoutChat(conversations: unknown[]) {
     navRoutes: ['/', '/profil', '/kalender', '/mein-team', '/dokumente', '/dienste'],
     passwordChangeRecommended: false,
     dismissPasswordChangeHint: () => {},
+    keepAlive: () => {},
     login: async () => {},
     logout: async () => {},
     startImpersonation: async () => {},

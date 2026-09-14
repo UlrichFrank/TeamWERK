@@ -89,6 +89,7 @@ function makeCtx(user: User, capabilities: string[], navRoutes: string[]): AuthC
     navRoutes,
     passwordChangeRecommended: false,
     dismissPasswordChangeHint: () => {},
+    keepAlive: () => {},
     login: async () => {},
     logout: async () => {},
     startImpersonation: async () => {},

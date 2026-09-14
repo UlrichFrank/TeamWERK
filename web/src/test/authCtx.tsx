@@ -21,6 +21,7 @@ function makeAuthCtx(capabilities: string[] = [], user: User = DEFAULT_USER): Au
     navRoutes: [],
     passwordChangeRecommended: false,
     dismissPasswordChangeHint: () => {},
+    keepAlive: () => {},
     login: async () => {},
     logout: async () => {},
     startImpersonation: async () => {},
