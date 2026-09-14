@@ -232,7 +232,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
 		        duration_mode, end_anchor, end_offset_minutes, end_at_next_duty,
 		        same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences,
-		        instruction_md <> '', instruction_updated_at, instruction_updated_by
+		        instruction_md <> '', instruction_updated_at, instruction_updated_by, grants_video_upload
 		 FROM duty_types ORDER BY name`)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "ListTypes query error: %v\n", err)
@@ -259,6 +259,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		HasInstruction       bool     `json:"has_instruction"`
 		InstructionUpdatedAt *string  `json:"instruction_updated_at,omitempty"`
 		InstructionUpdatedBy *int     `json:"instruction_updated_by,omitempty"`
+		GrantsVideoUpload    bool     `json:"grants_video_upload"`
 	}
 	result := []dt{}
 	for rows.Next() {
@@ -272,7 +273,7 @@ func (h *Handler) ListTypes(w http.ResponseWriter, r *http.Request) {
 		rows.Scan(&d.ID, &d.Name, &d.HoursValue, &cs, &d.DefaultAnchor, &d.DefaultOffsetMinutes,
 			&d.DurationMode, &d.EndAnchor, &d.EndOffsetMinutes, &d.EndAtNextDuty,
 			&d.SameDayBehavior, &sdvi, &d.AdjacentDayBehavior, &advi, &audiences,
-			&d.HasInstruction, &instrUpdatedAt, &instrUpdatedBy)
+			&d.HasInstruction, &instrUpdatedAt, &instrUpdatedBy, &d.GrantsVideoUpload)
 		if cs.Valid {
 			d.CashSubstitute = &cs.Float64
 		}
@@ -355,6 +356,7 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
 		AdjacentDayVariantID *int     `json:"adjacent_day_variant_id"`
 		Audiences            []string `json:"audiences"`
+		GrantsVideoUpload    bool     `json:"grants_video_upload"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
@@ -402,11 +404,13 @@ func (h *Handler) CreateType(w http.ResponseWriter, r *http.Request) {
 	h.db.ExecContext(r.Context(),
 		`INSERT INTO duty_types (name, hours_value, cash_substitute, default_anchor, default_offset_minutes,
 		                          duration_mode, end_anchor, end_offset_minutes, end_at_next_duty,
-		                          same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		                          same_day_behavior, same_day_variant_id, adjacent_day_behavior, adjacent_day_variant_id, audiences,
+		                          grants_video_upload)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		req.Name, hoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
 		req.DurationMode, req.EndAnchor, req.EndOffsetMinutes, req.EndAtNextDuty,
-		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID, audiencesToDB(req.Audiences))
+		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID, audiencesToDB(req.Audiences),
+		req.GrantsVideoUpload)
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusCreated)
 }
@@ -477,6 +481,7 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 		AdjacentDayBehavior  string   `json:"adjacent_day_behavior"`
 		AdjacentDayVariantID *int     `json:"adjacent_day_variant_id"`
 		Audiences            []string `json:"audiences"`
+		GrantsVideoUpload    bool     `json:"grants_video_upload"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.DefaultAnchor == "" {
@@ -526,12 +531,12 @@ func (h *Handler) UpdateType(w http.ResponseWriter, r *http.Request) {
 		`UPDATE duty_types SET name=?, hours_value=?, cash_substitute=?, default_anchor=?, default_offset_minutes=?,
 		                       duration_mode=?, end_anchor=?, end_offset_minutes=?, end_at_next_duty=?,
 		                       same_day_behavior=?, same_day_variant_id=?, adjacent_day_behavior=?, adjacent_day_variant_id=?,
-		                       audiences=?
+		                       audiences=?, grants_video_upload=?
 		 WHERE id=?`,
 		req.Name, hoursValue, req.CashSubstitute, req.DefaultAnchor, req.DefaultOffsetMinutes,
 		req.DurationMode, req.EndAnchor, req.EndOffsetMinutes, req.EndAtNextDuty,
 		req.SameDayBehavior, req.SameDayVariantID, req.AdjacentDayBehavior, req.AdjacentDayVariantID,
-		audiencesToDB(req.Audiences), id)
+		audiencesToDB(req.Audiences), req.GrantsVideoUpload, id)
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
 }
