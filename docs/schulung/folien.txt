@@ -168,7 +168,9 @@ titel: Übersicht
 absicht: Was steht für mich an?
 - Nächste Termine und offene Dienste
 - Dienststand je Kind und Team
-- Alle Meldungen, auch wenn Push aus ist
+- Neueste Chat-Nachrichten / Mitteilungen
+- Mitfahrgelegenheiten
+- Alle Meldungen (Log), auch wenn Push aus ist
 rollen: Alle
 bild: vs-dashboard | /
 
@@ -177,9 +179,11 @@ typ: funktion
 weg: Spielbetrieb › Kalender
 titel: Kalender
 absicht: Alle Termine eines Monats.
-- Filter nach Team: Heim, Auswärts, Training
+- Filter nach Typ: Heim, Auswärts, Training
+- Filter nach Team
+- Freitextfilter
 - „+ Event“ legt einen Termin an
-- „Abwesenheit“ meldet Urlaub vorab ab
+- Einblenden von „Abwesenheit“
 rollen-text: anlegen
 rollen: Trainer, Vorstand
 bild: vs-kalender | /kalender
@@ -238,7 +242,8 @@ titel: Mein Team
 absicht: Alles zur eigenen Mannschaft.
 - Team, Trainer und Eltern mit Kontakt
 - Ämter wie Leibchen, Harz, Strafenwart
-- Strafenkatalog und Mannschaftskasse
+- Strafenkatalog
+- Mannschaftskasse
 rollen-text: verwalten
 rollen: Trainer
 bild: tr-mein_team_detail | /mein-team
@@ -247,10 +252,10 @@ bild: tr-mein_team_detail | /mein-team
 typ: funktion
 weg: Verein › Dienste
 titel: Dienstbörse
-absicht: Wer macht Sekretär, Kamera, Kuchen?
+absicht: Wer macht Sekretär, Kamera, wer backt Kuchen?
+- Dienste sind Zielgruppen-spezifisch
 - Freie Dienste mit „Eintragen“ übernehmen
-- „Eltern“ zeigt, für wen der Dienst gedacht ist
-- Trainer bestätigen danach „erfüllt“
+- „Eltern“ label zeigt, für wen der Dienst gedacht ist
 rollen: Alle
 bild: vs-dienste | /dienste
 
@@ -260,7 +265,7 @@ weg: Verein › Dienst-Rangliste
 titel: Dienst-Rangliste
 absicht: Ist es fair verteilt?
 - Grün geleistet, blau eingetragen, Strich = fairer Anteil
-- Gezählt pro Kind, Geschwister teilen sich
+- Gezählt pro Kind
 - Andere Familien bleiben anonym, nur der Vorstand sieht alle
 rollen: Alle
 bild: vs-dienste_rangliste | /dienste/rangliste
@@ -269,11 +274,11 @@ bild: vs-dienste_rangliste | /dienste/rangliste
 typ: funktion
 weg: Verwaltung › Dienstplan-Vorlagen
 titel: Dienstplan-Vorlagen
-absicht: Dienste entstehen von selbst.
-- Eine Vorlage für Heim, Auswärts oder Event
-- Spiel anlegen, und die Dienste sind da
+absicht: Automatisierte Dienstplan-Erstellung.
+- Mehrere Vorlagen für Heim, Auswärts oder Event möglich
+- Event anlegen erzeugt Dienste automatisch
 - Von Hand geänderte Dienste bleiben erhalten
-rollen: Vorstand
+rollen: Vorstand / Trainer
 bild: vs-dienstplan_vorlagen | /dienstplan-vorlagen
 hinweis: Beispieldaten
 
@@ -295,8 +300,8 @@ weg: Verein › Nachrichten
 titel: Nachrichten
 absicht: Team-Chat ohne private Handynummern.
 - Gruppen für Spieler, Eltern und Trainer
-- Mitteilungen gehen an viele, ohne Antwortflut
-- Umfragen direkt im Chat
+- Broadcast Mitteilungen ohne Rückkanal
+- Emoji, Umfragen, Lesebestätigung
 rollen: Alle
 bild: vs-chat | /chat
 hinweis: Beispieldaten · Texte ersetzt
