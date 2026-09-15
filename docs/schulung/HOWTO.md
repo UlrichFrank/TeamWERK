@@ -85,7 +85,7 @@ Felder der Funktionsfolie im Einzelnen:
 |-----------------|------------------------------------------------------------------------------------|
 | `weg`           | Navigation im Tool, Teile mit `›` getrennt; der letzte Teil wird fett              |
 | `absicht`       | ein Satz: wozu gibt es die Funktion (gelb markiert)                                |
-| `rollen`        | Komma-Liste: `Alle`, `Spieler`, `Trainer`, `Sportliche Leitung`/`Sportl. Leitung`, `Vorstand`, `Kassierer`, `Medien` |
+| `rollen`        | getrennt durch Komma oder `/`: `Alle`, `Spieler`, `Trainer`, `Sportliche Leitung`/`Sportl. Leitung`, `Vorstand`, `Kassierer`, `Medien` |
 | `rollen-text`   | Wort vor den Rollen, Standard `für` (z. B. `anlegen`, `verwalten`)                 |
 | `rollen-zusatz` | kleiner Text nach den Rollen (z. B. `je nach Ordnerrecht`)                         |
 | `bild`          | `datei | adresse` — Datei aus `folien/img/` ohne `.jpg`, dahinter der Text der Adressleiste |

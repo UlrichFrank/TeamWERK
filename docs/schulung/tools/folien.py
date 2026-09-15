@@ -175,7 +175,8 @@ def r_kapitel(s):
 
 def copy_block(s):
     points = "".join(f"<li>{inline(' '.join([it['text']] + it['lines']))}</li>" for it in s.items)
-    chips = "".join(role_chip(r, s.line) for r in split_list(s.f("rollen")))
+    roles = [r.strip() for r in re.split(r"[,/]", s.f("rollen")) if r.strip()]
+    chips = "".join(role_chip(r, s.field_lines.get("rollen", s.line)) for r in roles)
     extra = f'<span class="lbl">&nbsp;{inline(s.f("rollen-zusatz"))}</span>' if s.f("rollen-zusatz") else ""
     roles = (f'<div class="roles-row"><span class="lbl">{inline(s.f("rollen-text", "für"))}</span>{chips}{extra}</div>'
              if chips else "")
