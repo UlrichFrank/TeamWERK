@@ -41,7 +41,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e schulung lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
+.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e folien schulung lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -366,7 +366,10 @@ test-e2e: ## Playwright-E2E (echter Chromium gegen Prod-Binary + Seed-DB) — ~2
 	cd web && CI=true ./node_modules/.bin/playwright test --config e2e/playwright.config.ts
 	@rm -f e2e.db e2e.db-wal e2e.db-shm
 
-schulung: ## Schulungsfolien: Screenshots aus anonymisierter Kopie der lokalen DB neu erzeugen → docs/schulung/folien/img/ (siehe docs/schulung/HOWTO.md)
+folien: ## Schulungsfolien aus docs/schulung/folien.txt erzeugen → docs/schulung/folien/index.html (Sekunden, ohne DB)
+	@python3 docs/schulung/tools/folien.py
+
+schulung: folien ## Schulungsfolien + Screenshots aus anonymisierter Kopie der lokalen DB neu erzeugen → docs/schulung/folien/ (siehe docs/schulung/HOWTO.md)
 	@GO="$(GO)" bash docs/schulung/tools/build.sh
 
 lint: ## Statische Codeanalyse mit golangci-lint

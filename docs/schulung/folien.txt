@@ -1,0 +1,405 @@
+# Schulungsfolien TeamWERK — Quelltext
+#
+# Aus dieser Datei erzeugt `make folien` die Präsentation folien/index.html.
+# Kurzfassung der Schreibweise (ausführlich: HOWTO.md):
+#
+#   ---              beginnt eine neue Folie
+#   typ: funktion    Folientyp: titel, kapitel, funktion, handy, vorher-nachher,
+#                    aussagen, modell, vergleich, raster, liste, schritte
+#   titel: …         ein Feld; eingerückte Folgezeilen gehören zum Feld
+#   - …              ein Punkt; eingerückte Folgezeilen gehören zum Punkt
+#   **fett**         Hervorhebung      &shy;  erlaubte Silbentrennung
+#   # …              Kommentar (nur am Zeilenanfang)
+
+---
+typ: titel
+eyebrow: Schulung · Saison 2026/27
+titel: TeamWERK
+untertitel: für Funktionäre
+chips: Vorstand, Trainer, Kassierer, Sportliche Leitung
+fuss: teamwerk.team-stuttgart.org
+
+---
+typ: vorher-nachher
+titel: Warum TeamWERK?
+vorher:
+  WhatsApp-Gruppe pro Team
+  Kaderlisten in Excel
+  Dienstplan in Google Sheets
+  Zu- und Absagen per Zuruf
+  E-Mail-Verteiler von Hand
+nachher:
+  Ein Ort.
+  Eine Wahrheit.
+text: Termine, Kader, Dienste und Nachrichten hängen zusammen. Wer im Kader steht, bekommt automatisch die richtigen Termine, Meldungen und Dienste.
+
+---
+typ: aussagen
+titel: Was es euch bringt
+- Weniger hinterher&shy;telefonieren
+  Zu- und Absagen kommen von selbst. Ihr seht vor dem Training, wer kommt.
+- Faire Dienste
+  Jede Familie sieht ihren Anteil. Die Rangliste ersetzt die Diskussion.
+- Sichere Daten
+  Jeder sieht nur, was zu seiner Funktion passt. Bankdaten sind verschlüsselt.
+
+# ════════════════════════════════════════════════════════════════════
+---
+typ: kapitel
+teil: Teil 1
+titel: Der Kern
+text: Saison, Kader, Team und die Menschen dahinter. Wer das versteht, versteht das ganze Tool.
+
+---
+typ: modell
+titel: Saison → Kader → Team
+- Saison: 2026/27
+  Genau eine ist aktiv. Sie bestimmt, welche Kader gelten.
+- Kader: B-Jugend männlich 2
+  Stammkader = Termine · Dienstpflicht
+  Erweiterter Kader = Termine · keine Dienste
+  Trainer = Rechte fürs Team
+- Team: mB2
+  Spiele, Dienste, Kasse, Strafen, Videos, Ordner
+notiz: **Übungsgruppe** = Kader ohne Team. Sie hat nur Trainings, keine Spiele, Dienste oder Kasse.
+
+---
+typ: funktion
+weg: Verwaltung › Kader
+titel: Kader
+absicht: Wer spielt diese Saison in welcher Mannschaft?
+- Saison oben wählen, dann Mannschaft
+- „Aus vorheriger Saison kopieren“ übernimmt nur den Stammkader
+- Trainer und erweiterten Kader jede Saison neu setzen
+rollen: Vorstand, Trainer
+bild: vs-kader | /kader
+
+---
+typ: funktion
+weg: Verwaltung › Übungsgruppen
+titel: Übungs&shy;gruppen
+absicht: Trainieren ohne Spielbetrieb.
+- Frei benannt, z. B. Frühtraining
+- Trainings mit Zu- und Absage
+- Keine Spiele, Dienste oder Kasse
+rollen: Vorstand
+bild: vs-uebungsgruppen | /uebungsgruppen
+
+---
+typ: vergleich
+titel: Nutzer ≠ Mitglied
+verbindung: verknüpft
+# Die ersten beiden Punkte sind die Kästen, alle weiteren die Beispiele darunter.
+- Nutzer: Wer sich anmeldet
+  E-Mail, Passwort, Benachrichtigungen
+- Mitglied: Wer im Verein ist
+  Stammdaten, Status, Beitrag, Kader, Vereinsfunktion
+- Spielerin, 17
+  Eigener Nutzer, mit ihrem Mitglied verknüpft
+- Kind, 9
+  Kein eigener Login. Die Eltern sehen es über „Familie“.
+- Gasttrainer
+  Mitglied mit Status „Extern“, zahlt keinen Beitrag
+
+---
+typ: funktion
+weg: Verwaltung › Mitglieder
+titel: Mitglieder
+absicht: Der Vereinsdatensatz jeder Person.
+- Status: Aktiv, Anwärter, Förderkind, Extern, passiv
+- Filter „Ohne App-Account“ findet, wer noch fehlt
+- Änderungsanträge der Mitglieder prüfen
+rollen: Vorstand, Kassierer
+bild: vs-mitglieder | /mitglieder
+
+---
+typ: funktion
+weg: Verwaltung › Nutzerverwaltung
+titel: Nutzer&shy;verwaltung
+absicht: Wer darf sich anmelden?
+- Oben: offene Anfragen und Einladungen
+- „+ Neu“ lädt per E-Mail ein
+- „nicht verknüpft“ zeigt Logins ohne Mitglied
+rollen: Vorstand
+bild: vs-nutzer | /nutzer
+
+---
+typ: raster
+titel: Vereinsfunktion = Rechte
+- Spieler
+  Termine, Zu- und Absage, eigenes Trainingstagebuch
+- Trainer
+  Zusätzlich: Kader, Anwesenheit, Aufstellung, Tagebuch des Teams
+- Sportliche Leitung
+  Trainerrechte für alle Mannschaften
+- Vorstand
+  Zusätzlich: Mitglieder, Nutzer, Dienste, Einstellungen, Beitragslauf
+- Kassierer
+  Mitglieder, Bankdaten, Beitragslauf, Tresor
+- Medien
+  Spielberichte prüfen und freigeben
+fuss:
+  **Mehrere Funktionen** pro Person sind möglich
+  **Eltern** brauchen keine Funktion, das regelt „Familie“
+  **Admin** ist eine Systemrolle und darf alles
+
+---
+typ: funktion
+weg: Mitglieder › Mitglied › Stammdaten
+titel: Funktion vergeben
+absicht: Rechte hängen am Mitglied, nicht am Login.
+- Mehrere Funktionen ankreuzen
+- Wirkt nach der nächsten Anmeldung
+- Trainer eines Teams zusätzlich im Kader eintragen
+rollen: Vorstand
+bild: vs-mitglied_stammdaten | /mitglieder/…
+
+# ════════════════════════════════════════════════════════════════════
+---
+typ: kapitel
+teil: Teil 2
+titel: Die Funktionen
+text: Wozu es sie gibt und wo ihr sie im Tool findet.
+
+---
+typ: funktion
+weg: Nutzer › Dashboard
+titel: Übersicht
+absicht: Was steht für mich an?
+- Nächste Termine und offene Dienste
+- Dienststand je Kind und Team
+- Alle Meldungen, auch wenn Push aus ist
+rollen: Alle
+bild: vs-dashboard | /
+
+---
+typ: funktion
+weg: Spielbetrieb › Kalender
+titel: Kalender
+absicht: Alle Termine eines Monats.
+- Filter nach Team: Heim, Auswärts, Training
+- „+ Event“ legt einen Termin an
+- „Abwesenheit“ meldet Urlaub vorab ab
+rollen-text: anlegen
+rollen: Trainer, Vorstand
+bild: vs-kalender | /kalender
+hinweis: Beispieldaten
+
+---
+typ: funktion
+weg: Spielbetrieb › Termine
+titel: Termine
+absicht: Wer kommt?
+- Zusagen, Absagen und offene Rückmeldungen auf einen Blick
+- Eltern sagen für ihr Kind zu
+- Hinweise am Termin erreichen alle
+rollen: Alle
+bild: vs-termine | /termine
+hinweis: Beispieldaten
+
+---
+typ: funktion
+weg: Termine › Termin öffnen
+titel: Aufstellung
+absicht: Wer ist nominiert?
+- Häkchen setzen, wird sofort gespeichert
+- Team und Eltern sehen die Aufstellung
+- Eine Änderung verschickt keine Meldung
+rollen: Trainer
+bild: tr-termin_detail | /termine/spiel/…
+
+---
+typ: funktion
+weg: Spielbetrieb › Anwesenheit
+titel: Anwesenheit
+absicht: Wer war wirklich da?
+- Erfassen im Termin, nach dem Termin
+- Quote je Spieler für Trainings und Spiele
+- Erweiterter Kader in eigenem Block
+rollen: Trainer, Sportl. Leitung
+bild: tr-anwesenheit | /anwesenheit
+
+---
+typ: funktion
+weg: Spielbetrieb › Trainingstagebuch
+titel: Trainings&shy;tagebuch
+absicht: Wer trainiert zusätzlich?
+- Spieler tragen Eigentraining ein
+- Einheiten, Minuten, Belastung (RPE)
+- Selbstauskunft, ein Nachweis ist freiwillig
+rollen-text: auswerten
+rollen: Trainer
+bild: tr-trainingstagebuch | /trainingstagebuch
+
+---
+typ: funktion
+weg: Verein › Mein Team
+titel: Mein Team
+absicht: Alles zur eigenen Mannschaft.
+- Team, Trainer und Eltern mit Kontakt
+- Ämter wie Leibchen, Harz, Strafenwart
+- Strafenkatalog und Mannschaftskasse
+rollen-text: verwalten
+rollen: Trainer
+bild: tr-mein_team_detail | /mein-team
+
+---
+typ: funktion
+weg: Verein › Dienste
+titel: Dienstbörse
+absicht: Wer macht Sekretär, Kamera, Kuchen?
+- Freie Dienste mit „Eintragen“ übernehmen
+- „Eltern“ zeigt, für wen der Dienst gedacht ist
+- Trainer bestätigen danach „erfüllt“
+rollen: Alle
+bild: vs-dienste | /dienste
+
+---
+typ: funktion
+weg: Verein › Dienst-Rangliste
+titel: Dienst-Rangliste
+absicht: Ist es fair verteilt?
+- Grün geleistet, blau eingetragen, Strich = fairer Anteil
+- Gezählt pro Kind, Geschwister teilen sich
+- Andere Familien bleiben anonym, nur der Vorstand sieht alle
+rollen: Alle
+bild: vs-dienste_rangliste | /dienste/rangliste
+
+---
+typ: funktion
+weg: Verwaltung › Dienstplan-Vorlagen
+titel: Dienstplan-Vorlagen
+absicht: Dienste entstehen von selbst.
+- Eine Vorlage für Heim, Auswärts oder Event
+- Spiel anlegen, und die Dienste sind da
+- Von Hand geänderte Dienste bleiben erhalten
+rollen: Vorstand
+bild: vs-dienstplan_vorlagen | /dienstplan-vorlagen
+hinweis: Beispieldaten
+
+---
+typ: funktion
+weg: Einstellungen › Heimspieltage
+titel: Heimspieltage
+absicht: Kuchen fair über die Teams verteilen.
+- Kuchen je Spiel und Obergrenze pro Mannschaft
+- Die Teams des Spieltags wechseln sich ab
+- Ausrichter gilt je Spieltag
+rollen: Vorstand
+bild: vs-heimspieltage | /einstellungen?tab=heimspieltage
+hinweis: Beispieldaten
+
+---
+typ: funktion
+weg: Verein › Nachrichten
+titel: Nachrichten
+absicht: Team-Chat ohne private Handynummern.
+- Gruppen für Spieler, Eltern und Trainer
+- Mitteilungen gehen an viele, ohne Antwortflut
+- Umfragen direkt im Chat
+rollen: Alle
+bild: vs-chat | /chat
+hinweis: Beispieldaten · Texte ersetzt
+
+---
+typ: funktion
+weg: Verein › Mitfahrten
+titel: Mitfahrten
+absicht: Wer fährt, wer braucht einen Platz?
+- Angebot oder Gesuch je Termin
+- Eltern und Trainer werden benachrichtigt
+rollen: Alle
+bild: vs-mitfahrgelegenheiten | /mitfahrgelegenheiten
+hinweis: Beispieldaten
+
+---
+typ: funktion
+weg: Verein › Dokumente
+titel: Dokumente
+absicht: Satzung, Formulare, Spielpläne an einem Ort.
+- Ordner mit Rechten für Funktion oder Team
+- Wer einen Ordner anlegt, behält immer Zugriff
+rollen: Alle
+rollen-zusatz: je nach Ordnerrecht
+bild: vs-dokumente | /dokumente
+
+---
+typ: funktion
+weg: Verwaltung › Beitragslauf
+titel: Beitragslauf
+absicht: Beiträge per SEPA einziehen.
+- Hinweise zeigen fehlende Mandate und Beitragssätze
+- Die SEPA-Datei entsteht im Browser
+- Bankdaten sind nur mit dem Tresor-Passwort lesbar
+rollen: Kassierer, Vorstand
+bild: vs-beitragslauf | /beitragslauf
+
+---
+typ: funktion
+weg: Einstellungen › Saisons
+titel: Saisons
+absicht: Die aktive Saison steuert alles.
+- Ohne aktive Saison gibt es keine Spiele und keine Dienste
+- Kader gelten immer für eine Saison
+- Der Wechsel ist ein Klick: „Aktivieren“
+rollen: Vorstand
+bild: vs-saisons | /einstellungen?tab=saisons
+hinweis: Beispieldaten
+
+---
+typ: handy
+weg: Browser › Zum Home-Bildschirm
+titel: Unterwegs
+absicht: TeamWERK als App auf dem Handy.
+- Seite öffnen und „Zum Home-Bildschirm“ wählen
+- Erst dann kommen Push-Meldungen, auf dem iPhone nur so
+- Einzelne Kategorien unter Profil abschaltbar
+rollen: Alle
+bilder: mob-dashboard, mob-termine
+hinweis: Beispieldaten
+
+---
+typ: liste
+titel: Außerdem im Tool
+- Videos
+  weg: Spielbetrieb › Videos
+  Spielaufnahmen fürs Team, streambar und per AirPlay
+- Spielberichte
+  weg: Verein › Spielberichte
+  Schreiben, prüfen, für die Homepage freigeben
+- Diensttypen
+  weg: Verwaltung › Diensttypen
+  Sekretär, Kamera, Bewirtung, jeweils mit Anleitung
+- Hallen
+  weg: Verwaltung › Veranstaltungsorte
+  Adressen, einmal gepflegt, überall verlinkt
+- Tresor
+  weg: Verwaltung › Tresor
+  Entsperrt die Bankdaten, nur für Vorstand und Kassierer
+- Anleitung
+  weg: unten links
+  Die Hilfe für jede Rolle, direkt in der App
+
+---
+typ: schritte
+titel: Saisonstart in sechs Schritten
+- Saison anlegen und aktivieren
+  weg: Einstellungen › Saisons
+- Mannschaften anlegen, Stammkader kopieren
+  weg: Kader › Aus vorheriger Saison kopieren
+- Trainer und erweiterten Kader neu setzen
+  warn: werden nicht mitkopiert
+- Dienstplan-Vorlagen prüfen
+  weg: Dienstplan-Vorlagen · Heimspieltage
+- Spielplan importieren oder Termine anlegen
+  weg: Kalender › + Event
+- Neue Mitglieder einladen
+  weg: Nutzerverwaltung › + Neu
+
+---
+typ: titel
+eyebrow: Danke
+titel: Fragen?
+untertitel: Jetzt ausprobieren.
+chips: Anmelden, Kader prüfen, Funktion prüfen
+fuss: teamwerk.team-stuttgart.org · Anleitung: unten links in der App
