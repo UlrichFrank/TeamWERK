@@ -1,0 +1,42 @@
+# Screenshots für docs/schulung/folien — eine Zeile = ein Bild in folien/img/<datei>.jpg
+#
+#   persona | route | datei | klick | scrollen
+#
+# persona   vorstand, trainer, vorstand-mobil, trainer-mobil
+# route     Pfad im Tool; {platzhalter} kommen aus .build/ids.json:
+#           {vorstand_member}  Mitglied der Vorstand-Persona
+#           {trainer_team}     erstes Team der Trainer-Persona (aktive Saison)
+#           {trainer_game}     nächstes Spiel dieses Teams
+# klick     optional: Beschriftung eines Buttons/Tabs, der vorher geklickt wird
+# scrollen  optional: Text, der an den oberen Rand gescrollt wird
+#
+# Nach Änderungen: make schulung
+
+# Teil 1 — Der Kern
+vorstand | /kader                              | vs-kader
+vorstand | /uebungsgruppen                     | vs-uebungsgruppen
+vorstand | /mitglieder                         | vs-mitglieder
+vorstand | /nutzer                             | vs-nutzer
+vorstand | /mitglieder/{vorstand_member}       | vs-mitglied_stammdaten | Stammdaten | Vereinsfunktion
+
+# Teil 2 — Die Funktionen
+vorstand | /                                   | vs-dashboard
+vorstand | /kalender                           | vs-kalender
+vorstand | /termine                            | vs-termine
+trainer  | /termine/spiel/{trainer_game}       | tr-termin_detail
+trainer  | /anwesenheit                        | tr-anwesenheit
+trainer  | /trainingstagebuch                  | tr-trainingstagebuch
+trainer  | /mein-team?team={trainer_team}      | tr-mein_team_detail
+vorstand | /dienste                            | vs-dienste
+vorstand | /dienste/rangliste                  | vs-dienste_rangliste
+vorstand | /dienstplan-vorlagen                | vs-dienstplan_vorlagen
+vorstand | /einstellungen?tab=heimspieltage    | vs-heimspieltage
+vorstand | /chat                               | vs-chat
+vorstand | /mitfahrgelegenheiten               | vs-mitfahrgelegenheiten
+vorstand | /dokumente                          | vs-dokumente
+vorstand | /beitragslauf                       | vs-beitragslauf
+vorstand | /einstellungen?tab=saisons          | vs-saisons
+
+# Handy
+trainer-mobil | /                              | mob-dashboard
+trainer-mobil | /termine                       | mob-termine

@@ -12,6 +12,7 @@ make test / lint / coverage
 make test-e2e                # Playwright (echter Chromium gegen Prod-Binary + Seed-DB) — ~2–4 min, NICHT Teil von make test/pre-push; für UI-riskante Änderungen (Scroll/Layout/Focus)
 make metrics                 # Code-Metriken (Größe/Komplexität/Coverage/Lint-Dichte/Duplikation) → stdout + metrics/REPORT.md (Exit 0)
 make metrics-gate            # Wie metrics + Schwellwert-Prüfung gegen metrics/thresholds.yml (Exit 1 bei Regression)
+make schulung                # Screenshots der Schulungsfolien (docs/schulung/) aus anonymisierter Kopie der lokalen DB — Howto: docs/schulung/HOWTO.md
 
 # Video-Encoder (Desktop-Tool, eigenes Go-Modul — NICHT Teil von make test/pre-push)
 cd tools/video-encoder && go test ./internal/...   # reines Go; mit ffmpeg/ffprobe im PATH laufen auch die Integrationstests

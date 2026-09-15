@@ -82,3 +82,7 @@ web/e2e/*.db*
 e2e.db*
 bin/teamwerk-e2e
 web/test-results/
+
+# Schulungsfolien: Demo-DB/Binary und generierte Screenshots (make schulung)
+docs/schulung/.build/
+docs/schulung/folien/img/

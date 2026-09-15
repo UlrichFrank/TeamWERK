@@ -1,0 +1,924 @@
+<title>TeamWERK Funktionärsschulung</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,700;0,800;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    /* Seitengrund (folgt dem Theme) */
+    --ground: #E6E4DF;
+    --ground-ink: #3A332E;
+    --bar: #F4F3EF;
+    --bar-line: #D6D3CC;
+    /* Folien (festes Markenbild, identisch in beiden Themes) */
+    --ink: #181310;
+    --yellow: #FDE400;
+    --paper: #FFFFFF;
+    --stone: #F3F2EE;
+    --line: #E2DFD8;
+    --muted: #6E655E;
+    --blue: #3E4A98;
+    --green: #6EB42E;
+    --sans: "Hanken Grotesk", "Helvetica Neue", Arial, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #141210;
+      --ground-ink: #D9D4CC;
+      --bar: #1E1B18;
+      --bar-line: #34302B;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #141210;
+    --ground-ink: #D9D4CC;
+    --bar: #1E1B18;
+    --bar-line: #34302B;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ground-ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Werkzeugleiste ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px max(16px, calc((100% - 1280px) / 2));
+    background: var(--bar);
+    border-bottom: 1px solid var(--bar-line);
+  }
+  .toolbar strong { font-weight: 800; letter-spacing: -0.01em; }
+  .toolbar .meta { font: 400 12px/1.4 var(--mono); opacity: .75; }
+  .toolbar .spacer { flex: 1; }
+  .btn {
+    font: 700 14px/1 var(--sans);
+    background: var(--yellow); color: var(--ink);
+    border: 0; border-radius: 6px; padding: 10px 14px; cursor: pointer;
+  }
+  .btn:hover { background: var(--ink); color: var(--yellow); }
+  .btn:focus-visible, .slide:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+
+  /* ---------- Übersicht ---------- */
+  .deck {
+    display: flex; flex-direction: column; align-items: center; gap: 28px;
+    padding-inline: 16px; padding-block: 28px 64px;
+    counter-reset: slide;
+  }
+  .slide-wrap {
+    width: 100%; max-width: 1280px;
+    container: slide / inline-size;
+    counter-increment: slide;
+  }
+  .slide {
+    position: relative; overflow: hidden;
+    aspect-ratio: 16 / 9;
+    background: var(--paper); color: var(--ink);
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgb(24 19 16 / .08), 0 10px 30px rgb(24 19 16 / .10);
+    font-size: 1.6cqi; line-height: 1.4;
+  }
+  .slide::after {
+    content: counter(slide);
+    position: absolute; right: 2.2cqi; bottom: 1.6cqi;
+    font: 500 .9cqi/1 var(--mono); color: var(--muted);
+  }
+  .s-yellow { background: var(--yellow); }
+  .s-yellow::after { color: var(--ink); }
+  .s-dark { background: var(--ink); color: var(--paper); }
+  .s-dark::after { color: #9C938B; }
+
+  h1, h2, h3 { margin: 0; text-wrap: balance; }
+  p { margin: 0; }
+  .eyebrow {
+    font: 500 1.05cqi/1.3 var(--mono);
+    letter-spacing: .04em; color: var(--muted);
+  }
+  .eyebrow b { color: var(--ink); font-weight: 500; }
+  .note { font: 400 .95cqi/1.4 var(--mono); color: var(--muted); }
+
+  /* ---------- Titel & Ende ---------- */
+  .s-title { display: grid; grid-template-columns: 1fr auto; align-content: space-between; padding: 5cqi 6cqi; }
+  .s-title .logo { width: 12cqi; height: auto; grid-column: 2; grid-row: 1 / span 2; align-self: start; }
+  .s-title h1 {
+    font-weight: 800; letter-spacing: -0.04em; line-height: .88;
+    font-size: 10.5cqi; margin-top: 1.5cqi;
+  }
+  .s-title h1 span { display: block; font-size: .52em; letter-spacing: -0.025em; line-height: 1; margin-top: 1.2cqi; }
+  .s-title .eyebrow, .s-title .eyebrow b { color: var(--ink); }
+  .s-title .roles { display: flex; gap: 1cqi; flex-wrap: wrap; grid-column: 1 / -1; align-self: end; }
+  .s-title .roles span { font: 700 1.6cqi/1 var(--sans); border: .18cqi solid var(--ink); border-radius: 99px; padding: .9cqi 1.8cqi; }
+  .s-title .url { grid-column: 1 / -1; font: 500 1.1cqi/1 var(--mono); margin-top: 1.6cqi; }
+
+  /* ---------- Kapiteltrenner ---------- */
+  .s-section { display: flex; flex-direction: column; justify-content: flex-end; padding: 6cqi; gap: 1.6cqi; }
+  .s-section .part { font: 500 1.3cqi/1 var(--mono); color: var(--yellow); letter-spacing: .08em; text-transform: uppercase; }
+  .s-section h2 { font-size: 8cqi; font-weight: 800; letter-spacing: -0.035em; line-height: .95; color: var(--yellow); }
+  .s-section p { font-size: 2.2cqi; color: #CFC8C0; max-width: 60cqi; }
+
+  /* ---------- Funktionsfolie: Text links, Screenshot rechts ---------- */
+  .s-feature { display: grid; grid-template-columns: 30cqi 1fr; }
+  .s-feature .copy {
+    display: flex; flex-direction: column; gap: 1.8cqi;
+    padding: 4.4cqi 2.6cqi 3.6cqi 4.4cqi;
+  }
+  .s-feature h2 { font-size: 3.6cqi; font-weight: 800; letter-spacing: -0.025em; line-height: 1.02; }
+  .intent { font-size: 2.15cqi; font-weight: 500; line-height: 1.25; }
+  .intent mark {
+    background: linear-gradient(transparent 55%, var(--yellow) 55%, var(--yellow) 92%, transparent 92%);
+    color: inherit; padding: 0 .15em; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+  }
+  .points { list-style: none; margin: 0; padding: 0; display: grid; gap: 1cqi; font-size: 1.5cqi; }
+  .points li { padding-left: 1.6cqi; position: relative; }
+  .points li::before {
+    content: ""; position: absolute; left: 0; top: .55em;
+    width: .7cqi; height: .7cqi; background: var(--ink); border-radius: 1px;
+  }
+  .roles-row { margin-top: auto; display: flex; flex-wrap: wrap; gap: .6cqi; align-items: center; }
+  .roles-row .lbl { font: 500 .95cqi/1 var(--mono); color: var(--muted); margin-right: .3cqi; }
+  .chip { font: 700 1.05cqi/1 var(--sans); padding: .55cqi 1cqi; border-radius: 99px; white-space: nowrap; }
+  .c-all { background: var(--stone); color: var(--ink); border: 1px solid var(--line); }
+  .c-trainer { background: var(--blue); color: #fff; }
+  .c-vorstand { background: var(--ink); color: var(--yellow); }
+  .c-kasse { background: transparent; color: var(--ink); border: .14cqi solid var(--ink); }
+  .c-medien { background: var(--green); color: var(--ink); }
+
+  .shot {
+    align-self: center; margin: 2.4cqi 3.2cqi 2.4cqi 0;
+    border-radius: .8cqi; overflow: hidden;
+    background: var(--stone);
+    border: 1px solid var(--line);
+    box-shadow: 0 .4cqi 2.4cqi rgb(24 19 16 / .14);
+  }
+  .shot .urlbar {
+    display: flex; align-items: center; gap: .8cqi;
+    padding: .7cqi 1.2cqi; background: var(--stone);
+    border-bottom: 1px solid var(--line);
+    font: 400 .95cqi/1 var(--mono); color: var(--muted);
+  }
+  .shot .urlbar::before { content: ""; width: .8cqi; height: .8cqi; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 0 .12cqi var(--ink) inset; }
+  /* Die Tool-Seitenleiste (≈15,8 % der Bildbreite) wird abgeschnitten — der Weg steht links auf der Folie */
+  .shot img { display: block; width: 118.8%; max-width: none; height: auto; margin-left: -18.8%; }
+  .demo { position: absolute; left: 4.4cqi; bottom: 1.6cqi; font: 400 .85cqi/1 var(--mono); color: var(--muted); }
+
+  /* ---------- Textfolien ---------- */
+  .s-text { padding: 5cqi 6cqi; display: flex; flex-direction: column; gap: 3cqi; }
+  .s-text h2 { font-size: 4.4cqi; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+
+  .before-after { display: grid; grid-template-columns: 1fr 1.25fr; gap: 4cqi; flex: 1; align-items: stretch; }
+  .before { display: flex; flex-direction: column; gap: 1.2cqi; padding: 2.8cqi; background: var(--stone); border-radius: .8cqi; }
+  .before .eyebrow { margin-bottom: .6cqi; }
+  .before p { font-size: 2cqi; color: var(--muted); text-decoration: line-through; text-decoration-thickness: .16cqi; text-decoration-color: rgb(24 19 16 / .45); }
+  .after { display: flex; flex-direction: column; justify-content: center; gap: 2cqi; }
+  .after .big { font-size: 6cqi; font-weight: 800; letter-spacing: -0.04em; line-height: .95; }
+  .after .big span { background: var(--yellow); padding: 0 .12em; }
+  .after p { font-size: 2cqi; max-width: 46cqi; }
+
+  .gains { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3cqi; flex: 1; align-content: center; }
+  .gain { border-top: .45cqi solid var(--ink); padding-top: 1.8cqi; display: flex; flex-direction: column; gap: 1.2cqi; }
+  .gain h3 { font-size: 3cqi; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+  .gain p { font-size: 1.8cqi; color: var(--muted); }
+
+  /* ---------- Modell-Diagramm ---------- */
+  .model { display: grid; grid-template-columns: 1fr 1.35fr 1fr; gap: 2.4cqi; align-items: center; flex: 1; }
+  .box { border: .18cqi solid var(--ink); border-radius: .8cqi; padding: 2cqi; background: var(--paper); display: flex; flex-direction: column; gap: .8cqi; }
+  .box h3 { font-size: 2.4cqi; font-weight: 800; letter-spacing: -0.02em; }
+  .box .eyebrow { color: var(--muted); }
+  .box p { font-size: 1.45cqi; color: var(--muted); }
+  .box.season { background: var(--yellow); }
+  .box.season p { color: var(--ink); }
+  .lists { display: grid; gap: .8cqi; margin-top: .4cqi; }
+  .list { display: grid; gap: .3cqi; padding: 1cqi 1.2cqi; background: var(--stone); border-radius: .5cqi; }
+  .list b { font-size: 1.6cqi; line-height: 1.15; }
+  .list span { font: 400 1cqi/1.3 var(--mono); color: var(--muted); }
+  .arrow { font: 800 3cqi/1 var(--sans); text-align: center; }
+  .model-wrap { display: grid; grid-template-columns: 1fr auto 1.35fr auto 1fr; gap: 1.6cqi; align-items: center; flex: 1; }
+  .aside { font-size: 1.5cqi; padding: 1.2cqi 1.6cqi; border-left: .45cqi solid var(--yellow); background: var(--stone); }
+
+  .pair { display: grid; grid-template-columns: 1fr auto 1fr; gap: 2cqi; align-items: center; }
+  .link { font: 500 1.1cqi/1.2 var(--mono); color: var(--muted); text-align: center; display: flex; flex-direction: column; align-items: center; gap: .6cqi; }
+  .link i { display: block; width: 8cqi; height: .22cqi; background: var(--ink); }
+  .cases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2cqi; }
+  .case { padding: 1.6cqi; background: var(--stone); border-radius: .6cqi; display: flex; flex-direction: column; gap: .6cqi; }
+  .case b { font-size: 1.7cqi; }
+  .case span { font-size: 1.35cqi; color: var(--muted); }
+
+  /* ---------- Vereinsfunktionen ---------- */
+  .funcs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.6cqi; flex: 1; align-content: start; }
+  .func { padding: 1.8cqi; border-radius: .7cqi; background: var(--stone); display: flex; flex-direction: column; gap: .8cqi; }
+  .func .chip { align-self: flex-start; font-size: 1.3cqi; }
+  .func p { font-size: 1.5cqi; }
+  .foot { display: flex; gap: 3cqi; flex-wrap: wrap; font-size: 1.45cqi; color: var(--muted); }
+  .foot b { color: var(--ink); }
+
+  /* ---------- Handy ---------- */
+  .s-phones { display: grid; grid-template-columns: 34cqi 1fr; }
+  .phones { display: flex; gap: 3cqi; justify-content: center; align-items: center; padding-right: 3cqi; }
+  .phone {
+    width: 19cqi; border-radius: 2.4cqi; padding: .7cqi; background: var(--ink);
+    box-shadow: 0 .6cqi 2.4cqi rgb(24 19 16 / .25);
+  }
+  .phone img { display: block; width: 100%; height: auto; border-radius: 1.8cqi; }
+  .phone:nth-child(2) { transform: translateY(2cqi); }
+
+  /* ---------- Checkliste ---------- */
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 1.6cqi 4cqi; counter-reset: step; flex: 1; align-content: center; }
+  .steps li { counter-increment: step; display: grid; grid-template-columns: 4.4cqi 1fr; gap: .2cqi 1.4cqi; align-items: start; }
+  .steps li::before {
+    content: counter(step); grid-row: span 2;
+    width: 4.4cqi; height: 4.4cqi; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--yellow); font: 800 2cqi/1 var(--sans);
+  }
+  .steps b { font-size: 1.9cqi; line-height: 1.2; padding-top: .3cqi; }
+  .steps span { font: 400 1.05cqi/1.4 var(--mono); color: var(--muted); }
+  .steps .warn { color: var(--ink); background: var(--yellow); padding: 0 .3em; }
+
+  .more { display: grid; grid-template-columns: repeat(auto-fit, minmax(22cqi, 1fr)); gap: 1.6cqi 3cqi; }
+  .more div { border-top: .25cqi solid var(--ink); padding-top: 1.2cqi; display: grid; gap: .5cqi; }
+  .more b { font-size: 2cqi; }
+  .more span { font-size: 1.45cqi; color: var(--muted); }
+  .more .eyebrow { font-size: .95cqi; }
+
+  /* ---------- Schmale Bildschirme: Folien fließen statt skalieren ---------- */
+  @container slide (max-width: 680px) {
+    .slide { aspect-ratio: auto; font-size: 15px; border-radius: 8px; }
+    .slide::after { font-size: 11px; right: 14px; bottom: 12px; }
+    .s-feature, .s-phones { grid-template-columns: 1fr; }
+    .s-feature .copy, .s-text, .s-section, .s-title { padding: 24px 20px 36px; gap: 14px; }
+    .s-feature h2, .s-text h2 { font-size: 26px; }
+    .intent { font-size: 18px; }
+    .points { font-size: 15px; gap: 8px; }
+    .points li { padding-left: 14px; }
+    .points li::before { width: 6px; height: 6px; }
+    .eyebrow, .note, .roles-row .lbl { font-size: 11px; }
+    .chip { font-size: 12px; padding: 5px 9px; }
+    .shot { margin: 0 16px 36px; border-radius: 6px; }
+    .shot .urlbar { font-size: 10px; padding: 6px 10px; }
+    .demo { position: static; padding: 0 20px 28px; font-size: 10px; }
+    .s-title h1 { font-size: 48px; }
+    .s-title .logo { width: 64px; }
+    .s-title .roles span { font-size: 13px; padding: 7px 12px; }
+    .s-title .url { font-size: 11px; }
+    .s-section h2 { font-size: 40px; }
+    .s-section .part { font-size: 11px; }
+    .s-section p { font-size: 16px; }
+    .before-after, .gains, .cases, .funcs, .steps, .model-wrap, .pair { grid-template-columns: 1fr; }
+    .arrow { transform: rotate(90deg); font-size: 22px; }
+    .link i { width: 2px; height: 28px; }
+    .before p, .after p, .gain p, .box p, .func p, .case span, .more span, .aside, .foot { font-size: 14px; }
+    .after .big { font-size: 34px; }
+    .gain h3, .box h3 { font-size: 20px; }
+    .list b, .case b, .steps b, .more b { font-size: 15px; }
+    .list span, .steps span, .more .eyebrow { font-size: 11px; }
+    .func .chip { font-size: 12px; }
+    .steps li { grid-template-columns: 32px 1fr; }
+    .steps li::before { width: 32px; height: 32px; font-size: 15px; }
+    .phones { padding: 0 16px 40px; }
+    .phone { width: 42%; border-radius: 18px; padding: 5px; }
+    .phone img { border-radius: 14px; }
+    .before, .box, .func, .case, .list { padding: 14px; }
+  }
+
+  /* ---------- Präsentationsmodus ---------- */
+  body.present { overflow: hidden; background: #000; }
+  body.present .toolbar { display: none; }
+  body.present .deck { padding: 0; gap: 0; }
+  body.present .slide-wrap { display: none; }
+  body.present .slide-wrap.current {
+    display: block; position: fixed; inset: 0; margin: auto;
+    width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16));
+    max-width: none;
+  }
+  body.present .slide { border-radius: 0; box-shadow: none; height: 100%; aspect-ratio: auto; cursor: pointer; }
+  .hint {
+    position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+    font: 400 12px/1 var(--mono); color: #bbb; background: rgb(0 0 0 / .6);
+    padding: 7px 10px; border-radius: 6px; pointer-events: none;
+    opacity: 0; transition: opacity .4s;
+  }
+  body.present .hint.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .hint { transition: none; } }
+
+  @media print {
+    @page { size: 13.333in 7.5in; margin: 0; }
+    body { background: #fff; }
+    .toolbar, .hint { display: none; }
+    .deck { padding: 0; gap: 0; }
+    .slide-wrap { max-width: none; break-after: page; }
+    .slide { border-radius: 0; box-shadow: none; }
+  }
+</style>
+
+<header class="toolbar">
+  <strong>TeamWERK · Funktionärsschulung</strong>
+  <span class="meta" id="count"></span>
+  <span class="spacer"></span>
+  <span class="meta">Pfeiltasten · Esc beendet</span>
+  <button class="btn" id="present" type="button">Präsentieren</button>
+</header>
+
+<main class="deck" id="deck">
+
+  <!-- 1 Titel -->
+  <section class="slide-wrap"><div class="slide s-yellow s-title">
+    <div>
+      <p class="eyebrow"><b>Schulung · Saison 2026/27</b></p>
+      <h1>TeamWERK <span>für Funktionäre</span></h1>
+    </div>
+    <img class="logo" src="logo.svg" alt="Team Stuttgart Handball">
+    <div class="roles"><span>Vorstand</span><span>Trainer</span><span>Kassierer</span><span>Sportliche Leitung</span></div>
+    <p class="url">teamwerk.team-stuttgart.org</p>
+  </div></section>
+
+  <!-- 2 Motivation -->
+  <section class="slide-wrap"><div class="slide s-text">
+    <h2>Warum TeamWERK?</h2>
+    <div class="before-after">
+      <div class="before">
+        <p class="eyebrow">Bisher</p>
+        <p>WhatsApp-Gruppe pro Team</p>
+        <p>Kaderlisten in Excel</p>
+        <p>Dienstplan auf Papier</p>
+        <p>Zu- und Absagen per Zuruf</p>
+        <p>E-Mail-Verteiler von Hand</p>
+      </div>
+      <div class="after">
+        <p class="eyebrow">Jetzt</p>
+        <p class="big">Ein Ort.<br><span>Eine Wahrheit.</span></p>
+        <p>Termine, Kader, Dienste und Nachrichten hängen zusammen. Wer im Kader steht, bekommt automatisch die richtigen Termine, Meldungen und Dienste.</p>
+      </div>
+    </div>
+  </div></section>
+
+  <!-- 3 Nutzen -->
+  <section class="slide-wrap"><div class="slide s-text">
+    <h2>Was es euch bringt</h2>
+    <div class="gains">
+      <div class="gain"><h3>Weniger hinterher&shy;telefonieren</h3><p>Zu- und Absagen kommen von selbst. Ihr seht vor dem Training, wer kommt.</p></div>
+      <div class="gain"><h3>Faire Dienste</h3><p>Jede Familie sieht ihren Anteil. Die Rangliste ersetzt die Diskussion.</p></div>
+      <div class="gain"><h3>Sichere Daten</h3><p>Jeder sieht nur, was zu seiner Funktion passt. Bankdaten sind verschlüsselt.</p></div>
+    </div>
+  </div></section>
+
+  <!-- 4 Kapitel: Kern -->
+  <section class="slide-wrap"><div class="slide s-dark s-section">
+    <p class="part">Teil 1</p>
+    <h2>Der Kern</h2>
+    <p>Saison, Kader, Team und die Menschen dahinter. Wer das versteht, versteht das ganze Tool.</p>
+  </div></section>
+
+  <!-- 5 Modell -->
+  <section class="slide-wrap"><div class="slide s-text">
+    <h2>Saison → Kader → Team</h2>
+    <div class="model-wrap">
+      <div class="box season">
+        <p class="eyebrow" style="color:var(--ink)">Saison</p>
+        <h3>2026/27</h3>
+        <p>Genau eine ist aktiv. Sie bestimmt, welche Kader gelten.</p>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="box">
+        <p class="eyebrow">Kader</p>
+        <h3>B-Jugend männlich 2</h3>
+        <div class="lists">
+          <div class="list"><b>Stammkader</b><span>Termine · Dienstpflicht</span></div>
+          <div class="list"><b>Erweiterter Kader</b><span>Termine · keine Dienste</span></div>
+          <div class="list"><b>Trainer</b><span>Rechte fürs Team</span></div>
+        </div>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="box">
+        <p class="eyebrow">Team</p>
+        <h3>mB2</h3>
+        <p>Spiele, Dienste, Kasse, Strafen, Videos, Ordner</p>
+      </div>
+    </div>
+    <p class="aside"><b>Übungsgruppe</b> = Kader ohne Team. Sie hat nur Trainings, keine Spiele, Dienste oder Kasse.</p>
+  </div></section>
+
+  <!-- 6 Kader -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verwaltung › <b>Kader</b></p>
+      <h2>Kader</h2>
+      <p class="intent"><mark>Wer spielt diese Saison in welcher Mannschaft?</mark></p>
+      <ul class="points">
+        <li>Saison oben wählen, dann Mannschaft</li>
+        <li>„Aus vorheriger Saison kopieren“ übernimmt nur den Stammkader</li>
+        <li>Trainer und erweiterten Kader jede Saison neu setzen</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-vorstand">Vorstand</span><span class="chip c-trainer">Trainer</span></div>
+    </div>
+    <figure class="shot" style="margin-block:2.4cqi"><div class="urlbar">/kader</div><img src="img/vs-kader.jpg" alt="Kader-Seite mit Mannschaftskarte A-Jugend 1 männlich, Trainerliste und Stammkader" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 7 Übungsgruppen -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verwaltung › <b>Übungsgruppen</b></p>
+      <h2>Übungs&shy;gruppen</h2>
+      <p class="intent"><mark>Trainieren ohne Spielbetrieb.</mark></p>
+      <ul class="points">
+        <li>Frei benannt, z.&nbsp;B. Frühtraining</li>
+        <li>Trainings mit Zu- und Absage</li>
+        <li>Keine Spiele, Dienste oder Kasse</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-vorstand">Vorstand</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/uebungsgruppen</div><img src="img/vs-uebungsgruppen.jpg" alt="Übungsgruppe mit Trainern und Mitgliedern" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 8 Nutzer vs. Mitglied -->
+  <section class="slide-wrap"><div class="slide s-text">
+    <h2>Nutzer ≠ Mitglied</h2>
+    <div class="pair">
+      <div class="box">
+        <p class="eyebrow">Nutzer</p>
+        <h3>Wer sich anmeldet</h3>
+        <p>E-Mail, Passwort, Benachrichtigungen</p>
+      </div>
+      <div class="link"><i></i>verknüpft</div>
+      <div class="box season">
+        <p class="eyebrow" style="color:var(--ink)">Mitglied</p>
+        <h3>Wer im Verein ist</h3>
+        <p>Stammdaten, Status, Beitrag, Kader, Vereinsfunktion</p>
+      </div>
+    </div>
+    <div class="cases">
+      <div class="case"><b>Spielerin, 17</b><span>Eigener Nutzer, mit ihrem Mitglied verknüpft</span></div>
+      <div class="case"><b>Kind, 9</b><span>Kein eigener Login. Die Eltern sehen es über „Familie“.</span></div>
+      <div class="case"><b>Gasttrainer</b><span>Mitglied mit Status „Extern“, zahlt keinen Beitrag</span></div>
+    </div>
+  </div></section>
+
+  <!-- 9 Mitglieder -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verwaltung › <b>Mitglieder</b></p>
+      <h2>Mitglieder</h2>
+      <p class="intent"><mark>Der Vereinsdatensatz jeder Person.</mark></p>
+      <ul class="points">
+        <li>Status: Aktiv, Anwärter, Förderkind, Extern, passiv</li>
+        <li>Filter „Ohne App-Account“ findet, wer noch fehlt</li>
+        <li>Änderungsanträge der Mitglieder prüfen</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-vorstand">Vorstand</span><span class="chip c-kasse">Kassierer</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/mitglieder</div><img src="img/vs-mitglieder.jpg" alt="Mitgliederliste mit Status, Position und Filtern" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 10 Nutzerverwaltung -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verwaltung › <b>Nutzerverwaltung</b></p>
+      <h2>Nutzer&shy;verwaltung</h2>
+      <p class="intent"><mark>Wer darf sich anmelden?</mark></p>
+      <ul class="points">
+        <li>Oben: offene Anfragen und Einladungen</li>
+        <li>„+ Neu“ lädt per E-Mail ein</li>
+        <li>„nicht verknüpft“ zeigt Logins ohne Mitglied</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-vorstand">Vorstand</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/nutzer</div><img src="img/vs-nutzer.jpg" alt="Nutzerverwaltung mit ausstehenden Einladungen und registrierten Nutzern" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 11 Vereinsfunktionen -->
+  <section class="slide-wrap"><div class="slide s-text">
+    <h2>Vereinsfunktion = Rechte</h2>
+    <div class="funcs">
+      <div class="func"><span class="chip c-all">Spieler</span><p>Termine, Zu- und Absage, eigenes Trainingstagebuch</p></div>
+      <div class="func"><span class="chip c-trainer">Trainer</span><p>Zusätzlich: Kader, Anwesenheit, Aufstellung, Tagebuch des Teams</p></div>
+      <div class="func"><span class="chip c-trainer">Sportliche Leitung</span><p>Trainerrechte für alle Mannschaften</p></div>
+      <div class="func"><span class="chip c-vorstand">Vorstand</span><p>Zusätzlich: Mitglieder, Nutzer, Dienste, Einstellungen, Beitragslauf</p></div>
+      <div class="func"><span class="chip c-kasse">Kassierer</span><p>Mitglieder, Bankdaten, Beitragslauf, Tresor</p></div>
+      <div class="func"><span class="chip c-medien">Medien</span><p>Spielberichte prüfen und freigeben</p></div>
+    </div>
+    <div class="foot">
+      <span><b>Mehrere Funktionen</b> pro Person sind möglich</span>
+      <span><b>Eltern</b> brauchen keine Funktion, das regelt „Familie“</span>
+      <span><b>Admin</b> ist eine Systemrolle und darf alles</span>
+    </div>
+  </div></section>
+
+  <!-- 12 Funktion vergeben -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Mitglieder › Mitglied › <b>Stammdaten</b></p>
+      <h2>Funktion vergeben</h2>
+      <p class="intent"><mark>Rechte hängen am Mitglied, nicht am Login.</mark></p>
+      <ul class="points">
+        <li>Mehrere Funktionen ankreuzen</li>
+        <li>Wirkt nach der nächsten Anmeldung</li>
+        <li>Trainer eines Teams zusätzlich im Kader eintragen</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-vorstand">Vorstand</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/mitglieder/…</div><img src="img/vs-mitglied_stammdaten.jpg" alt="Mitglied bearbeiten, Abschnitt Vereinsfunktion" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 13 Kapitel: Funktionen -->
+  <section class="slide-wrap"><div class="slide s-dark s-section">
+    <p class="part">Teil 2</p>
+    <h2>Die Funktionen</h2>
+    <p>Wozu es sie gibt und wo ihr sie im Tool findet.</p>
+  </div></section>
+
+  <!-- 14 Übersicht -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Nutzer › <b>Dashboard</b></p>
+      <h2>Übersicht</h2>
+      <p class="intent"><mark>Was steht für mich an?</mark></p>
+      <ul class="points">
+        <li>Nächste Termine und offene Dienste</li>
+        <li>Dienststand je Kind und Team</li>
+        <li>Alle Meldungen, auch wenn Push aus ist</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-all">Alle</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/</div><img src="img/vs-dashboard.jpg" alt="Dashboard mit Meine Termine, Meine Dienste und Nachrichten" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 15 Kalender -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Spielbetrieb › <b>Kalender</b></p>
+      <h2>Kalender</h2>
+      <p class="intent"><mark>Alle Termine eines Monats.</mark></p>
+      <ul class="points">
+        <li>Filter nach Team: Heim, Auswärts, Training</li>
+        <li>„+ Event“ legt einen Termin an</li>
+        <li>„Abwesenheit“ meldet Urlaub vorab ab</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">anlegen</span><span class="chip c-trainer">Trainer</span><span class="chip c-vorstand">Vorstand</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/kalender</div><img src="img/vs-kalender.jpg" alt="Monatskalender September 2026 mit Trainings und Spielen" loading="lazy"></figure>
+    <p class="demo">Beispieldaten</p>
+  </div></section>
+
+  <!-- 16 Termine -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Spielbetrieb › <b>Termine</b></p>
+      <h2>Termine</h2>
+      <p class="intent"><mark>Wer kommt?</mark></p>
+      <ul class="points">
+        <li>Zusagen, Absagen und offene Rückmeldungen auf einen Blick</li>
+        <li>Eltern sagen für ihr Kind zu</li>
+        <li>Hinweise am Termin erreichen alle</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-all">Alle</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/termine</div><img src="img/vs-termine.jpg" alt="Terminliste mit Zusage-Zählern und Hinweis zum Fotoshooting" loading="lazy"></figure>
+    <p class="demo">Beispieldaten</p>
+  </div></section>
+
+  <!-- 17 Termindetail -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Termine › <b>Termin öffnen</b></p>
+      <h2>Aufstellung</h2>
+      <p class="intent"><mark>Wer ist nominiert?</mark></p>
+      <ul class="points">
+        <li>Häkchen setzen, wird sofort gespeichert</li>
+        <li>Team und Eltern sehen die Aufstellung</li>
+        <li>Eine Änderung verschickt keine Meldung</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-trainer">Trainer</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/termine/spiel/…</div><img src="img/tr-termin_detail.jpg" alt="Termindetail mit Teilnahme-Tabelle und Spalte Aufstellung" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 18 Anwesenheit -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Spielbetrieb › <b>Anwesenheit</b></p>
+      <h2>Anwesenheit</h2>
+      <p class="intent"><mark>Wer war wirklich da?</mark></p>
+      <ul class="points">
+        <li>Erfassen im Termin, nach dem Termin</li>
+        <li>Quote je Spieler für Trainings und Spiele</li>
+        <li>Erweiterter Kader in eigenem Block</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-trainer">Trainer</span><span class="chip c-trainer">Sportl. Leitung</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/anwesenheit</div><img src="img/tr-anwesenheit.jpg" alt="Anwesenheitsstatistik B-Jugend männlich 2" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 19 Trainingstagebuch -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Spielbetrieb › <b>Trainingstagebuch</b></p>
+      <h2>Trainings&shy;tagebuch</h2>
+      <p class="intent"><mark>Wer trainiert zusätzlich?</mark></p>
+      <ul class="points">
+        <li>Spieler tragen Eigentraining ein</li>
+        <li>Einheiten, Minuten, Belastung (RPE)</li>
+        <li>Selbstauskunft, ein Nachweis ist freiwillig</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">auswerten</span><span class="chip c-trainer">Trainer</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/trainingstagebuch</div><img src="img/tr-trainingstagebuch.jpg" alt="Trainingstagebuch-Übersicht einer Mannschaft" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 20 Mein Team -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verein › <b>Mein Team</b></p>
+      <h2>Mein Team</h2>
+      <p class="intent"><mark>Alles zur eigenen Mannschaft.</mark></p>
+      <ul class="points">
+        <li>Team, Trainer und Eltern mit Kontakt</li>
+        <li>Ämter wie Leibchen, Harz, Strafenwart</li>
+        <li>Strafenkatalog und Mannschaftskasse</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">verwalten</span><span class="chip c-trainer">Trainer</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/mein-team</div><img src="img/tr-mein_team_detail.jpg" alt="Mein Team mit aufgeklappter B-Jugend 2 und Ämtern" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 21 Dienste -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verein › <b>Dienste</b></p>
+      <h2>Dienstbörse</h2>
+      <p class="intent"><mark>Wer macht Sekretär, Kamera, Kuchen?</mark></p>
+      <ul class="points">
+        <li>Freie Dienste mit „Eintragen“ übernehmen</li>
+        <li>„Eltern“ zeigt, für wen der Dienst gedacht ist</li>
+        <li>Trainer bestätigen danach „erfüllt“</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-all">Alle</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/dienste</div><img src="img/vs-dienste.jpg" alt="Dienstbörse mit Sekretär-, Kamera- und Spielbericht-Diensten" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 22 Rangliste -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verein › <b>Dienst-Rangliste</b></p>
+      <h2>Dienst-Rangliste</h2>
+      <p class="intent"><mark>Ist es fair verteilt?</mark></p>
+      <ul class="points">
+        <li>Grün geleistet, blau eingetragen, Strich = fairer Anteil</li>
+        <li>Gezählt pro Kind, Geschwister teilen sich</li>
+        <li>Andere Familien bleiben anonym, nur der Vorstand sieht alle</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-all">Alle</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/dienste/rangliste</div><img src="img/vs-dienste_rangliste.jpg" alt="Dienst-Rangliste der gemischten D-Jugend mit Balken" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 23 Vorlagen -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verwaltung › <b>Dienstplan-Vorlagen</b></p>
+      <h2>Dienstplan-Vorlagen</h2>
+      <p class="intent"><mark>Dienste entstehen von selbst.</mark></p>
+      <ul class="points">
+        <li>Eine Vorlage für Heim, Auswärts oder Event</li>
+        <li>Spiel anlegen, und die Dienste sind da</li>
+        <li>Von Hand geänderte Dienste bleiben erhalten</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-vorstand">Vorstand</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/dienstplan-vorlagen</div><img src="img/vs-dienstplan_vorlagen.jpg" alt="Liste der Dienstplan-Vorlagen Heimspiel, Auswärts, Sommerfest, Turnier" loading="lazy"></figure>
+    <p class="demo">Beispieldaten</p>
+  </div></section>
+
+  <!-- 24 Heimspieltage -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Einstellungen › <b>Heimspieltage</b></p>
+      <h2>Heimspieltage</h2>
+      <p class="intent"><mark>Kuchen fair über die Teams verteilen.</mark></p>
+      <ul class="points">
+        <li>Kuchen je Spiel und Obergrenze pro Mannschaft</li>
+        <li>Die Teams des Spieltags wechseln sich ab</li>
+        <li>Ausrichter gilt je Spieltag</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-vorstand">Vorstand</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/einstellungen?tab=heimspieltage</div><img src="img/vs-heimspieltage.jpg" alt="Einstellungen Heimspieltage mit Bewirtung und Ausrichter" loading="lazy"></figure>
+    <p class="demo">Beispieldaten</p>
+  </div></section>
+
+  <!-- 25 Nachrichten -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verein › <b>Nachrichten</b></p>
+      <h2>Nachrichten</h2>
+      <p class="intent"><mark>Team-Chat ohne private Handynummern.</mark></p>
+      <ul class="points">
+        <li>Gruppen für Spieler, Eltern und Trainer</li>
+        <li>Mitteilungen gehen an viele, ohne Antwortflut</li>
+        <li>Umfragen direkt im Chat</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-all">Alle</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/chat</div><img src="img/vs-chat.jpg" alt="Nachrichten mit Chats und Mitteilungen" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Texte ersetzt</p>
+  </div></section>
+
+  <!-- 26 Mitfahrten -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verein › <b>Mitfahrten</b></p>
+      <h2>Mitfahrten</h2>
+      <p class="intent"><mark>Wer fährt, wer braucht einen Platz?</mark></p>
+      <ul class="points">
+        <li>Angebot oder Gesuch je Termin</li>
+        <li>Eltern und Trainer werden benachrichtigt</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-all">Alle</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/mitfahrgelegenheiten</div><img src="img/vs-mitfahrgelegenheiten.jpg" alt="Mitfahrten je Termin mit Fahrangeboten und Gesuchen" loading="lazy"></figure>
+    <p class="demo">Beispieldaten</p>
+  </div></section>
+
+  <!-- 27 Dokumente -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verein › <b>Dokumente</b></p>
+      <h2>Dokumente</h2>
+      <p class="intent"><mark>Satzung, Formulare, Spielpläne an einem Ort.</mark></p>
+      <ul class="points">
+        <li>Ordner mit Rechten für Funktion oder Team</li>
+        <li>Wer einen Ordner anlegt, behält immer Zugriff</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-all">Alle</span><span class="lbl">&nbsp;je nach Ordnerrecht</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/dokumente</div><img src="img/vs-dokumente.jpg" alt="Dokumente mit zwei Ordnern" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 28 Beitragslauf -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Verwaltung › <b>Beitragslauf</b></p>
+      <h2>Beitragslauf</h2>
+      <p class="intent"><mark>Beiträge per SEPA einziehen.</mark></p>
+      <ul class="points">
+        <li>Hinweise zeigen fehlende Mandate und Beitragssätze</li>
+        <li>Die SEPA-Datei entsteht im Browser</li>
+        <li>Bankdaten sind nur mit dem Tresor-Passwort lesbar</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-kasse">Kassierer</span><span class="chip c-vorstand">Vorstand</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/beitragslauf</div><img src="img/vs-beitragslauf.jpg" alt="Beitragslauf-Tabelle mit Hinweisen zu SEPA-Mandaten" loading="lazy"></figure>
+    <p class="demo">Beispieldaten · Namen anonymisiert</p>
+  </div></section>
+
+  <!-- 29 Saisons -->
+  <section class="slide-wrap"><div class="slide s-feature">
+    <div class="copy">
+      <p class="eyebrow">Einstellungen › <b>Saisons</b></p>
+      <h2>Saisons</h2>
+      <p class="intent"><mark>Die aktive Saison steuert alles.</mark></p>
+      <ul class="points">
+        <li>Ohne aktive Saison gibt es keine Spiele und keine Dienste</li>
+        <li>Kader gelten immer für eine Saison</li>
+        <li>Der Wechsel ist ein Klick: „Aktivieren“</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-vorstand">Vorstand</span></div>
+    </div>
+    <figure class="shot"><div class="urlbar">/einstellungen?tab=saisons</div><img src="img/vs-saisons.jpg" alt="Saisonliste mit aktiver Saison 2026/27" loading="lazy"></figure>
+    <p class="demo">Beispieldaten</p>
+  </div></section>
+
+  <!-- 30 Handy -->
+  <section class="slide-wrap"><div class="slide s-phones">
+    <div class="copy s-feature" style="display:flex;flex-direction:column;gap:1.8cqi;padding:4.4cqi 2.6cqi 3.6cqi 4.4cqi">
+      <p class="eyebrow">Browser › <b>Zum Home-Bildschirm</b></p>
+      <h2 style="font-size:3.6cqi;font-weight:800;letter-spacing:-0.025em;line-height:1.02">Unterwegs</h2>
+      <p class="intent"><mark>TeamWERK als App auf dem Handy.</mark></p>
+      <ul class="points">
+        <li>Seite öffnen und „Zum Home-Bildschirm“ wählen</li>
+        <li>Erst dann kommen Push-Meldungen, auf dem iPhone nur so</li>
+        <li>Einzelne Kategorien unter Profil abschaltbar</li>
+      </ul>
+      <div class="roles-row"><span class="lbl">für</span><span class="chip c-all">Alle</span></div>
+    </div>
+    <div class="phones">
+      <div class="phone"><img src="img/mob-dashboard.jpg" alt="Dashboard auf dem Handy" loading="lazy"></div>
+      <div class="phone"><img src="img/mob-termine.jpg" alt="Termine auf dem Handy" loading="lazy"></div>
+    </div>
+    <p class="demo">Beispieldaten</p>
+  </div></section>
+
+  <!-- 31 Außerdem -->
+  <section class="slide-wrap"><div class="slide s-text">
+    <h2>Außerdem im Tool</h2>
+    <div class="more">
+      <div><p class="eyebrow">Spielbetrieb › Videos</p><b>Videos</b><span>Spielaufnahmen fürs Team, streambar und per AirPlay</span></div>
+      <div><p class="eyebrow">Verein › Spielberichte</p><b>Spielberichte</b><span>Schreiben, prüfen, für die Homepage freigeben</span></div>
+      <div><p class="eyebrow">Verwaltung › Diensttypen</p><b>Diensttypen</b><span>Sekretär, Kamera, Bewirtung, jeweils mit Anleitung</span></div>
+      <div><p class="eyebrow">Verwaltung › Veranstaltungsorte</p><b>Hallen</b><span>Adressen, einmal gepflegt, überall verlinkt</span></div>
+      <div><p class="eyebrow">Verwaltung › Tresor</p><b>Tresor</b><span>Entsperrt die Bankdaten, nur für Vorstand und Kassierer</span></div>
+      <div><p class="eyebrow">unten links</p><b>Anleitung</b><span>Die Hilfe für jede Rolle, direkt in der App</span></div>
+    </div>
+  </div></section>
+
+  <!-- 32 Checkliste -->
+  <section class="slide-wrap"><div class="slide s-text">
+    <h2>Saisonstart in sechs Schritten</h2>
+    <ol class="steps">
+      <li><b>Saison anlegen und aktivieren</b><span>Einstellungen › Saisons</span></li>
+      <li><b>Spielplan importieren oder Termine anlegen</b><span>Kalender › + Event</span></li>
+      <li><b>Mannschaften anlegen, Stammkader kopieren</b><span>Kader › Aus vorheriger Saison kopieren</span></li>
+      <li><b>Dienstplan-Vorlagen prüfen</b><span>Dienstplan-Vorlagen · Heimspieltage</span></li>
+      <li><b>Trainer und erweiterten Kader neu setzen</b><span><span class="warn">werden nicht mitkopiert</span></span></li>
+      <li><b>Neue Mitglieder einladen</b><span>Nutzerverwaltung › + Neu</span></li>
+    </ol>
+  </div></section>
+
+  <!-- 33 Ende -->
+  <section class="slide-wrap"><div class="slide s-yellow s-title">
+    <div>
+      <p class="eyebrow"><b>Danke</b></p>
+      <h1>Fragen? <span>Jetzt ausprobieren.</span></h1>
+    </div>
+    <img class="logo" src="logo.svg" alt="Team Stuttgart Handball">
+    <div class="roles"><span>Anmelden</span><span>Kader prüfen</span><span>Funktion prüfen</span></div>
+    <p class="url">teamwerk.team-stuttgart.org · Anleitung: unten links in der App</p>
+  </div></section>
+
+</main>
+<div class="hint" id="hint">← → blättern · Esc beendet</div>
+
+<script>
+  const wraps = [...document.querySelectorAll('.slide-wrap')];
+  const body = document.body;
+  const count = document.getElementById('count');
+  const hint = document.getElementById('hint');
+  let cur = 0;
+  count.textContent = wraps.length + ' Folien';
+  wraps.forEach(w => { const s = w.querySelector('.slide'); s.tabIndex = -1; });
+
+  function show(i) {
+    cur = Math.max(0, Math.min(wraps.length - 1, i));
+    wraps.forEach((w, j) => w.classList.toggle('current', j === cur));
+    try { history.replaceState(null, '', '#' + (cur + 1)); } catch (e) {}
+  }
+  function mostVisible() {
+    let best = 0, bestVis = -1;
+    wraps.forEach((w, i) => {
+      const r = w.getBoundingClientRect();
+      const vis = Math.min(r.bottom, innerHeight) - Math.max(r.top, 0);
+      if (vis > bestVis) { bestVis = vis; best = i; }
+    });
+    return best;
+  }
+  function enter() {
+    show(mostVisible());
+    body.classList.add('present');
+    hint.classList.add('show');
+    setTimeout(() => hint.classList.remove('show'), 2500);
+    try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  }
+  function leave() {
+    body.classList.remove('present');
+    try { document.fullscreenElement && document.exitFullscreen(); } catch (e) {}
+    wraps[cur].scrollIntoView({ block: 'center' });
+  }
+  document.getElementById('present').addEventListener('click', enter);
+  document.addEventListener('keydown', e => {
+    if (!body.classList.contains('present')) {
+      if (e.key === 'p' || e.key === 'F5') { e.preventDefault(); enter(); }
+      return;
+    }
+    if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); show(cur + 1); }
+    else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); show(cur - 1); }
+    else if (e.key === 'Home') show(0);
+    else if (e.key === 'End') show(wraps.length - 1);
+    else if (e.key === 'Escape') leave();
+  });
+  document.getElementById('deck').addEventListener('click', e => {
+    if (!body.classList.contains('present')) return;
+    show(e.clientX > innerWidth / 2 ? cur + 1 : cur - 1);
+  });
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && body.classList.contains('present')) leave();
+  });
+  const start = parseInt(location.hash.slice(1), 10);
+  if (start > 1 && start <= wraps.length) wraps[start - 1].scrollIntoView({ block: 'start' });
+</script>
