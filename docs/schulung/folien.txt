@@ -26,42 +26,42 @@ vorher:
   WhatsApp-Gruppe pro Team
   Kaderlisten in Excel
   Dienstplan in Google Sheets
-  Zu- und Absagen per Zuruf
+  Zu- und Absagen per WhatsApp
   E-Mail-Verteiler von Hand
 nachher:
-  Ein Ort.
-  Eine Wahrheit.
+  Zentrales einheitliches System
+  für alle
 text: Termine, Kader, Dienste und Nachrichten hängen zusammen. Wer im Kader steht, bekommt automatisch die richtigen Termine, Meldungen und Dienste.
 
 ---
 typ: aussagen
 titel: Was es euch bringt
-- Weniger hinterher&shy;telefonieren
+- Weniger hinterher&shy;laufen
   Zu- und Absagen kommen von selbst. Ihr seht vor dem Training, wer kommt.
 - Faire Dienste
   Jede Familie sieht ihren Anteil. Die Rangliste ersetzt die Diskussion.
-- Sichere Daten
-  Jeder sieht nur, was zu seiner Funktion passt. Bankdaten sind verschlüsselt.
+- Eingebauter Datenschutz
+  Jeder sieht nur, was zu seiner Funktion und seinem Team passt. Verschlüsselung sensibler Daten. Opt-In.
 
 # ════════════════════════════════════════════════════════════════════
 ---
 typ: kapitel
 teil: Teil 1
 titel: Der Kern
-text: Saison, Kader, Team und die Menschen dahinter. Wer das versteht, versteht das ganze Tool.
+text: Saison, Kader, Team und die Menschen bilden die Basis des Tools.
 
 ---
 typ: modell
 titel: Saison → Kader → Team
 - Saison: 2026/27
-  Genau eine ist aktiv. Sie bestimmt, welche Kader gelten.
+  Klammer für die aktiven Kader und Teams.
 - Kader: B-Jugend männlich 2
   Stammkader = Termine · Dienstpflicht
-  Erweiterter Kader = Termine · keine Dienste
+  Erweiterter Kader = Termine · keine Dienstpflicht
   Trainer = Rechte fürs Team
 - Team: mB2
   Spiele, Dienste, Kasse, Strafen, Videos, Ordner
-notiz: **Übungsgruppe** = Kader ohne Team. Sie hat nur Trainings, keine Spiele, Dienste oder Kasse.
+notiz: **Übungsgruppe** = Sonderform eines Teams. Kennt nur Trainings.
 
 ---
 typ: funktion
@@ -69,7 +69,7 @@ weg: Verwaltung › Kader
 titel: Kader
 absicht: Wer spielt diese Saison in welcher Mannschaft?
 - Saison oben wählen, dann Mannschaft
-- „Aus vorheriger Saison kopieren“ übernimmt nur den Stammkader
+- „Aus vorheriger Saison kopieren“ übernimmt den Stammkader
 - Trainer und erweiterten Kader jede Saison neu setzen
 rollen: Vorstand, Trainer
 bild: vs-kader | /kader
@@ -94,7 +94,7 @@ verbindung: verknüpft
   E-Mail, Passwort, Benachrichtigungen
 - Mitglied: Wer im Verein ist
   Stammdaten, Status, Beitrag, Kader, Vereinsfunktion
-- Spielerin, 17
+- Spielerin, 15
   Eigener Nutzer, mit ihrem Mitglied verknüpft
 - Kind, 9
   Kein eigener Login. Die Eltern sehen es über „Familie“.
