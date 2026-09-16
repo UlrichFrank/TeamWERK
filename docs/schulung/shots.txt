@@ -24,6 +24,7 @@ vorstand | /                                   | vs-dashboard
 vorstand | /kalender                           | vs-kalender
 vorstand | /termine                            | vs-termine
 trainer  | /termine/spiel/{trainer_game}       | tr-termin_detail
+vorstand | /videos                             | vs-videos
 trainer  | /anwesenheit                        | tr-anwesenheit
 trainer  | /trainingstagebuch                  | tr-trainingstagebuch
 trainer  | /mein-team?team={trainer_team}      | tr-mein_team_detail
@@ -32,6 +33,7 @@ vorstand | /dienste/rangliste                  | vs-dienste_rangliste
 vorstand | /dienstplan-vorlagen                | vs-dienstplan_vorlagen
 vorstand | /einstellungen?tab=heimspieltage    | vs-heimspieltage
 vorstand | /chat                               | vs-chat
+vorstand | /spielberichte/pruefen              | vs-spielberichte_pruefen
 vorstand | /mitfahrgelegenheiten               | vs-mitfahrgelegenheiten
 vorstand | /dokumente                          | vs-dokumente
 vorstand | /beitragslauf                       | vs-beitragslauf

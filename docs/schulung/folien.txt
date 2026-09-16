@@ -214,6 +214,18 @@ bild: tr-termin_detail | /termine/spiel/…
 
 ---
 typ: funktion
+weg: Spielbetrieb › Videos
+titel: Videos
+absicht: Spielaufnahmen fürs Team.
+- Streamen direkt im Browser, Weitergabe per AirPlay/Chromecast
+- Hochladen mit dem Video-Encoder (Desktop-Tool), Konvertierung läuft danach im Hintergrund
+- Sichtbar nur für die eigene Mannschaft
+rollen: Alle
+rollen-zusatz: Hochladen: Trainer
+bild: vs-videos | /videos
+
+---
+typ: funktion
 weg: Spielbetrieb › Anwesenheit
 titel: Anwesenheit
 absicht: Wer war wirklich da?
@@ -308,6 +320,18 @@ hinweis: Beispieldaten · Texte ersetzt
 
 ---
 typ: funktion
+weg: Verein › Spielberichte
+titel: Spielberichte
+absicht: Vom Entwurf zur Vereins-Website.
+- Presseteam schreibt den Entwurf und reicht ihn zur Prüfung ein
+- Medien oder Vorstand prüfen, korrigieren und veröffentlichen
+- Geht danach live auf die Homepage
+rollen-text: prüfen
+rollen: Medien, Vorstand
+bild: vs-spielberichte_pruefen | /spielberichte/pruefen
+
+---
+typ: funktion
 weg: Verein › Mitfahrten
 titel: Mitfahrten
 absicht: Wer fährt, wer braucht einen Platz?
@@ -366,12 +390,6 @@ hinweis: Beispieldaten
 ---
 typ: liste
 titel: Außerdem im Tool
-- Videos
-  weg: Spielbetrieb › Videos
-  Spielaufnahmen fürs Team, streambar und per AirPlay
-- Spielberichte
-  weg: Verein › Spielberichte
-  Schreiben, prüfen, für die Homepage freigeben
 - Diensttypen
   weg: Verwaltung › Diensttypen
   Sekretär, Kamera, Bewirtung, jeweils mit Anleitung
