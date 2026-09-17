@@ -584,9 +584,10 @@ func TestMemberDiary_SportlicheLeitung(t *testing.T) {
 	}
 }
 
-// vorstand ist bewusst NICHT leseberechtigt — gleichgezogen mit der
-// Anwesenheitsstatistik.
-func TestMemberDiary_VorstandForbidden(t *testing.T) {
+// vorstand liest hier mit — anders als bei der Anwesenheitsstatistik, wo
+// vorstand bewusst außen vor bleibt (Vereinsverwaltung braucht beim
+// Trainingstagebuch denselben Überblick wie die sportliche Leitung).
+func TestMemberDiary_VorstandAllowed(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "25/26")
 	srv, _ := newDiaryServer(t, db)
@@ -600,8 +601,8 @@ func TestMemberDiary_VorstandForbidden(t *testing.T) {
 
 	resp := testutil.Do(t, srv, http.MethodGet, fmt.Sprintf("/api/members/%d/training-diary", targetMember), vToken, nil)
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
 }
 

@@ -309,8 +309,14 @@ func NavFor(p *Principal) []NavItem {
 	// Anwesenheits-Statistik nur für Trainer / sportliche Leitung / Admin.
 	if IsTrainerLike(p) {
 		nav = append(nav, NavItem{"Anwesenheit", "/anwesenheit"})
-		// Mannschaftsübersicht des Trainingstagebuchs — dieselbe Zielgruppe
-		// wie die Anwesenheitsstatistik.
+	}
+	// Mannschaftsübersicht des Trainingstagebuchs: dieselbe Zielgruppe wie die
+	// Anwesenheitsstatistik, zusätzlich Vorstand — der liest hier über alle
+	// Mannschaften mit (canReadMemberDiary/canSeeTeamDiary), weil
+	// Vereinsverwaltung denselben Überblick wie die sportliche Leitung
+	// braucht. Anders als bei Anwesenheit, wo Vorstand bewusst außen vor
+	// bleibt.
+	if IsTrainerLike(p) || IsVorstandLike(p) {
 		nav = append(nav, NavItem{"Trainingstagebuch", "/trainingstagebuch"})
 	}
 	// Eigenes Trainingstagebuch: ausschließlich für Spieler. Ein Mitglieds-
@@ -343,11 +349,13 @@ func NavFor(p *Principal) []NavItem {
 	if IsTrainerLike(p) || IsVorstandLike(p) {
 		nav = append(nav, NavItem{"Kader", "/kader"})
 	}
-	// Übungsgruppen sind ein reines Verwaltungsobjekt des Vorstands — Anlage,
-	// Umbenennung, Besetzung. Trainer sehen ihre Termine über den Kalender,
-	// pflegen die Gruppe aber nicht (die Routen liegen im Vorstand-Tier).
-	if IsVorstandLike(p) {
+	// Übungsgruppen: äquivalent zum Kader auch für Trainer/sportliche Leitung
+	// sichtbar — sie legen ihre eigenen Gruppen an, statt dafür den Vorstand zu
+	// brauchen (die Routen liegen jetzt im selben Tier wie /api/kader).
+	if IsTrainerLike(p) || IsVorstandLike(p) {
 		nav = append(nav, NavItem{"Übungsgruppen", "/uebungsgruppen"})
+	}
+	if IsVorstandLike(p) {
 		nav = append(nav, NavItem{"Nutzerverwaltung", "/nutzer"})
 	}
 	// Mitglieder + Beitragslauf + Einstellungen: auch für Kassierer sichtbar.

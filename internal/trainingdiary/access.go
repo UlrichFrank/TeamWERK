@@ -8,13 +8,15 @@ import (
 )
 
 // Die Zugriffsregeln spiegeln bewusst attendance.canSeeMemberStats /
-// canSeeTeamStats. Kopiert statt importiert, weil der Architektur-Test
-// Domain→Domain-Importe verbietet — die Auflösung von Trainern gegen den Kader
-// der AKTIVEN Saison ist derselbe Mechanismus, damit ein Kaderwechsel den
-// Zugriff sofort und ohne Nachpflege entzieht.
+// canSeeTeamStats, mit einer Ausnahme: `vorstand` liest hier zusätzlich mit
+// (Attendance schließt vorstand weiter aus). Kopiert statt importiert, weil
+// der Architektur-Test Domain→Domain-Importe verbietet — die Auflösung von
+// Trainern gegen den Kader der AKTIVEN Saison ist derselbe Mechanismus, damit
+// ein Kaderwechsel den Zugriff sofort und ohne Nachpflege entzieht.
 //
-// Bewusst NICHT enthalten: `vorstand` und `kassierer`. Das Tagebuch ist
-// persönlich; Vereinsverwaltung begründet keinen Lesezugriff.
+// `vorstand` sieht das Trainingstagebuch wie `sportliche_leitung` über alle
+// Mannschaften — Vereinsverwaltung braucht hier denselben Überblick.
+// `kassierer` bleibt bewusst außen vor: keine sportliche Funktion.
 
 // isPlayer prüft die Vereinsfunktion `spieler`. Bewusst OHNE Admin-Bypass: es
 // geht um das persönliche Tagebuch des Aufrufers, nicht um ein Verwaltungsrecht
@@ -39,13 +41,13 @@ func (h *Handler) resolveOwnMember(ctx context.Context, claims *auth.Claims) (in
 
 // canReadMemberDiary prüft den Lesezugriff auf das Tagebuch eines Mitglieds:
 // das Mitglied selbst, ein Elternteil via family_links, ein Trainer des Kaders
-// in der aktiven Saison (Stamm- oder erweiterter Kader), sportliche_leitung
-// oder admin.
+// in der aktiven Saison (Stamm- oder erweiterter Kader), sportliche_leitung,
+// vorstand oder admin.
 func (h *Handler) canReadMemberDiary(ctx context.Context, claims *auth.Claims, memberID int) (bool, error) {
 	if claims == nil {
 		return false, nil
 	}
-	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
+	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") || claims.HasFunction("vorstand") {
 		return true, nil
 	}
 
@@ -97,12 +99,13 @@ func (h *Handler) canReadMemberDiary(ctx context.Context, claims *auth.Claims, m
 }
 
 // canSeeTeamDiary prüft den Zugriff auf die Mannschaftsübersicht: admin,
-// sportliche_leitung oder Trainer dieser Mannschaft in der aktiven Saison.
+// sportliche_leitung, vorstand oder Trainer dieser Mannschaft in der aktiven
+// Saison.
 func (h *Handler) canSeeTeamDiary(ctx context.Context, claims *auth.Claims, teamID int) (bool, error) {
 	if claims == nil {
 		return false, nil
 	}
-	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") {
+	if claims.Role == "admin" || claims.HasFunction("sportliche_leitung") || claims.HasFunction("vorstand") {
 		return true, nil
 	}
 	if !claims.HasFunction("trainer") {

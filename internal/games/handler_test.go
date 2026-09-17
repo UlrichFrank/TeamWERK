@@ -967,14 +967,22 @@ func TestListTeamsForUser_SpielerSeesOwnTeam(t *testing.T) {
 	}
 }
 
-// TestListTeamsForUser_VorstandTrainerScopeStats verifies that a user who is
-// both vorstand and trainer gets only their own trainer teams for
-// ?scope=stats — the same teams canSeeTeamStats/canReadMemberDiary actually
-// allow. Without the scope filter, the vorstand branch would return every
-// team in the club (including ones this user does not train), and the
-// Anwesenheits-/Trainingstagebuch-Teamselektor would default to a team whose
-// stats endpoint then answers 403 (Bug: Marko Baisch, Vorstand+Trainer,
-// "Statistik konnte nicht geladen werden").
+// TestListTeamsForUser_VorstandTrainerScopeStats verifies the two dedicated
+// team-selector scopes for a user who is both vorstand and trainer of only
+// one of two teams.
+//
+// scope=attendance-stats mirrors attendance.canSeeTeamStats, which excludes
+// vorstand — so only the user's own trainer team comes back. Without this
+// scope filter, the vorstand branch would return every team in the club
+// (including ones this user does not train), and the
+// Anwesenheits-Teamselektor would default to a team whose stats endpoint
+// then answers 403 (Bug: Marko Baisch, Vorstand+Trainer, "Statistik konnte
+// nicht geladen werden").
+//
+// scope=diary-stats mirrors trainingdiary.canSeeTeamDiary, which — unlike
+// attendance — DOES let vorstand read across all teams, gleichgezogen mit
+// sportliche_leitung. So this scope returns the full club list for the same
+// vorstand+trainer user.
 func TestListTeamsForUser_VorstandTrainerScopeStats(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -990,7 +998,7 @@ func TestListTeamsForUser_VorstandTrainerScopeStats(t *testing.T) {
 	srv := teamsServer(t, db)
 	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer", "vorstand"})
 
-	// Without scope=stats, vorstand sees the whole club (existing behavior).
+	// Without a scope, vorstand sees the whole club (existing behavior).
 	res := testutil.Get(t, srv, "/api/teams", token)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
@@ -1002,19 +1010,31 @@ func TestListTeamsForUser_VorstandTrainerScopeStats(t *testing.T) {
 		t.Fatalf("vorstand without scope: expected 2 teams, got %d", len(allTeams))
 	}
 
-	// With scope=stats, only the team this user actually trains comes back.
-	res = testutil.Get(t, srv, "/api/teams?scope=stats", token)
+	// scope=attendance-stats: only the team this user actually trains.
+	res = testutil.Get(t, srv, "/api/teams?scope=attendance-stats", token)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
 	}
-	var statsTeams []map[string]any
-	json.NewDecoder(res.Body).Decode(&statsTeams)
+	var attendanceTeams []map[string]any
+	json.NewDecoder(res.Body).Decode(&attendanceTeams)
 	res.Body.Close()
-	if len(statsTeams) != 1 {
-		t.Fatalf("vorstand+trainer scope=stats: expected 1 team, got %d", len(statsTeams))
+	if len(attendanceTeams) != 1 {
+		t.Fatalf("vorstand+trainer scope=attendance-stats: expected 1 team, got %d", len(attendanceTeams))
 	}
-	if int(statsTeams[0]["id"].(float64)) != teamA {
-		t.Errorf("expected team A (id=%d), got id=%.0f", teamA, statsTeams[0]["id"])
+	if int(attendanceTeams[0]["id"].(float64)) != teamA {
+		t.Errorf("expected team A (id=%d), got id=%.0f", teamA, attendanceTeams[0]["id"])
+	}
+
+	// scope=diary-stats: vorstand reads across all teams, like sportliche_leitung.
+	res = testutil.Get(t, srv, "/api/teams?scope=diary-stats", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var diaryTeams []map[string]any
+	json.NewDecoder(res.Body).Decode(&diaryTeams)
+	res.Body.Close()
+	if len(diaryTeams) != 2 {
+		t.Errorf("vorstand+trainer scope=diary-stats: expected 2 teams, got %d", len(diaryTeams))
 	}
 }
 

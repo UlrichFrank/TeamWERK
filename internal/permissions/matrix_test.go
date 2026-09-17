@@ -194,15 +194,17 @@ var exDiaryOwnMember = map[string]int{
 }
 
 // Handler-Level-Gate: trainingdiary.canReadMemberDiary / canSeeTeamDiary —
-// admin || sportliche_leitung || isOwn || isParent || Trainer des Kaders.
-// Mit Member-/Team-ID 1 (keiner Persona zugeordnet) bleiben isOwn, isParent
-// und die Trainer-Bedingung falsch → nur admin und sportliche_leitung kommen
-// durch. `vorstand` und `kassierer` sind hier bewusst NICHT dabei.
+// admin || sportliche_leitung || vorstand || isOwn || isParent || Trainer des
+// Kaders. Mit Member-/Team-ID 1 (keiner Persona zugeordnet) bleiben isOwn,
+// isParent und die Trainer-Bedingung falsch → nur admin, sportliche_leitung
+// und vorstand kommen durch. `vorstand_beisitzer` (eigene, engere
+// Vereinsfunktion) und `kassierer` sind hier bewusst NICHT dabei.
 var exDiaryReadACL = map[string]int{
 	"admin":              httpAllowed,
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
-	"vorstand": 403, "vorstand_elternteil": 403, "vorstand_beisitzer": 403,
-	"kassierer": 403, "trainer": 403, "trainer_elternteil": 403,
+	"vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
+	"vorstand_beisitzer": 403,
+	"kassierer":          403, "trainer": 403, "trainer_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
 }
 

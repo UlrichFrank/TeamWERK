@@ -108,8 +108,8 @@ export default function App() {
               {/* Eigenes Tagebuch: nur Spieler. Eltern erreichen die Tagebücher
                   ihrer Kinder über den Tab auf der Kind-Profilseite. */}
               <Route path="profil/trainingstagebuch" element={<RoleRoute roles={['spieler']}><ProfilTrainingstagebuchPage /></RoleRoute>} />
-              <Route path="trainingstagebuch" element={<RoleRoute roles={['admin','trainer','sportliche_leitung']}><TeamTrainingstagebuchPage /></RoleRoute>} />
-              <Route path="team/:id/trainingstagebuch" element={<RoleRoute roles={['admin','trainer','sportliche_leitung']}><TeamTrainingstagebuchPage /></RoleRoute>} />
+              <Route path="trainingstagebuch" element={<RoleRoute roles={['admin','trainer','sportliche_leitung','vorstand']}><TeamTrainingstagebuchPage /></RoleRoute>} />
+              <Route path="team/:id/trainingstagebuch" element={<RoleRoute roles={['admin','trainer','sportliche_leitung','vorstand']}><TeamTrainingstagebuchPage /></RoleRoute>} />
               <Route path="dokumente" element={<DocumentsPage />} />
               <Route path="dokumente/datei/:fileId" element={<DocumentFileLinkPage />} />
               <Route path="dokumente/anzeigen/:fileId" element={<FileViewerPage />} />
@@ -128,7 +128,7 @@ export default function App() {
               <Route path="beitragslauf" element={<RoleRoute roles={['admin','vorstand','kassierer']}><BeitragslaufPage /></RoleRoute>} />
               <Route path="tresor" element={<RoleRoute roles={['admin','vorstand','kassierer']}><TresorPage /></RoleRoute>} />
               <Route path="kader" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><AdminKaderPage /></RoleRoute>} />
-              <Route path="uebungsgruppen" element={<RoleRoute roles={['admin','vorstand']}><UebungsgruppenPage /></RoleRoute>} />
+              <Route path="uebungsgruppen" element={<RoleRoute roles={['admin','vorstand','trainer','sportliche_leitung']}><UebungsgruppenPage /></RoleRoute>} />
               <Route path="nutzer" element={<RoleRoute roles={['admin','vorstand']}><AdminUsersPage /></RoleRoute>} />
               <Route path="diensttypen" element={<RoleRoute roles={['admin','vorstand']}><AdminDutyTypesPage /></RoleRoute>} />
               <Route path="kalender" element={<KalenderPage />} />

@@ -1683,16 +1683,25 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	const activeSeasonSub = `(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
 	const groupCountSub = `(SELECT COUNT(*) FROM kader k2 WHERE k2.season_id=k.season_id AND k2.age_class=k.age_class AND k2.gender=k.gender)`
 
+	// Teamselektoren der Anwesenheits- und Trainingstagebuch-Statistikseiten:
+	// beide navigieren beim Laden auf das erste zurückgegebene Team, das dann
+	// gegen canSeeTeamStats (attendance) bzw. canSeeTeamDiary (trainingdiary)
+	// geprüft wird. Die beiden Checks sind NICHT mehr deckungsgleich —
+	// canSeeTeamDiary lässt vorstand seit "trainingstagebuch-vorstand-sicht"
+	// wie sportliche_leitung über alle Mannschaften lesen, canSeeTeamStats
+	// (Anwesenheit) bewusst weiterhin nicht. Ein einzelner scope=stats-Wert
+	// könnte deshalb für die eine Seite zu viele, für die andere zu wenige
+	// Teams liefern; die beiden Scopes bleiben deshalb getrennt.
+	scope := r.URL.Query().Get("scope")
+	trainerOnlyTeams := (scope == "attendance-stats" || scope == "diary-stats") &&
+		claims.Role != "admin" && !claims.HasFunction("sportliche_leitung") &&
+		!(scope == "diary-stats" && claims.HasFunction("vorstand"))
+
 	var rows *sql.Rows
 	var err error
-	if r.URL.Query().Get("scope") == "stats" && claims.Role != "admin" && !claims.HasFunction("sportliche_leitung") {
-		// Anwesenheits-/Trainingstagebuch-Teamselektor: canSeeTeamStats/
-		// canReadMemberDiary lassen "nur vorstand" bewusst nicht durch (das
-		// Tagebuch ist persönlich, Anwesenheits-Details sind es faktisch auch).
-		// Ein Vorstand, der zugleich Trainer ist, darf hier deshalb nur seine
-		// eigenen Teams sehen, nicht den vollen Vereinskader aus dem
-		// admin/vorstand-Zweig unten — sonst zeigt der Selektor Teams an, für
-		// die derselbe Request danach mit 403 abgewiesen wird.
+	if trainerOnlyTeams {
+		// Nur die eigenen Trainer-Teams — sonst zeigt der Selektor Teams an,
+		// für die derselbe Request danach mit 403 abgewiesen wird.
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
 			 FROM teams t

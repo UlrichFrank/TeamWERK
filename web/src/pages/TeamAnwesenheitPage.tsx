@@ -178,7 +178,7 @@ export default function TeamAnwesenheitPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.get('/teams?scope=stats').then(r => {
+    api.get('/teams?scope=attendance-stats').then(r => {
       const list: TeamRef[] = r.data ?? []
       setTeams(list)
       // Ohne explizit gewähltes Team direkt auf das erste verfügbare springen.
