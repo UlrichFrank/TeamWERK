@@ -9,14 +9,14 @@ Diese Spezifikation beschreibt die Capability `termine-unified-view`. (Automatis
 Die `/termine`-Seite SHALL ihren Filterzustand vollständig über URL-Query-Parameter abbilden. Beim Mount liest sie die Parameter aus `useSearchParams()` und initialisiert daraus den State. Jede Änderung an Filtern (Team-Auswahl, Termin-Typen, Vergangene anzeigen, Textfilter) MUSS die URL via `setSearchParams()` (Replace, nicht Push) aktualisieren, sodass die Seite per Browser-Back/Forward navigierbar und per Link teilbar ist.
 
 Unterstützte Parameter:
-- `team` (kommaseparierte Liste numerischer Team-IDs, z.B. `team=3` oder `team=3,7`; fehlt → kein Team-Filter). Ein Termin passt, wenn er mindestens einer der gewählten Mannschaften zugeordnet ist.
+- `team` (kommaseparierte Liste numerischer IDs, z.B. `team=3` oder `team=3,-7`; fehlt → kein Filter). Ein Termin passt, wenn er mindestens einer der gewählten Mannschaften oder Übungsgruppen zugeordnet ist. Neben Mannschafts-IDs (positiv, `teams.id`) nimmt die Liste auch Übungsgruppen-IDs auf, negativ kodiert als `-kader_id` (Details und Matching-Regel: Capability `uebungsgruppen-termin-filter`).
 - `types` (kommaseparierte Werte aus `training`, `heim`, `auswaerts`, `generisch`; fehlt → alle Typen aktiv, identisch zum bisherigen Default)
 - `past` (`1` zeigt vergangene Termine, default `0`)
 - `q` (Freitext-Filterausdruck; fehlt oder leer → kein Textfilter. Auswertung siehe Capability `termin-textfilter`)
 
 Ungültige oder unbekannte Werte SHALL ignoriert und der jeweilige Filter auf seinen Default zurückgesetzt werden — ohne Fehlermeldung. Für `q` gibt es keine ungültigen Werte: jeder Zeichenketten-Inhalt ist ein zulässiger Filterausdruck, ein Ausdruck ohne Treffer führt zu einer leeren Liste, nicht zu einem Fehler.
 
-Der Team-Filter SHALL als Dropdown mit Checkboxen bedienbar sein — in derselben Form wie der Typ-Filter im Compact-Modus — und auf jeder Bildschirmbreite erreichbar sein. Die leere Auswahl und die vollständige Auswahl sind derselbe Zustand („kein Filter"): wählt der Nutzer die letzte verbliebene Mannschaft ab oder hakt er alle an, SHALL `team` aus der URL verschwinden und die Kästchen SHALL wieder alle als angehakt erscheinen. Dieses Verhalten ist mit dem des Typ-Filters identisch.
+Der Team-Filter SHALL als Dropdown mit Checkboxen bedienbar sein — in derselben Form wie der Typ-Filter im Compact-Modus — und auf jeder Bildschirmbreite erreichbar sein. Die leere Auswahl und die vollständige Auswahl sind derselbe Zustand („kein Filter"): wählt der Nutzer die letzte verbliebene Mannschaft oder Übungsgruppe ab oder hakt er alle an, SHALL `team` aus der URL verschwinden und die Kästchen SHALL wieder alle als angehakt erscheinen. Dieses Verhalten ist mit dem des Typ-Filters identisch.
 
 Anders als die übrigen Filter SHALL `q` die URL **verzögert** aktualisieren (~250 ms nach dem letzten Tastenanschlag), während die Liste unmittelbar gefiltert wird. Damit entsteht kein URL-Schreibvorgang pro Zeichen.
 
@@ -29,6 +29,10 @@ Anders als die übrigen Filter SHALL `q` die URL **verzögert** aktualisieren (~
 - **WHEN** ein User `/termine?team=3,7` aufruft
 - **THEN** zeigt die Liste Termine der Teams 3 und 7 und keine anderen
 - **THEN** sind im Dropdown genau diese beiden Mannschaften angehakt
+
+#### Scenario: Page lädt mit einer Übungsgruppe aus URL
+- **WHEN** ein User `/termine?team=-5` aufruft (Übungsgruppe mit `kader_id=5`)
+- **THEN** zeigt die Liste ausschließlich die Trainingstermine dieser Übungsgruppe
 
 #### Scenario: Letzte Mannschaft abgewählt
 - **WHEN** ein User im Team-Dropdown die letzte noch angehakte Mannschaft abwählt
