@@ -802,7 +802,7 @@ export default function AdminUsersPage() {
                       {req.is_child ? (req.parent_email || req.email) : req.email}
                       {req.is_child && <span className="block text-xs text-brand-text-subtle">Eltern-E-Mail</span>}
                     </td>
-                    <td className="hidden lg:table-cell px-4 py-3 text-brand-text-subtle text-xs">{req.comment || '–'}</td>
+                    <td className="hidden md:table-cell px-4 py-3 text-brand-text-subtle text-xs">{req.comment || '–'}</td>
                     <td className="px-4 py-3">
                       <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-yellow text-brand-black">Anfrage</span>
                     </td>
@@ -829,7 +829,7 @@ export default function AdminUsersPage() {
                         )}
                       </td>
                       <td className="hidden md:table-cell px-4 py-3 text-brand-text-subtle">{ROLE_LABELS[inv.role] || inv.role}</td>
-                      <td className="hidden lg:table-cell px-4 py-3 text-brand-text-subtle text-xs">{inv.comment || '–'}</td>
+                      <td className="hidden md:table-cell px-4 py-3 text-brand-text-subtle text-xs">{inv.comment || '–'}</td>
                       <td className="px-4 py-3">
                         {feedback ? (
                           <span className={`text-xs font-medium ${feedback.ok ? 'text-brand-info' : 'text-brand-danger'}`}>{feedback.msg}</span>
