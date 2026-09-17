@@ -1685,7 +1685,23 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 
 	var rows *sql.Rows
 	var err error
-	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+	if r.URL.Query().Get("scope") == "stats" && claims.Role != "admin" && !claims.HasFunction("sportliche_leitung") {
+		// Anwesenheits-/Trainingstagebuch-Teamselektor: canSeeTeamStats/
+		// canReadMemberDiary lassen "nur vorstand" bewusst nicht durch (das
+		// Tagebuch ist persönlich, Anwesenheits-Details sind es faktisch auch).
+		// Ein Vorstand, der zugleich Trainer ist, darf hier deshalb nur seine
+		// eigenen Teams sehen, nicht den vollen Vereinskader aus dem
+		// admin/vorstand-Zweig unten — sonst zeigt der Selektor Teams an, für
+		// die derselbe Request danach mit 403 abgewiesen wird.
+		rows, err = h.db.QueryContext(r.Context(),
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
+			 FROM teams t
+			 JOIN kader k ON k.team_id = t.id
+			 JOIN kader_trainers kt ON kt.kader_id = k.id
+			 JOIN members m ON m.id = kt.member_id
+			 WHERE k.season_id = `+activeSeasonSub+` AND m.user_id = ?
+			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`, claims.UserID)
+	} else if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
 			 FROM teams t

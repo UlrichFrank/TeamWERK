@@ -24,7 +24,7 @@ export default function TeamTrainingstagebuchPage() {
 
   useEffect(() => {
     api
-      .get<TeamRef[]>('/teams')
+      .get<TeamRef[]>('/teams?scope=stats')
       .then(r => {
         const list = r.data ?? []
         setTeams(list)

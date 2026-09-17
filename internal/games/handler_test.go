@@ -967,6 +967,57 @@ func TestListTeamsForUser_SpielerSeesOwnTeam(t *testing.T) {
 	}
 }
 
+// TestListTeamsForUser_VorstandTrainerScopeStats verifies that a user who is
+// both vorstand and trainer gets only their own trainer teams for
+// ?scope=stats — the same teams canSeeTeamStats/canReadMemberDiary actually
+// allow. Without the scope filter, the vorstand branch would return every
+// team in the club (including ones this user does not train), and the
+// Anwesenheits-/Trainingstagebuch-Teamselektor would default to a team whose
+// stats endpoint then answers 403 (Bug: Marko Baisch, Vorstand+Trainer,
+// "Statistik konnte nicht geladen werden").
+func TestListTeamsForUser_VorstandTrainerScopeStats(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamB := testutil.CreateTeam(t, db, "Team B") // not linked to trainer
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.CreateKader(t, db, teamB, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+
+	srv := teamsServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer", "vorstand"})
+
+	// Without scope=stats, vorstand sees the whole club (existing behavior).
+	res := testutil.Get(t, srv, "/api/teams", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var allTeams []map[string]any
+	json.NewDecoder(res.Body).Decode(&allTeams)
+	res.Body.Close()
+	if len(allTeams) != 2 {
+		t.Fatalf("vorstand without scope: expected 2 teams, got %d", len(allTeams))
+	}
+
+	// With scope=stats, only the team this user actually trains comes back.
+	res = testutil.Get(t, srv, "/api/teams?scope=stats", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var statsTeams []map[string]any
+	json.NewDecoder(res.Body).Decode(&statsTeams)
+	res.Body.Close()
+	if len(statsTeams) != 1 {
+		t.Fatalf("vorstand+trainer scope=stats: expected 1 team, got %d", len(statsTeams))
+	}
+	if int(statsTeams[0]["id"].(float64)) != teamA {
+		t.Errorf("expected team A (id=%d), got id=%.0f", teamA, statsTeams[0]["id"])
+	}
+}
+
 // TestListDutyTemplates_TrainerCanRead verifies that a user with club_function=trainer
 // can list duty templates (GET /api/duty-templates returns 200).
 func TestListDutyTemplates_TrainerCanRead(t *testing.T) {
