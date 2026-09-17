@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -521,8 +522,27 @@ type reminderUser struct {
 	name  string
 }
 
+// dutyReminderOffsets sind die Tage vor dem Event, an denen eligible User für
+// weiterhin offene Duty-Slots erinnert werden. Jeder Offset ist unabhängig und
+// wiederkehrend: bleibt ein Slot über mehrere dieser Zeitpunkte hinweg offen,
+// wird derselbe User bei jedem erneut erinnert (Eskalation über die Woche,
+// kein "einmal erinnert, nie wieder" — siehe duty-reminder-eskalation/design.md).
+var dutyReminderOffsets = []int{7, 3, 2, 1}
+
+// boardOverviewOffsets sind die (engeren) Zeitpunkte, an denen der Vorstand
+// zusätzlich eine vereinsweite Übersicht über offene Duty-Slots bekommt, um
+// ggf. manuell einzugreifen — bewusst eine Teilmenge von dutyReminderOffsets,
+// weil es reine Eskalation kurz vor dem Termin ist.
+var boardOverviewOffsets = []int{3, 1}
+
 func (s *Scheduler) sendDutyReminders() {
-	targetDate := time.Now().AddDate(0, 0, 2).Format("2006-01-02")
+	for _, offset := range dutyReminderOffsets {
+		s.sendDutyRemindersForOffset(offset)
+	}
+}
+
+func (s *Scheduler) sendDutyRemindersForOffset(offset int) {
+	targetDate := time.Now().AddDate(0, 0, offset).Format("2006-01-02")
 
 	rows, err := s.db.Query(`
 		SELECT ds.id, ds.event_name, ds.event_date, COALESCE(ds.event_time,''),
@@ -534,7 +554,7 @@ func (s *Scheduler) sendDutyReminders() {
 		  AND ds.slots_filled < ds.slots_total`, targetDate)
 	if err != nil {
 		logIfBusy(err, "sendDutyReminders.query")
-		slog.Error("scheduler duty reminders query slots failed", "error", err)
+		slog.Error("scheduler duty reminders query slots failed", "error", err, "days_before", offset)
 		return
 	}
 	defer rows.Close()
@@ -572,14 +592,14 @@ func (s *Scheduler) sendDutyReminders() {
 		// Email reminder (opt-in via notification_preferences)
 		if push.HasEmailEnabled(s.db, uid, "duty_reminders") {
 			var exists int
-			s.db.QueryRow(`SELECT 1 FROM duty_reminder_log WHERE user_id=? AND event_date=?`, uid, targetDate).Scan(&exists)
+			s.db.QueryRow(`SELECT 1 FROM duty_reminder_log WHERE user_id=? AND event_date=? AND days_before=?`, uid, targetDate, offset).Scan(&exists)
 			if exists == 0 {
-				body := buildReminderMail(u.name, targetDate, uSlots, s.cfg.BaseURL)
-				subject := fmt.Sprintf("Offene Dienste am %s", formatDate(targetDate))
+				body := buildReminderMail(u.name, targetDate, uSlots, offset, s.cfg.BaseURL)
+				subject := fmt.Sprintf("Offene Dienste am %s (%s)", formatDate(targetDate), formatOffsetLabel(offset))
 				if err := s.mailer.Send(u.email, subject, body); err != nil {
 					slog.Error("scheduler duty reminders send mail failed", "email", u.email, "error", err)
 				} else {
-					s.db.Exec(`INSERT OR IGNORE INTO duty_reminder_log (user_id, event_date) VALUES (?,?)`, uid, targetDate)
+					s.db.Exec(`INSERT OR IGNORE INTO duty_reminder_log (user_id, event_date, days_before) VALUES (?,?,?)`, uid, targetDate, offset)
 					emailSent++
 				}
 			}
@@ -590,22 +610,113 @@ func (s *Scheduler) sendDutyReminders() {
 		// die Präferenz selbst, schreibt den Event-Log aber IMMER, auch für
 		// Nutzer mit deaktiviertem Push. Idempotency via notification_log:
 		// INSERT first, then check RowsAffected. This prevents double-send
-		// when two cron instances run concurrently.
+		// when two cron instances run concurrently. Der Offset steckt im
+		// ref_type (kein Schema-Zusatz nötig — ref_type ist bereits TEXT),
+		// sonst würde ein bereits verschickter 7-Tage-Reminder den 3-/2-/
+		// 1-Tage-Reminder für denselben event_date blockieren.
 		res, _ := s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
-			uid, "duty_reminder", hashDate(targetDate))
+			uid, fmt.Sprintf("duty_reminder_%dd", offset), hashDate(targetDate))
 		if n, _ := res.RowsAffected(); n == 1 {
 			notify.Send(s.db, s.cfg, []int{uid}, "duty_reminders",
-				"Offene Dienste", "Am "+formatDate(targetDate)+" gibt es noch offene Dienste", "/dienste", notify.NoEmail())
+				"Offene Dienste", "Am "+formatDate(targetDate)+" gibt es noch offene Dienste ("+formatOffsetLabel(offset)+")", "/dienste", notify.NoEmail())
 			pushSent++
 		}
 	}
 
 	if emailSent > 0 {
-		slog.Info("scheduler duty reminders emails sent", "count", emailSent, "date", targetDate)
+		slog.Info("scheduler duty reminders emails sent", "count", emailSent, "date", targetDate, "days_before", offset)
 	}
 	if pushSent > 0 {
-		slog.Info("scheduler duty reminders push sent", "count", pushSent, "date", targetDate)
+		slog.Info("scheduler duty reminders push sent", "count", pushSent, "date", targetDate, "days_before", offset)
 	}
+
+	s.sendBoardOverview(offset, targetDate, slots)
+}
+
+// sendBoardOverview verschickt eine vereinsweite Übersicht über weiterhin
+// offene Duty-Slots an alle Nutzer mit Vereinsfunktion 'vorstand' — nur an
+// boardOverviewOffsets (3/1 Tage), nicht bei jedem dutyReminderOffsets-Wert,
+// damit noch manuell eingegriffen werden kann (Person ansprechen, selbst
+// einspringen, Dienst streichen), bevor der Termin unbesetzt bleibt. Läuft
+// über dieselbe Kategorie 'duty_reminders' wie die persönliche Erinnerung
+// (kein eigenes Präferenz-Enum — bewusste Entscheidung, siehe proposal.md),
+// aber mit eigenständiger Idempotenz (duty_board_reminder_log für Mail, ein
+// eigener ref_type für Push), getrennt von der Mitglieder-Reminder-Idempotenz:
+// ein Vorstandsmitglied, das selbst auch eligible User eines Slots ist, soll
+// beide Meldungen unabhängig bekommen können.
+func (s *Scheduler) sendBoardOverview(offset int, targetDate string, slots []openSlot) {
+	if !slices.Contains(boardOverviewOffsets, offset) {
+		return
+	}
+	if len(slots) == 0 {
+		return
+	}
+
+	board := s.boardOverviewRecipients()
+	if len(board) == 0 {
+		return
+	}
+
+	emailSent, pushSent := 0, 0
+	for _, u := range board {
+		if push.HasEmailEnabled(s.db, u.id, "duty_reminders") {
+			var exists int
+			s.db.QueryRow(`SELECT 1 FROM duty_board_reminder_log WHERE user_id=? AND event_date=? AND days_before=?`, u.id, targetDate, offset).Scan(&exists)
+			if exists == 0 {
+				body := buildBoardOverviewMail(u.name, targetDate, slots, offset, s.cfg.BaseURL)
+				subject := fmt.Sprintf("Offene Dienste am %s (%s) – Vorstands-Übersicht", formatDate(targetDate), formatOffsetLabel(offset))
+				if err := s.mailer.Send(u.email, subject, body); err != nil {
+					slog.Error("scheduler board overview send mail failed", "email", u.email, "error", err)
+				} else {
+					s.db.Exec(`INSERT OR IGNORE INTO duty_board_reminder_log (user_id, event_date, days_before) VALUES (?,?,?)`, u.id, targetDate, offset)
+					emailSent++
+				}
+			}
+		}
+
+		res, _ := s.db.Exec(`INSERT OR IGNORE INTO notification_log (user_id, ref_type, ref_id) VALUES (?,?,?)`,
+			u.id, fmt.Sprintf("duty_board_vorstand_%dd", offset), hashDate(targetDate))
+		if n, _ := res.RowsAffected(); n == 1 {
+			notify.Send(s.db, s.cfg, []int{u.id}, "duty_reminders",
+				"Offene Dienste – Vorstand", "Am "+formatDate(targetDate)+" sind Dienste unbesetzt ("+formatOffsetLabel(offset)+")", "/dienste", notify.NoEmail())
+			pushSent++
+		}
+	}
+
+	if emailSent > 0 {
+		slog.Info("scheduler board overview emails sent", "count", emailSent, "date", targetDate, "days_before", offset)
+	}
+	if pushSent > 0 {
+		slog.Info("scheduler board overview push sent", "count", pushSent, "date", targetDate, "days_before", offset)
+	}
+}
+
+// boardOverviewRecipients listet alle Nutzer mit Vereinsfunktion 'vorstand' —
+// vereinsweit, kein Team-Filter (die Übersicht soll bewusst über alle Teams
+// hinweg informieren). Rein lesende Query, keine Notification-Nebenwirkung,
+// analog zu matchReportReviewers.
+func (s *Scheduler) boardOverviewRecipients() []reminderUser {
+	rows, err := s.db.Query(`
+		SELECT DISTINCT u.id, u.email, u.first_name || ' ' || u.last_name
+		FROM users u
+		JOIN members m ON m.user_id = u.id
+		JOIN member_club_functions mcf ON mcf.member_id = m.id
+		WHERE mcf.function = 'vorstand'`)
+	if err != nil {
+		logIfBusy(err, "boardOverviewRecipients.query")
+		slog.Error("scheduler board overview recipients query failed", "error", err)
+		return nil
+	}
+	defer rows.Close()
+	var users []reminderUser
+	for rows.Next() {
+		var u reminderUser
+		if err := rows.Scan(&u.id, &u.email, &u.name); err != nil {
+			continue
+		}
+		users = append(users, u)
+	}
+	return users
 }
 
 // hashDate converts a YYYY-MM-DD string to an integer for use as ref_id.
@@ -995,10 +1106,10 @@ func (s *Scheduler) eligibleUsers(sl openSlot) ([]reminderUser, error) {
 	return users, nil
 }
 
-func buildReminderMail(name, date string, slots []openSlot, baseURL string) string {
+func buildReminderMail(name, date string, slots []openSlot, offset int, baseURL string) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Hallo %s,\n\n", name)
-	fmt.Fprintf(&sb, "am %s sind noch folgende Dienste offen, für die du dich eintragen kannst:\n\n", formatDate(date))
+	fmt.Fprintf(&sb, "am %s (%s) sind noch folgende Dienste offen, für die du dich eintragen kannst:\n\n", formatDate(date), formatOffsetLabel(offset))
 
 	for _, sl := range slots {
 		timeStr := ""
@@ -1016,6 +1127,42 @@ func buildReminderMail(name, date string, slots []openSlot, baseURL string) stri
 	fmt.Fprintf(&sb, "Jetzt eintragen: %s/duty-board\n\n", baseURL)
 	sb.WriteString("Viele Grüße\nDein TeamWERK\n")
 	return sb.String()
+}
+
+// buildBoardOverviewMail ist buildReminderMail's Gegenstück für die
+// Vorstands-Übersicht: gleiche Slot-Auflistung, aber Eingreifen- statt
+// Eintragen-Framing (der Vorstand ist nicht selbst Adressat der offenen
+// Plätze, sondern soll den Überblick behalten und ggf. eingreifen).
+func buildBoardOverviewMail(name, date string, slots []openSlot, offset int, baseURL string) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Hallo %s,\n\n", name)
+	fmt.Fprintf(&sb, "am %s (%s) sind folgende Dienste weiterhin unbesetzt — bitte ggf. manuell eingreifen:\n\n", formatDate(date), formatOffsetLabel(offset))
+
+	for _, sl := range slots {
+		timeStr := ""
+		if sl.eventTime != "" {
+			timeStr = " um " + sl.eventTime + " Uhr"
+		}
+		fmt.Fprintf(&sb, "  • %s%s\n", sl.eventName, timeStr)
+		fmt.Fprintf(&sb, "    Diensttyp: %s", sl.dutyType)
+		if sl.roleDesc != "" {
+			fmt.Fprintf(&sb, " – %s", sl.roleDesc)
+		}
+		fmt.Fprintf(&sb, "\n    Noch offene Plätze: %d\n\n", sl.slotsOpen)
+	}
+
+	fmt.Fprintf(&sb, "Dienstübersicht: %s/duty-board\n\n", baseURL)
+	sb.WriteString("Viele Grüße\nDein TeamWERK\n")
+	return sb.String()
+}
+
+// formatOffsetLabel liefert die Zeithorizont-Phrase für Betreff/Body der
+// Dienst-Erinnerungen — "morgen" statt "noch 1 Tage" für den nähesten Offset.
+func formatOffsetLabel(days int) string {
+	if days == 1 {
+		return "morgen"
+	}
+	return fmt.Sprintf("noch %d Tage", days)
 }
 
 func formatDate(iso string) string {

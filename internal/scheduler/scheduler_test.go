@@ -347,7 +347,7 @@ func TestCarpoolingReminder_Exactly3hWindow(t *testing.T) {
 // früher hartkodierte internal.*-URL enthält.
 func TestScheduler_DutyReminder_UsesConfigBaseURL(t *testing.T) {
 	slots := []openSlot{{eventName: "Heimspiel", dutyType: "Kasse", slotsOpen: 2}}
-	body := buildReminderMail("Alex", "2026-07-10", slots, "https://example.test")
+	body := buildReminderMail("Alex", "2026-07-10", slots, 2, "https://example.test")
 
 	if !strings.Contains(body, "https://example.test/duty-board") {
 		t.Errorf("body missing base-URL deep link, got:\n%s", body)
