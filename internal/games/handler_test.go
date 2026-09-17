@@ -1038,6 +1038,66 @@ func TestListTeamsForUser_VorstandTrainerScopeStats(t *testing.T) {
 	}
 }
 
+// TestListTeamsForUser_ScopeDutiesTrainerAlsoParent reproduces a real bug
+// report (Florian Steinle, 2026-09-17): a trainer of exactly one team who is
+// also parent of children in other teams lost the /dienste Teamfilter,
+// because the trainer branch of scope=duties returned only kader_trainers
+// teams and ignored the parent's Stammkader-Teams — even though the duty
+// board itself shows slots for both. teams.length > 1 on the frontend
+// (DutyPage.tsx) is what actually toggles the filter, so this must return
+// the union, not just the trainer's own team.
+func TestListTeamsForUser_ScopeDutiesTrainerAlsoParent(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A") // trainer's own team
+	teamB := testutil.CreateTeam(t, db, "Team B") // child's team
+
+	trainerUserID := testutil.CreateUser(t, db, "standard")
+	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
+	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
+	testutil.AddKaderTrainer(t, db, kaderA, trainerMemberID)
+
+	childUserID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, childUserID)
+	kaderB := testutil.CreateKader(t, db, teamB, seasonID)
+	db.Exec(`INSERT OR IGNORE INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderB, childMemberID)
+	testutil.AddFamilyLink(t, db, trainerUserID, childMemberID)
+
+	srv := teamsServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
+
+	// Without scope: unchanged existing behavior, only the trainer's own team.
+	res := testutil.Get(t, srv, "/api/teams", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var plainTeams []map[string]any
+	json.NewDecoder(res.Body).Decode(&plainTeams)
+	res.Body.Close()
+	if len(plainTeams) != 1 {
+		t.Fatalf("trainer without scope: expected 1 team, got %d", len(plainTeams))
+	}
+
+	// scope=duties: union of trainer's own team and the child's team.
+	res = testutil.Get(t, srv, "/api/teams?scope=duties", token)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var dutyTeams []map[string]any
+	json.NewDecoder(res.Body).Decode(&dutyTeams)
+	res.Body.Close()
+	if len(dutyTeams) != 2 {
+		t.Fatalf("trainer+parent scope=duties: expected 2 teams, got %d", len(dutyTeams))
+	}
+	got := map[int]bool{}
+	for _, tm := range dutyTeams {
+		got[int(tm["id"].(float64))] = true
+	}
+	if !got[teamA] || !got[teamB] {
+		t.Errorf("expected teams A (id=%d) and B (id=%d), got %v", teamA, teamB, dutyTeams)
+	}
+}
+
 // TestListDutyTemplates_TrainerCanRead verifies that a user with club_function=trainer
 // can list duty templates (GET /api/duty-templates returns 200).
 func TestListDutyTemplates_TrainerCanRead(t *testing.T) {
