@@ -59,11 +59,32 @@ const GAMES = [
   game({ id: 202, date: '2026-09-20', opponent: 'Göppingen', team_ids: [3], team_names: 'B-Jugend weiblich' }),
 ]
 
-function seedRoutes() {
+// Teil von openspec/changes/kalender-termine-uebungsgruppen-filter: ein
+// Mannschafts-Training (team_id=1) und ein Übungsgruppen-Training (team_id=0,
+// Server-Projektion — Name kommt über team_name).
+const TRAININGS = [
+  {
+    id: 301, title: 'Vereinstraining', date: '2026-09-14', start_time: '18:00', end_time: '19:00',
+    status: 'active', cancel_reason: '', team_id: 1, kader_id: 0, team_name: 'mA2-Training',
+    confirmed_count: 0, declined_count: 0, maybe_count: 0, my_rsvp: null, am_i_participant: false,
+    rsvp_default_players: 'none', rsvp_default_extended: 'none', rsvp_require_reason: 1, venue: null, note: '',
+  },
+  {
+    id: 302, title: 'Torwarttraining', date: '2026-09-15', start_time: '18:00', end_time: '19:00',
+    status: 'active', cancel_reason: '', team_id: 0, kader_id: 9, team_name: 'Torwarttraining',
+    confirmed_count: 0, declined_count: 0, maybe_count: 0, my_rsvp: null, am_i_participant: false,
+    rsvp_default_players: 'none', rsvp_default_extended: 'none', rsvp_require_reason: 1, venue: null, note: '',
+  },
+]
+
+const PRACTICE_GROUPS = [{ id: 9, name: 'Torwarttraining' }]
+
+function seedRoutes(opts: { trainings?: unknown[]; practiceGroups?: unknown[] } = {}) {
   mockGet.mockImplementation((url: string) => {
     if (url.startsWith('/seasons/active')) return Promise.resolve({ data: SEASON })
-    if (url.startsWith('/training-sessions')) return Promise.resolve({ data: [] })
+    if (url.startsWith('/training-sessions')) return Promise.resolve({ data: opts.trainings ?? [] })
     if (url.startsWith('/games/my')) return Promise.resolve({ data: GAMES })
+    if (url.startsWith('/practice-groups/my')) return Promise.resolve({ data: opts.practiceGroups ?? [] })
     if (url.startsWith('/teams')) return Promise.resolve({ data: TEAMS })
     return Promise.resolve({ data: [] })
   })
@@ -163,6 +184,29 @@ describe('TerminePage — Team-Mehrfachfilter', () => {
     await waitFor(() => expect(screen.getByText(/Ludwigsburg/)).toBeTruthy())
     expect(screen.getByText(/Turnier in Oppenweiler/)).toBeTruthy()
     expect(screen.getByText(/Göppingen/)).toBeTruthy()
+  })
+
+  // Teil von openspec/changes/kalender-termine-uebungsgruppen-filter.
+  test('Übungsgruppe erscheint im Filter und kombiniert mit einer Mannschaft zeigt die Vereinigungsmenge', async () => {
+    seedRoutes({ trainings: TRAININGS, practiceGroups: PRACTICE_GROUPS })
+    renderAt('/termine?past=1')
+    await waitFor(() => expect(screen.getByText(/Ludwigsburg/)).toBeTruthy())
+    expect(screen.getAllByText('Torwarttraining').length).toBeGreaterThan(0)
+
+    const user = await openTeamDropdown()
+    expect(screen.getByRole('checkbox', { name: 'Torwarttraining' })).toBeTruthy()
+
+    // mC2 und wB abwählen — es bleiben mA2 und die Übungsgruppe angehakt.
+    await user.click(screen.getByRole('checkbox', { name: 'mC2' }))
+    await user.click(screen.getByRole('checkbox', { name: 'wB' }))
+
+    await waitFor(() => expect(screen.queryByText(/Turnier in Oppenweiler/)).toBeNull())
+    expect(screen.queryByText(/Göppingen/)).toBeNull()
+    // Vereinigungsmenge: mA2-Spiel und -Training (Mannschaft) UND
+    // Übungsgruppen-Training bleiben — nur mC2/wB fallen weg.
+    expect(screen.getByText(/Ludwigsburg/)).toBeTruthy()
+    expect(screen.getByText('mA2-Training')).toBeTruthy()
+    expect(screen.getAllByText('Torwarttraining').length).toBeGreaterThan(0)
   })
 })
 

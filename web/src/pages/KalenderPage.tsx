@@ -5,7 +5,7 @@ import { api } from '../lib/api'
 import { buildPreviewUrl } from '../lib/dutyPreview'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamShortNames, formatTeamList, TeamForName } from '../lib/teamName'
-import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, serializeTeamIds, toggleTeamId } from '../lib/teamFilter'
+import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, serializeTeamIds, toggleTeamId, trainingFilterId, type TeamFilterOption } from '../lib/teamFilter'
 import { errorStatus } from '../lib/errors'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -74,6 +74,7 @@ interface Training {
   my_rsvp_locked?: boolean
   series_id?: number
   team_id: number
+  kader_id: number
   season_id: number
   note: string
   cancel_reason?: string
@@ -152,6 +153,11 @@ interface Team {
   is_active: boolean
 }
 
+interface FilterPracticeGroup {
+  id: number
+  name: string
+}
+
 const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
   'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember']
@@ -198,6 +204,10 @@ export default function KalenderPage() {
   const [trainings, setTrainings] = useState<Training[]>([])
   const [absences, setAbsences] = useState<Absence[]>([])
   const [teams, setTeams] = useState<Team[]>([])
+  // Für den Mannschafts-Filter (uebungsgruppen-termin-filter) — nicht zu
+  // verwechseln mit `practiceGroups` unten, das die Trainings-Erstellung speist
+  // (Vorstand/Trainer/sportliche_leitung, andere Route, andere Sichtbarkeit).
+  const [filterPracticeGroups, setFilterPracticeGroups] = useState<FilterPracticeGroup[]>([])
   const [allTeamNames, setAllTeamNames] = useState<TeamForName[]>([])
   // q lebt — anders als die übrigen Kalender-Filter — in der URL, damit ein
   // gefilterter Kalender teilbar ist. Die bestehende Inkonsistenz der anderen
@@ -213,7 +223,15 @@ export default function KalenderPage() {
   // die leere Menge heißt „kein Filter" (siehe lib/teamFilter.ts).
   const [filterTeamIds, setFilterTeamIds] = useState<Set<number>>(new Set())
   const [filterTypes, setFilterTypes] = useState<Set<string>>(new Set(['heim', 'auswärts', 'generisch', 'training']))
-  const teamFilterOptions = useMemo(() => buildTeamOptions(teams.filter(t => t.is_active)), [teams])
+  // Übungsgruppen hängen an derselben Dropdown wie Mannschaften, kodiert als
+  // negative kader_id (uebungsgruppen-termin-filter) — siehe trainingFilterId.
+  const teamFilterOptions = useMemo<TeamFilterOption[]>(
+    () => [
+      ...buildTeamOptions(teams.filter(t => t.is_active)),
+      ...filterPracticeGroups.map(pg => ({ id: -pg.id, label: pg.name })),
+    ],
+    [teams, filterPracticeGroups],
+  )
   const activeTeamIds = effectiveTeamIds(filterTeamIds, teamFilterOptions)
   const toggleTeam = (teamId: number) => {
     const next = toggleTeamId(activeTeamIds, teamId)
@@ -367,6 +385,9 @@ export default function KalenderPage() {
         api.get('/teams/names')
           .then(r => setAllTeamNames(Array.isArray(r.data) ? r.data : []))
           .catch(() => setAllTeamNames([])),
+        api.get('/practice-groups/my')
+          .then(r => setFilterPracticeGroups(Array.isArray(r.data) ? r.data : []))
+          .catch(() => setFilterPracticeGroups([])),
         // Vorstand-Tier: für Trainer antwortet die Route 403 — dann bleibt die
         // Liste leer und die Übungsgruppen-Optgroup erscheint gar nicht.
         api.get('/practice-groups')
@@ -596,7 +617,7 @@ export default function KalenderPage() {
 
   const filteredTrainings = trainings.filter(t => {
     if (!filterTypes.has('training')) return false
-    if (!matchesTeamFilter(filterTeamIds, [t.team_id])) return false
+    if (!matchesTeamFilter(filterTeamIds, [trainingFilterId(t)])) return false
     if (!matchesQuery(queryTokens, trainingFilterFields(t), [t.date])) return false
     return true
   })

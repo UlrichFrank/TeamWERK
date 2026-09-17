@@ -21,7 +21,10 @@ export interface TeamFilterOption {
 /**
  * `team=3` oder `team=3,7` → Menge. Ungültige Teile werden still verworfen
  * (Spec: ungültige Query-Parameter verhalten sich wie kein Filter, ohne
- * Fehlermeldung).
+ * Fehlermeldung). Negative Zahlen sind seit `uebungsgruppen-termin-filter`
+ * gültig (kodieren eine Übungsgruppe als `-kader_id`, siehe `trainingFilterId`
+ * unten) — nur `0` und nicht-numerische Teile bleiben ungültig, weil keine
+ * echte Team- oder Kader-ID jemals `0` ist.
  */
 export function parseTeamIds(raw: string | null | undefined): Set<number> {
   if (!raw) return new Set()
@@ -29,7 +32,7 @@ export function parseTeamIds(raw: string | null | undefined): Set<number> {
     raw
       .split(',')
       .map(s => parseInt(s.trim()))
-      .filter(n => Number.isFinite(n) && n > 0),
+      .filter(n => Number.isFinite(n) && n !== 0),
   )
 }
 
@@ -82,4 +85,17 @@ export function matchesTeamFilter(selected: Set<number>, teamIds: readonly numbe
 export function buildTeamOptions<T extends TeamForName & { name?: string }>(teams: T[]): TeamFilterOption[] {
   const shortNames = buildTeamShortNames(teams)
   return teams.map(t => ({ id: t.id, label: shortNames.get(t.id) ?? t.name ?? `Team ${t.id}` }))
+}
+
+/**
+ * Filter-ID eines Trainingstermins. Ein Termin einer Übungsgruppe trägt
+ * `team_id=0` (Server-Projektion von `training_sessions.team_id IS NULL`,
+ * siehe Gotcha „Übungsgruppen") — alle Übungsgruppen-Trainings tragen denselben
+ * Wert und wären ohne diese Funktion nicht einzeln filterbar. Übungsgruppen
+ * gehen deshalb als **negative** `kader_id` in dieselbe `Set<number>` wie die
+ * Mannschafts-IDs ein (nie negativ oder 0 bei echten Team-IDs, also eindeutig
+ * unterscheidbar) — siehe Capability `uebungsgruppen-termin-filter`.
+ */
+export function trainingFilterId(training: { team_id: number; kader_id: number }): number {
+  return training.team_id > 0 ? training.team_id : -training.kader_id
 }

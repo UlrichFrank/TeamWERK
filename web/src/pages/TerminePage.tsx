@@ -8,7 +8,7 @@ import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { getEventColors } from '../lib/eventColors'
-import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId } from '../lib/teamFilter'
+import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId, trainingFilterId } from '../lib/teamFilter'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
@@ -56,6 +56,7 @@ interface Session {
   status: 'active' | 'cancelled'
   cancel_reason: string
   team_id: number
+  kader_id: number
   team_name: string
   confirmed_count: number
   declined_count: number
@@ -109,6 +110,11 @@ interface Team {
   team_number: number
   group_count: number
   is_active: boolean
+}
+
+interface PracticeGroup {
+  id: number
+  name: string
 }
 
 type Termin =
@@ -233,7 +239,13 @@ export default function TerminePage() {
   const [termine, setTermine] = useState<Termin[]>([])
   const [season, setSeason] = useState<SeasonWindow | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
-  const teamOptions = useMemo(() => buildTeamOptions(teams), [teams])
+  const [practiceGroups, setPracticeGroups] = useState<PracticeGroup[]>([])
+  // Übungsgruppen hängen an derselben Dropdown wie Mannschaften, kodiert als
+  // negative kader_id (uebungsgruppen-termin-filter) — siehe trainingFilterId.
+  const teamOptions = useMemo(
+    () => [...buildTeamOptions(teams), ...practiceGroups.map(pg => ({ id: -pg.id, label: pg.name }))],
+    [teams, practiceGroups],
+  )
   const [loading, setLoading] = useState(true)
   const [rsvpLoading, setRsvpLoading] = useState<string | null>(null)
   const [rsvpErrors, setRsvpErrors] = useState<Record<string, string>>({})
@@ -250,7 +262,7 @@ export default function TerminePage() {
   const updateFilter = (patch: { team?: Set<number>; types?: Set<string>; past?: boolean; focus?: { kind: 'training' | 'game'; id: number } | null }) => {
     const next = new URLSearchParams(searchParams)
     if ('team' in patch && patch.team) {
-      const value = serializeTeamIds(patch.team, teams.length)
+      const value = serializeTeamIds(patch.team, teamOptions.length)
       if (value === null) next.delete('team')
       else next.set('team', value)
     }
@@ -328,6 +340,7 @@ export default function TerminePage() {
       .then(r => setSeason({ start_date: r.data.start_date, end_date: r.data.end_date }))
       .catch(() => setSeason({ start_date: isoDaysFromNow(-365), end_date: isoDaysFromNow(365) }))
     api.get('/teams').then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? []))).catch(() => {})
+    api.get('/practice-groups/my').then(r => setPracticeGroups(Array.isArray(r.data) ? r.data : [])).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -342,7 +355,7 @@ export default function TerminePage() {
     if (focus && t.kind === focus.kind && t.data.id === focus.id) return true
     if (t.kind === 'training') {
       if (!filterTypes.has('training')) return false
-      if (!matchesTeamFilter(filterTeamIds, [t.data.team_id])) return false
+      if (!matchesTeamFilter(filterTeamIds, [trainingFilterId(t.data)])) return false
     } else {
       if (!filterTypes.has(t.data.event_type)) return false
       if (!matchesTeamFilter(filterTeamIds, t.data.team_ids)) return false

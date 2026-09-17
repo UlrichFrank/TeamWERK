@@ -6,6 +6,7 @@ import {
   parseTeamIds,
   serializeTeamIds,
   toggleTeamId,
+  trainingFilterId,
 } from './teamFilter'
 
 // Teil von openspec/changes/team-mehrfachfilter-alle-listen: die vier Listen
@@ -34,8 +35,12 @@ describe('parseTeamIds', () => {
   })
 
   test('unbrauchbare Teile werden still verworfen', () => {
-    expect([...parseTeamIds('abc,4,-1,0')]).toEqual([4])
+    expect([...parseTeamIds('abc,4,0')]).toEqual([4])
     expect(parseTeamIds('abc').size).toBe(0)
+  })
+
+  test('negative IDs (Übungsgruppen, uebungsgruppen-termin-filter) bleiben gültig', () => {
+    expect([...parseTeamIds('3,-5')]).toEqual([3, -5])
   })
 })
 
@@ -94,6 +99,20 @@ describe('matchesTeamFilter', () => {
   test('bei aktivem Filter fällt ein Termin ohne Mannschaft heraus', () => {
     expect(matchesTeamFilter(new Set([2]), [])).toBe(false)
     expect(matchesTeamFilter(new Set([2]), undefined)).toBe(false)
+  })
+})
+
+describe('trainingFilterId', () => {
+  test('Mannschafts-Training matcht über die Team-ID', () => {
+    expect(trainingFilterId({ team_id: 3, kader_id: 99 })).toBe(3)
+  })
+
+  test('Übungsgruppen-Training (team_id=0) matcht über die negative kader_id', () => {
+    expect(trainingFilterId({ team_id: 0, kader_id: 5 })).toBe(-5)
+  })
+
+  test('zwei Übungsgruppen liefern unterschiedliche Filter-IDs', () => {
+    expect(trainingFilterId({ team_id: 0, kader_id: 5 })).not.toBe(trainingFilterId({ team_id: 0, kader_id: 7 }))
   })
 })
 

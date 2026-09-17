@@ -406,3 +406,201 @@ func TestGetPracticeGroup_TeamKaderIstNichtAdressierbar(t *testing.T) {
 		t.Fatalf("der Mannschaftskader wurde über die Übungsgruppen-Route gelöscht")
 	}
 }
+
+// ── /api/practice-groups/my (uebungsgruppen-termin-filter) ────────────────────
+
+// routesMine registriert nur die Sichtbarkeits-Route ohne RequireClubFunction-Gate —
+// sie liegt im Authenticated-Tier, jeder eingeloggte Nutzer erreicht sie.
+func routesMine(h *practicegroups.Handler) func(chi.Router) {
+	return func(r chi.Router) {
+		r.Get("/api/practice-groups/my", h.ListMine)
+	}
+}
+
+func decodeNames(t *testing.T, resp *http.Response) []string {
+	t.Helper()
+	var items []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	names := make([]string, len(items))
+	for i, it := range items {
+		names[i], _ = it["name"].(string)
+	}
+	return names
+}
+
+func containsName(names []string, name string) bool {
+	for _, n := range names {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// TestListMine_TrainerSeeOwnGroup: ein Trainer sieht seine eigene Übungsgruppe
+// (über kader_trainers), aber keine fremde.
+func TestListMine_TrainerSeesOwnGroup(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := practicegroups.NewHandler(db, hub.NewHub())
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	ownGroup := testutil.CreatePracticeGroup(t, db, seasonID, "Torwarttraining")
+	testutil.CreatePracticeGroup(t, db, seasonID, "Athletiktraining")
+
+	uid := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, uid)
+	testutil.AddKaderTrainer(t, db, ownGroup, memberID)
+
+	token := testutil.Token(t, uid, "standard", []string{"trainer"})
+	srv := testutil.NewServer(t, routesMine(h))
+
+	resp := testutil.Get(t, srv, "/api/practice-groups/my", token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, bekommen %d", resp.StatusCode)
+	}
+	names := decodeNames(t, resp)
+	if !containsName(names, "Torwarttraining") || containsName(names, "Athletiktraining") {
+		t.Fatalf("erwartet nur Torwarttraining, bekommen %v", names)
+	}
+}
+
+// TestListMine_SpielerSeeOwnGroupNotForeign: ein Mitglied (Stammkader) sieht die
+// eigene Übungsgruppe, eine fremde nicht.
+func TestListMine_SpielerSiehtEigeneGruppeNichtFremde(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := practicegroups.NewHandler(db, hub.NewHub())
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	ownGroup := testutil.CreatePracticeGroup(t, db, seasonID, "Torwarttraining")
+	foreignGroup := testutil.CreatePracticeGroup(t, db, seasonID, "Athletiktraining")
+
+	uid := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, uid)
+	testutil.AddKaderMember(t, db, ownGroup, memberID)
+	_ = foreignGroup
+
+	token := testutil.Token(t, uid, "standard", []string{"spieler"})
+	srv := testutil.NewServer(t, routesMine(h))
+
+	resp := testutil.Get(t, srv, "/api/practice-groups/my", token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, bekommen %d", resp.StatusCode)
+	}
+	names := decodeNames(t, resp)
+	if !containsName(names, "Torwarttraining") || containsName(names, "Athletiktraining") {
+		t.Fatalf("erwartet nur Torwarttraining, bekommen %v", names)
+	}
+}
+
+// TestListMine_ErweiterterKaderSiehtEigeneGruppe: ein Mitglied im erweiterten
+// Kader einer Übungsgruppe sieht sie ebenfalls.
+func TestListMine_ErweiterterKaderSiehtEigeneGruppe(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := practicegroups.NewHandler(db, hub.NewHub())
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	groupID := testutil.CreatePracticeGroup(t, db, seasonID, "Torwarttraining")
+
+	uid := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, uid)
+	testutil.AddExtendedKaderMember(t, db, groupID, memberID)
+
+	token := testutil.Token(t, uid, "standard", []string{"spieler"})
+	srv := testutil.NewServer(t, routesMine(h))
+
+	resp := testutil.Get(t, srv, "/api/practice-groups/my", token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, bekommen %d", resp.StatusCode)
+	}
+	names := decodeNames(t, resp)
+	if !containsName(names, "Torwarttraining") {
+		t.Fatalf("erwartet Torwarttraining, bekommen %v", names)
+	}
+}
+
+// TestListMine_ElternteilSiehtGruppeDesKindes: ein Elternteil sieht die
+// Übungsgruppe seines Kindes über family_links, auch ohne eigene Mitgliedschaft.
+func TestListMine_ElternteilSiehtGruppeDesKindes(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := practicegroups.NewHandler(db, hub.NewHub())
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	groupID := testutil.CreatePracticeGroup(t, db, seasonID, "Torwarttraining")
+
+	childMemberID := testutil.CreateMember(t, db, 0)
+	testutil.AddKaderMember(t, db, groupID, childMemberID)
+
+	parentUID := testutil.CreateUser(t, db, "standard")
+	testutil.AddFamilyLink(t, db, parentUID, childMemberID)
+
+	token := testutil.TokenWithIsParent(t, parentUID, "standard", []string{"elternteil"}, true)
+	srv := testutil.NewServer(t, routesMine(h))
+
+	resp := testutil.Get(t, srv, "/api/practice-groups/my", token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, bekommen %d", resp.StatusCode)
+	}
+	names := decodeNames(t, resp)
+	if !containsName(names, "Torwarttraining") {
+		t.Fatalf("erwartet Torwarttraining für Elternteil, bekommen %v", names)
+	}
+}
+
+// TestListMine_VorstandSiehtAlle: Vorstand sieht alle Übungsgruppen der aktiven
+// Saison, unabhängig von eigener Mitgliedschaft.
+func TestListMine_VorstandSiehtAlle(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := practicegroups.NewHandler(db, hub.NewHub())
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	testutil.CreatePracticeGroup(t, db, seasonID, "Torwarttraining")
+	testutil.CreatePracticeGroup(t, db, seasonID, "Athletiktraining")
+
+	uid := testutil.CreateUser(t, db, "standard")
+	token := testutil.Token(t, uid, "standard", []string{"vorstand"})
+	srv := testutil.NewServer(t, routesMine(h))
+
+	resp := testutil.Get(t, srv, "/api/practice-groups/my", token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, bekommen %d", resp.StatusCode)
+	}
+	names := decodeNames(t, resp)
+	if len(names) != 2 {
+		t.Fatalf("erwartet 2 Übungsgruppen für Vorstand, bekommen %v", names)
+	}
+}
+
+// TestListMine_OhneToken: ohne gültiges Auth-Token antwortet die Route mit 401.
+func TestListMine_OhneToken(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := practicegroups.NewHandler(db, hub.NewHub())
+	testutil.CreateSeason(t, db, "2025/26")
+	srv := testutil.NewServer(t, routesMine(h))
+
+	resp := testutil.Get(t, srv, "/api/practice-groups/my", "")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("erwartet 401, bekommen %d", resp.StatusCode)
+	}
+}
+
+// TestListMine_OhneAktiveSaison: ohne aktive Saison liefert die Route ein leeres
+// Array statt eines Fehlers.
+func TestListMine_OhneAktiveSaison(t *testing.T) {
+	db := testutil.NewDB(t)
+	h := practicegroups.NewHandler(db, hub.NewHub())
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	testutil.CreatePracticeGroup(t, db, seasonID, "Torwarttraining")
+	db.Exec(`UPDATE seasons SET is_active=0`)
+
+	uid := testutil.CreateUser(t, db, "standard")
+	token := testutil.Token(t, uid, "standard", []string{"vorstand"})
+	srv := testutil.NewServer(t, routesMine(h))
+
+	resp := testutil.Get(t, srv, "/api/practice-groups/my", token)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("erwartet 200, bekommen %d", resp.StatusCode)
+	}
+	names := decodeNames(t, resp)
+	if len(names) != 0 {
+		t.Fatalf("erwartet leeres Ergebnis ohne aktive Saison, bekommen %v", names)
+	}
+}

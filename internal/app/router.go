@@ -398,6 +398,13 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/teams/my", h.Teams.ListMyTeams)
 		r.Get("/api/teams/{id}/roster", h.Teams.GetRoster)
 
+		// Übungsgruppen, für den Aufrufer sichtbar — speist den Mannschafts-Filter
+		// auf /kalender und /termine (uebungsgruppen-termin-filter). Bewusst hier
+		// im Authenticated-Tier statt im Vorstand/Trainer/sportliche_leitung-Tier
+		// der übrigen /api/practice-groups-Routen (s.u.): jeder Nutzer muss seine
+		// eigenen Gruppen zum Filtern sehen können.
+		r.Get("/api/practice-groups/my", h.PracticeGroups.ListMine)
+
 		// Mannschafts-Aufgaben (Responsibilities). Gates handler-inline
 		// (Trainer des Kaders); Anzeige reitet auf der Roster-Response mit.
 		r.Get("/api/teams/{id}/responsibility-types", h.Teams.ListResponsibilityTypes)

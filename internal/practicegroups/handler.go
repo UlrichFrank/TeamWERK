@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
@@ -145,6 +146,82 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		items = append(items, g)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": len(items)})
+}
+
+type practiceGroupName struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// GET /api/practice-groups/my — Übungsgruppen, die für den anfragenden Nutzer
+// sichtbar sind: id+name, ohne Mitglieder-/Trainerlisten. Speist den
+// Mannschafts-Filter auf /kalender und /termine (Capability
+// uebungsgruppen-termin-filter) und ist deshalb — anders als List (Vorstand/
+// Trainer/sportliche_leitung) — für jeden authentifizierten Nutzer erreichbar.
+// Sichtbarkeit spiegelt games.ListTeamsForUser, aber direkt auf kader statt
+// über teams/user_accessible_teams, die für kind='practice' nicht greifen.
+func (h *Handler) ListMine(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	if claims == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	seasonID, err := h.activeSeasonID(r.Context())
+	if err == sql.ErrNoRows {
+		// Keine aktive Saison: Übungsgruppen sind ohnehin nicht adressierbar
+		// (kader.season_id ist NOT NULL) — leeres Ergebnis statt Fehler.
+		writeJSON(w, http.StatusOK, []practiceGroupName{})
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var rows *sql.Rows
+	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("sportliche_leitung") {
+		rows, err = h.db.QueryContext(r.Context(),
+			`SELECT id, name FROM kader WHERE kind='practice' AND season_id=? ORDER BY name`, seasonID)
+	} else {
+		conds := []string{
+			`EXISTS (SELECT 1 FROM kader_trainers kt JOIN members m ON m.id = kt.member_id
+			         WHERE kt.kader_id = k.id AND m.user_id = ?)`,
+			`EXISTS (SELECT 1 FROM kader_members km JOIN members m ON m.id = km.member_id
+			         WHERE km.kader_id = k.id AND m.user_id = ?)`,
+			`EXISTS (SELECT 1 FROM kader_extended_members kem JOIN members m ON m.id = kem.member_id
+			         WHERE kem.kader_id = k.id AND m.user_id = ?)`,
+		}
+		args := []any{claims.UserID, claims.UserID, claims.UserID}
+		if claims.IsParent {
+			conds = append(conds,
+				`EXISTS (SELECT 1 FROM kader_members km JOIN family_links fl ON fl.member_id = km.member_id
+				         WHERE km.kader_id = k.id AND fl.parent_user_id = ?)`,
+				`EXISTS (SELECT 1 FROM kader_extended_members kem JOIN family_links fl ON fl.member_id = kem.member_id
+				         WHERE kem.kader_id = k.id AND fl.parent_user_id = ?)`)
+			args = append(args, claims.UserID, claims.UserID)
+		}
+		query := fmt.Sprintf(
+			`SELECT id, name FROM kader k WHERE kind='practice' AND season_id=? AND (%s) ORDER BY name`,
+			strings.Join(conds, " OR "))
+		rows, err = h.db.QueryContext(r.Context(), query, append([]any{seasonID}, args...)...)
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	result := []practiceGroupName{}
+	for rows.Next() {
+		var it practiceGroupName
+		if err := rows.Scan(&it.ID, &it.Name); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		result = append(result, it)
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // GET /api/practice-groups/{id}

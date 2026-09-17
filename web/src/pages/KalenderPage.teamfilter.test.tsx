@@ -54,10 +54,30 @@ const GAMES = [
   game(3, 3, 'Göppingen'),
 ]
 
-function seed() {
+// Teil von openspec/changes/kalender-termine-uebungsgruppen-filter: eine
+// Mannschafts-Training (team_id=1, in shortNames) und ein Übungsgruppen-Training
+// (team_id=0, Server-Projektion — Name kommt über team_name).
+const TRAININGS = [
+  {
+    id: 201, title: 'Training', date: `${MONTH}-10`, start_time: '17:00', end_time: '18:00',
+    status: 'active', confirmed_count: 0, declined_count: 0, maybe_count: 0, my_rsvp: null,
+    team_id: 1, kader_id: 0, season_id: 1, note: '', team_name: 'mA2',
+  },
+  {
+    id: 202, title: 'Torwarttraining', date: `${MONTH}-11`, start_time: '18:00', end_time: '19:00',
+    status: 'active', confirmed_count: 0, declined_count: 0, maybe_count: 0, my_rsvp: null,
+    team_id: 0, kader_id: 5, season_id: 1, note: '', team_name: 'Torwarttraining',
+  },
+]
+
+const PRACTICE_GROUPS = [{ id: 5, name: 'Torwarttraining' }]
+
+function seed(opts: { trainings?: unknown[]; practiceGroups?: unknown[] } = {}) {
   mockGet.mockImplementation((url: string) => {
     if (url.startsWith('/games')) return Promise.resolve({ data: GAMES })
     if (url.includes('/absences')) return Promise.resolve({ data: [] })
+    if (url.startsWith('/training-sessions')) return Promise.resolve({ data: { items: opts.trainings ?? [] } })
+    if (url.startsWith('/practice-groups/my')) return Promise.resolve({ data: opts.practiceGroups ?? [] })
     if (url.startsWith('/teams/names')) return Promise.resolve({ data: TEAMS })
     if (url.startsWith('/teams')) return Promise.resolve({ data: TEAMS })
     return Promise.resolve({ data: [] })
@@ -138,5 +158,28 @@ describe('KalenderPage — Team-Mehrfachfilter', () => {
     await user.click(screen.getByRole('checkbox', { name: 'wB' }))
 
     await waitFor(() => expect(absenceUrls().some(u => u.includes('team_id=1%2C2') || u.includes('team_id=1,2'))).toBe(true))
+  })
+
+  // Teil von openspec/changes/kalender-termine-uebungsgruppen-filter.
+  test('Übungsgruppe erscheint im Filter und Filtern zeigt nur ihre Trainings', async () => {
+    seed({ trainings: TRAININGS, practiceGroups: PRACTICE_GROUPS })
+    render(<MemoryRouter initialEntries={['/kalender']}><KalenderPage /></MemoryRouter>)
+    await waitFor(() => expect(screen.getByTitle(/Torwarttraining/)).toBeTruthy())
+    expect(screen.getByTitle(/17:00/)).toBeTruthy()
+    expect(screen.getByTitle(/Ludwigsburg/)).toBeTruthy()
+
+    const user = await openTeamDropdown()
+    expect(screen.getByRole('checkbox', { name: 'Torwarttraining' })).toBeTruthy()
+
+    // Alle Mannschaften abwählen — es bleibt nur die Übungsgruppe angehakt.
+    await user.click(screen.getByRole('checkbox', { name: 'mA2' }))
+    await user.click(screen.getByRole('checkbox', { name: 'mC2' }))
+    await user.click(screen.getByRole('checkbox', { name: 'wB' }))
+
+    await waitFor(() => expect(screen.queryByTitle(/Ludwigsburg/)).toBeNull())
+    expect(screen.queryByTitle(/Oppenweiler/)).toBeNull()
+    expect(screen.queryByTitle(/Göppingen/)).toBeNull()
+    expect(screen.queryByTitle(/17:00/)).toBeNull()
+    expect(screen.getByTitle(/Torwarttraining/)).toBeTruthy()
   })
 })

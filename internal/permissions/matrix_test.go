@@ -634,6 +634,11 @@ var matrix = []endpointCase{
 	// Übungsgruppen (kader kind='practice', ohne teams-Zwilling) — seit
 	// uebungsgruppen-trainer-zugriff im selben Tier wie /api/kader: Trainer und
 	// sportliche Leitung legen ihre eigenen Gruppen an.
+	// uebungsgruppen-termin-filter: jeder eingeloggte Nutzer sieht seine eigenen
+	// Übungsgruppen (id+name, keine Mitglieder-/Trainerlisten) für den
+	// Mannschafts-Filter auf /kalender und /termine — bewusst offener als die
+	// CRUD-Liste oben.
+	{method: "GET", path: "/api/practice-groups/my", expected: exAuth},
 	{method: "GET", path: "/api/practice-groups", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/practice-groups", expected: exVorstandTrainer},
 	{method: "GET", path: "/api/practice-groups/{id}", expected: exVorstandTrainer},
