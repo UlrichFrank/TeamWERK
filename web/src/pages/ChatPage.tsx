@@ -162,6 +162,7 @@ interface ChatUser {
 }
 
 interface TeamGroup {
+  groupType: "team" | "practice";
   teamId: number;
   displayShort: string;
   kind: "trainer" | "spieler" | "eltern" | "alle_trainer";
@@ -2781,9 +2782,11 @@ function NewConversationModal({
     if (resolvingTag) return;
     setResolvingTag(key);
     try {
-      const r = await api.get(
-        `/chat/team-groups/${tg.teamId}/${tg.kind}/members`,
-      );
+      const endpoint =
+        tg.groupType === "practice"
+          ? `/chat/practice-groups/${tg.teamId}/${tg.kind}/members`
+          : `/chat/team-groups/${tg.teamId}/${tg.kind}/members`;
+      const r = await api.get(endpoint);
       const incoming: ChatUser[] = r.data ?? [];
       setSelected((prev) => {
         const seen = new Set(prev.map((p) => p.id));
