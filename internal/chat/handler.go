@@ -203,6 +203,8 @@ type Conversation struct {
 	UnreadCount int          `json:"unreadCount"`
 	LastMessage *LastMessage `json:"lastMessage"`
 	Members     []Member     `json:"members"`
+	Pinned      bool         `json:"pinned"`
+	PinOrder    *int         `json:"pinOrder"`
 }
 
 // GET /api/chat/conversations
@@ -224,14 +226,18 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 		     SELECT 1 FROM chat_polls cp WHERE cp.message_id = (
 		       SELECT m.id FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1
 		     )
-		   )) AS last_is_poll
+		   )) AS last_is_poll,
+		  cm.pinned_at, cm.pin_order
 		FROM conversations c
 		JOIN conversation_members cm ON cm.conversation_id = c.id
 		WHERE cm.user_id = ? AND cm.left_at IS NULL
-		ORDER BY COALESCE(
-		  (SELECT m.sent_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1),
-		  c.created_at
-		) DESC`,
+		ORDER BY
+		  cm.pinned_at IS NOT NULL DESC,
+		  cm.pin_order ASC,
+		  COALESCE(
+		    (SELECT m.sent_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.sent_at DESC LIMIT 1),
+		    c.created_at
+		  ) DESC`,
 		claims.UserID, claims.UserID, claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -245,7 +251,9 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 		var name sql.NullString
 		var lastBody, lastAt sql.NullString
 		var lastIsPoll int
-		if err := rows.Scan(&c.ID, &c.Type, &name, &c.CreatedBy, &c.UnreadCount, &lastBody, &lastAt, &lastIsPoll); err != nil {
+		var pinnedAt sql.NullString
+		var pinOrder sql.NullInt64
+		if err := rows.Scan(&c.ID, &c.Type, &name, &c.CreatedBy, &c.UnreadCount, &lastBody, &lastAt, &lastIsPoll, &pinnedAt, &pinOrder); err != nil {
 			continue
 		}
 		if name.Valid {
@@ -253,6 +261,11 @@ func (h *Handler) ListConversations(w http.ResponseWriter, r *http.Request) {
 		}
 		if lastBody.Valid && lastAt.Valid {
 			c.LastMessage = &LastMessage{Body: lastBody.String, SentAt: lastAt.String, IsPoll: lastIsPoll == 1}
+		}
+		c.Pinned = pinnedAt.Valid
+		if pinOrder.Valid {
+			v := int(pinOrder.Int64)
+			c.PinOrder = &v
 		}
 		convs = append(convs, c)
 	}
@@ -1212,6 +1225,142 @@ func (h *Handler) LeaveConversation(w http.ResponseWriter, r *http.Request) {
 		h.hub.BroadcastToUser(uid, event)
 	}
 
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/chat/conversations/{id}/pin
+//
+// Pin ist rein privat (kein Fan-out an andere Mitglieder, siehe chat-pinned-
+// conversations/design.md D3) — nur ein BroadcastToUser an den handelnden User
+// selbst, damit ein zweites offenes Tab/Gerät desselben Nutzers die Liste neu
+// lädt. Idempotent: erneutes Pinnen einer bereits gepinnten Konversation lässt
+// pin_order unverändert (kein Sprung ans Ende der gepinnten Gruppe).
+func (h *Handler) Pin(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if !h.isActiveMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(), `
+		UPDATE conversation_members
+		SET pinned_at = COALESCE(pinned_at, CURRENT_TIMESTAMP),
+		    pin_order = COALESCE(pin_order, (
+		      SELECT COALESCE(MAX(pin_order), 0) + 1
+		      FROM conversation_members
+		      WHERE user_id = ? AND pinned_at IS NOT NULL
+		    ))
+		WHERE conversation_id = ? AND user_id = ?`,
+		claims.UserID, convID, claims.UserID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToUser(claims.UserID, "chat:pin-updated")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /api/chat/conversations/{id}/pin
+func (h *Handler) Unpin(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	convID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if !h.isActiveMember(r, convID, claims.UserID) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	if _, err := h.db.ExecContext(r.Context(),
+		`UPDATE conversation_members SET pinned_at = NULL, pin_order = NULL
+		 WHERE conversation_id = ? AND user_id = ?`,
+		convID, claims.UserID); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToUser(claims.UserID, "chat:pin-updated")
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /api/chat/conversations/pinned-order
+//
+// Nimmt die vollständige neue Reihenfolge entgegen (keine Einzel-Verschiebung)
+// — Drag & Drop liefert client-seitig ohnehin die komplette Ziel-Reihenfolge.
+// Die übergebene ID-Menge MUSS exakt der aktuell gepinnten Menge entsprechen,
+// sonst 409 (schützt gegen ein zweites Tab, das zwischen Laden und Drag-Ende
+// bereits gepinnt/gelöst hat).
+func (h *Handler) ReorderPinned(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+
+	var body struct {
+		Order []int `json:"order"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(),
+		`SELECT conversation_id FROM conversation_members WHERE user_id = ? AND pinned_at IS NOT NULL`,
+		claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	current := map[int]bool{}
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		current[id] = true
+	}
+	rows.Close()
+
+	if len(body.Order) != len(current) {
+		http.Error(w, "pin_order_mismatch", http.StatusConflict)
+		return
+	}
+	seen := map[int]bool{}
+	for _, id := range body.Order {
+		if !current[id] || seen[id] {
+			http.Error(w, "pin_order_mismatch", http.StatusConflict)
+			return
+		}
+		seen[id] = true
+	}
+
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	for i, convID := range body.Order {
+		if _, err := tx.ExecContext(r.Context(),
+			`UPDATE conversation_members SET pin_order = ? WHERE conversation_id = ? AND user_id = ?`,
+			i+1, convID, claims.UserID); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	h.hub.BroadcastToUser(claims.UserID, "chat:pin-updated")
 	w.WriteHeader(http.StatusNoContent)
 }
 

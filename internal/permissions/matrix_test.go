@@ -279,6 +279,8 @@ var matrix = []endpointCase{
 	// Suche: Sichtbarkeit pro Treffer im Handler (aktive Mitgliedschaft / broadcast_reads)
 	{method: "GET", path: "/api/chat/search", expected: exAuth},
 	{method: "POST", path: "/api/chat/conversations", expected: exAuth},
+	// Reorder wirkt nur auf die eigenen gepinnten Konversationen (kein {id}-Objektbezug).
+	{method: "PUT", path: "/api/chat/conversations/pinned-order", expected: exAuth},
 	{method: "GET", path: "/api/chat/broadcasts", expected: exAuth},
 	// Broadcasts senden: Handler-Level-Gate über die Ziel-Allowlist des Absenders
 	{method: "POST", path: "/api/chat/broadcasts", expected: exBroadcastSend},
@@ -300,6 +302,8 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/chat/conversations/{id}/transfer-ownership", expected: exPublic},
 	{method: "DELETE", path: "/api/chat/conversations/{id}", expected: exPublic},
 	{method: "POST", path: "/api/chat/conversations/{id}/members", expected: exPublic},
+	{method: "PUT", path: "/api/chat/conversations/{id}/pin", expected: exPublic},
+	{method: "DELETE", path: "/api/chat/conversations/{id}/pin", expected: exPublic},
 	// Nachrichten: Sender-Check → 403 für alle (kein Fixture)
 	{method: "GET", path: "/api/chat/messages/{id}", expected: exPublic},
 	{method: "GET", path: "/api/chat/messages/{id}/reads", expected: exPublic},

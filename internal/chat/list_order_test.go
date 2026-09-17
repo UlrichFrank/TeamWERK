@@ -17,6 +17,8 @@ type convListItem struct {
 		Body   string `json:"body"`
 		SentAt string `json:"sentAt"`
 	} `json:"lastMessage"`
+	Pinned   bool `json:"pinned"`
+	PinOrder *int `json:"pinOrder"`
 }
 
 // TestListConversations_SortedByLastActivity sichert die Invariante der

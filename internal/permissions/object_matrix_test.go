@@ -258,6 +258,8 @@ func objectFixtures() map[string]objFixture {
 	add("DELETE /api/chat/conversations/{id}/everyone", objFixture{params: convFixture})
 	add("PUT /api/chat/conversations/{id}", objFixture{params: convFixture, body: map[string]any{"name": "Neu"}})
 	add("DELETE /api/chat/conversations/{id}", objFixture{params: convFixture})
+	add("PUT /api/chat/conversations/{id}/pin", objFixture{params: convFixture})
+	add("DELETE /api/chat/conversations/{id}/pin", objFixture{params: convFixture})
 	add("POST /api/chat/conversations/{id}/members", objFixture{
 		params: func(w *objWorld) map[string]string { return p("id", w.newConversation()) },
 		// AddMember verlangt ein nicht-leeres userId — mit 0 endet die Route im
