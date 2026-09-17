@@ -1695,7 +1695,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	scope := r.URL.Query().Get("scope")
 	trainerOnlyTeams := (scope == "attendance-stats" || scope == "diary-stats") &&
 		claims.Role != "admin" && !claims.HasFunction("sportliche_leitung") &&
-		!(scope == "diary-stats" && claims.HasFunction("vorstand"))
+		(scope != "diary-stats" || !claims.HasFunction("vorstand"))
 
 	var rows *sql.Rows
 	var err error
