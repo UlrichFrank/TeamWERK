@@ -619,16 +619,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Vorstand
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand"))
-			// Übungsgruppen: benannte Kader ohne teams-Zwilling. Enger als die
-			// Kader-Routen (dort auch Trainer/sportliche Leitung) — die Gruppe
-			// wird vom Vorstand eingerichtet, danach arbeitet der eingetragene
-			// Trainer über die Trainings-Routen mit ihr.
-			r.Get("/api/practice-groups", h.PracticeGroups.List)
-			r.Post("/api/practice-groups", h.PracticeGroups.Create)
-			r.Get("/api/practice-groups/{id}", h.PracticeGroups.Get)
-			r.Put("/api/practice-groups/{id}", h.PracticeGroups.Update)
-			r.Delete("/api/practice-groups/{id}", h.PracticeGroups.Delete)
-			r.Get("/api/practice-groups/{id}/member-suggestions", h.PracticeGroups.MemberSuggestions)
 			r.Post("/api/members", h.Members.Create)
 			r.Put("/api/members/{id}", h.Members.Update)
 			r.Put("/api/members/{id}/status", h.Members.UpdateStatus)
@@ -722,6 +712,16 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Patch("/api/kader/{id}/games-per-season", h.Kader.PatchGamesPerSeason)
 			r.Post("/api/kader/copy-from-season", h.Kader.CopyFromSeason)
 			r.Post("/api/kader/auto-assign", h.Kader.AutoAssign)
+			// Übungsgruppen: benannte Kader ohne teams-Zwilling. Seit
+			// uebungsgruppen-trainer-zugriff im selben Tier wie /api/kader —
+			// Trainer/sportliche Leitung legen ihre eigenen Gruppen an, statt
+			// dafür den Vorstand zu brauchen.
+			r.Get("/api/practice-groups", h.PracticeGroups.List)
+			r.Post("/api/practice-groups", h.PracticeGroups.Create)
+			r.Get("/api/practice-groups/{id}", h.PracticeGroups.Get)
+			r.Put("/api/practice-groups/{id}", h.PracticeGroups.Update)
+			r.Delete("/api/practice-groups/{id}", h.PracticeGroups.Delete)
+			r.Get("/api/practice-groups/{id}/member-suggestions", h.PracticeGroups.MemberSuggestions)
 		})
 	})
 

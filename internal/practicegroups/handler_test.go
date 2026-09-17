@@ -15,12 +15,13 @@ import (
 )
 
 // routes registriert den Übungsgruppen-Baum so, wie ihn BuildRouter im
-// Vorstand-Tier mountet — inklusive Gate, damit der 403-Fall echt geprüft wird
-// und nicht nur der Handler ohne Wache.
+// Vorstand+Trainer+sL-Tier mountet (seit uebungsgruppen-trainer-zugriff
+// dasselbe Tier wie /api/kader) — inklusive Gate, damit der 403-Fall echt
+// geprüft wird und nicht nur der Handler ohne Wache.
 func routes(h *practicegroups.Handler) func(chi.Router) {
 	return func(r chi.Router) {
 		r.Group(func(r chi.Router) {
-			r.Use(auth.RequireClubFunction("vorstand"))
+			r.Use(auth.RequireClubFunction("vorstand", "trainer", "sportliche_leitung"))
 			r.Get("/api/practice-groups", h.List)
 			r.Post("/api/practice-groups", h.Create)
 			r.Get("/api/practice-groups/{id}", h.Get)
@@ -169,14 +170,40 @@ func TestCreatePracticeGroup_NameInAndererSaisonErlaubt(t *testing.T) {
 	}
 }
 
-// TestCreatePracticeGroup_OhneVorstand: das Gate liegt im Router-Tier.
-func TestCreatePracticeGroup_OhneVorstand(t *testing.T) {
+// TestCreatePracticeGroup_AlsTrainerUndSportlicheLeitung: seit
+// uebungsgruppen-trainer-zugriff dürfen Trainer und sportliche Leitung ihre
+// eigenen Übungsgruppen anlegen, äquivalent zu POST /api/kader — sie müssen
+// dafür nicht mehr den Vorstand bemühen.
+func TestCreatePracticeGroup_AlsTrainerUndSportlicheLeitung(t *testing.T) {
+	for _, fn := range []string{"trainer", "sportliche_leitung"} {
+		t.Run(fn, func(t *testing.T) {
+			db := testutil.NewDB(t)
+			h := practicegroups.NewHandler(db, hub.NewHub())
+			testutil.CreateSeason(t, db, "2025/26")
+
+			uid := testutil.CreateUser(t, db, "standard")
+			token := testutil.Token(t, uid, "standard", []string{fn})
+			srv := testutil.NewServer(t, routes(h))
+
+			resp := testutil.Post(t, srv, "/api/practice-groups", token, map[string]any{"name": "Athletik"})
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusCreated {
+				t.Fatalf("erwartet 201, bekommen %d", resp.StatusCode)
+			}
+		})
+	}
+}
+
+// TestCreatePracticeGroup_OhneBerechtigung: das Gate liegt im Router-Tier
+// (Vorstand/Trainer/sportliche Leitung) — ein reiner Spieler ohne eine dieser
+// Funktionen bleibt außen vor.
+func TestCreatePracticeGroup_OhneBerechtigung(t *testing.T) {
 	db := testutil.NewDB(t)
 	h := practicegroups.NewHandler(db, hub.NewHub())
 	testutil.CreateSeason(t, db, "2025/26")
 
 	uid := testutil.CreateUser(t, db, "standard")
-	token := testutil.Token(t, uid, "standard", []string{"trainer"})
+	token := testutil.Token(t, uid, "standard", []string{"spieler"})
 	srv := testutil.NewServer(t, routes(h))
 
 	resp := testutil.Post(t, srv, "/api/practice-groups", token, map[string]any{"name": "Athletik"})

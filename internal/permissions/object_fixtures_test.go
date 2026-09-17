@@ -329,6 +329,14 @@ func (w *objWorld) newEmptyKader() int {
 	return testutil.CreateKader(w.t, w.db, teamID, w.seasonID)
 }
 
+// newEmptyPracticeGroup legt eine Übungsgruppe ohne Mitglieder an. Nötig für
+// DELETE /api/practice-groups/{id}: eine besetzte Gruppe endet schon an der
+// Trainings-Zählung mit 409 und verdeckte damit, dass gar kein Objektrecht
+// geprüft wird (siehe newEmptyKader, dasselbe Muster).
+func (w *objWorld) newEmptyPracticeGroup() int {
+	return testutil.CreatePracticeGroup(w.t, w.db, w.seasonID, uniq("Leere-Uebungsgruppe"))
+}
+
 // ── Videos ───────────────────────────────────────────────────────────────────
 
 func (w *objWorld) newVideo() int {

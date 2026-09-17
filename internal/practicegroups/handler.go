@@ -32,9 +32,9 @@ type Handler struct {
 func NewHandler(db *sql.DB, h *hub.EventHub) *Handler { return &Handler{db: db, hub: h} }
 
 // broadcast meldet eine Änderung an der Übungsgruppen-Liste. Bewusst global:
-// die Gruppe ist ein Verwaltungsobjekt des Vorstands, und ihre Zielmenge ändert
-// sich mit genau der Mutation, die hier gemeldet wird — eine vorab aufgelöste
-// Empfängermenge wäre entweder die alte oder die neue, nie beide.
+// die Zielmenge (jeder mit Zugriff aufs Verwaltungs-Tier) ändert sich mit genau
+// der Mutation, die hier gemeldet wird — eine vorab aufgelöste Empfängermenge
+// wäre entweder die alte oder die neue, nie beide.
 func (h *Handler) broadcast() {
 	if h.hub == nil {
 		return

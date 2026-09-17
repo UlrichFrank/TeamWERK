@@ -631,6 +631,15 @@ var matrix = []endpointCase{
 	{method: "PATCH", path: "/api/kader/{id}/games-per-season", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/kader/copy-from-season", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/kader/auto-assign", expected: exVorstandTrainer},
+	// Übungsgruppen (kader kind='practice', ohne teams-Zwilling) — seit
+	// uebungsgruppen-trainer-zugriff im selben Tier wie /api/kader: Trainer und
+	// sportliche Leitung legen ihre eigenen Gruppen an.
+	{method: "GET", path: "/api/practice-groups", expected: exVorstandTrainer},
+	{method: "POST", path: "/api/practice-groups", expected: exVorstandTrainer},
+	{method: "GET", path: "/api/practice-groups/{id}", expected: exVorstandTrainer},
+	{method: "PUT", path: "/api/practice-groups/{id}", expected: exVorstandTrainer},
+	{method: "DELETE", path: "/api/practice-groups/{id}", expected: exVorstandTrainer},
+	{method: "GET", path: "/api/practice-groups/{id}/member-suggestions", expected: exVorstandTrainer},
 
 	// ── Saisons lesen: Vorstand/Trainer/sL + Kassierer ───────────────────────────
 	{method: "GET", path: "/api/seasons", expected: exSeasonsRead},
@@ -681,14 +690,6 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/fee-run/protocol", expected: exVorstandKassierer},
 
 	// ── Vorstand ─────────────────────────────────────────────────────────────────
-	// Übungsgruppen (kader kind='practice', ohne teams-Zwilling) — Einrichtung
-	// ist Vorstandssache; die Mitarbeit läuft danach über die Trainings-Routen.
-	{method: "GET", path: "/api/practice-groups", expected: exVorstand},
-	{method: "POST", path: "/api/practice-groups", expected: exVorstand},
-	{method: "GET", path: "/api/practice-groups/{id}", expected: exVorstand},
-	{method: "PUT", path: "/api/practice-groups/{id}", expected: exVorstand},
-	{method: "DELETE", path: "/api/practice-groups/{id}", expected: exVorstand},
-	{method: "GET", path: "/api/practice-groups/{id}/member-suggestions", expected: exVorstand},
 	{method: "POST", path: "/api/members", expected: exVorstand},
 	{method: "PUT", path: "/api/members/{id}", expected: exVorstand},
 	{method: "PUT", path: "/api/members/{id}/status", expected: exVorstand},

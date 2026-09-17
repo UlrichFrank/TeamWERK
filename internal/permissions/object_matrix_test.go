@@ -106,17 +106,19 @@ var openByDesign = map[string]string{
 	"OPTIONS /api/videos/{id}/hls/{rendition}/{segment}": "CORS-Preflight läuft per Definition ohne Auth (HLSPreflight); die Auslieferung selbst hängt am ?st=-Stream-Token.",
 
 	// Vereinsstammdaten ohne Eigentümer: das Tier IST die Berechtigung.
-	"PUT /api/venues/{id}":                            "Veranstaltungsorte sind Vereinsstammdaten ohne Eigentümer; CRUD liegt laut Auth-Tier-Tabelle (docs/agent/04-api-db.md) bei Vorstand + Trainer/sportliche Leitung. Ein Objektrecht existiert nicht — jeder Trainer pflegt dieselbe Hallenliste.",
-	"DELETE /api/venues/{id}":                         "Wie PUT: Hallenliste ist vereinsweites Stammdatum (Auth-Tier Vorstand + Trainer/sL), kein personenbezogenes Objekt.",
-	"GET /api/duty-templates/{id}":                    "Dienstvorlagen sind Vereinsstammdaten; der Lesezugriff hängt bewusst am Tier „Vorstand + Trainer + sportliche Leitung (read-only)\" (internal/app/router.go), damit jeder Planende die Vorlage eines Spieltags nachsehen kann.",
-	"GET /api/duty-templates/{id}/preview":            "Vorschau derselben Stammdaten-Vorlage gegen ein Datum — rein rechnend, ohne Personenbezug und ohne Schreibwirkung.",
-	"GET /api/kader/{id}":                             "Trainer und sportliche Leitung sehen bewusst alle Kader: Spieler werden über Mannschaftsgrenzen hinweg zugeordnet (Aushilfe, erweiterter Kader, Übungsgruppen). Der Kader selbst trägt keine Kontaktdaten.",
-	"GET /api/kader/{id}/member-suggestions":          "Vorschlagsliste für die Kaderpflege — vereinsweit gewollt, sonst könnte niemand einen noch nicht zugeordneten Spieler finden. Gleiches Tier wie GET /api/kader/{id}.",
-	"GET /api/kader/{id}/extended-member-suggestions": "Wie member-suggestions, nur für den erweiterten Kader (Förderkinder aus anderen Mannschaften) — die Zielgruppe liegt per Definition außerhalb des eigenen Kaders.",
-	"GET /api/users/{id}/contact":                     "Das Kontaktprofil ist vereinsweit lesbar und pro Feld opt-in: openspec/specs/person-contact/spec.md legt fest, dass jeder Eingeloggte Name + die selbst freigegebenen Felder (Telefon/Adresse/E-Mail/Foto) sieht. Ohne Freigabe kommt nur der Name.",
-	"POST /api/chat/broadcasts/{id}/read":             "Die Route markiert ausschließlich die eigene Lese-Zeile (UPDATE broadcast_reads … WHERE user_id = <self>) und legt keine an. Für einen Nicht-Empfänger trifft das UPDATE keine Zeile: 204 ohne Wirkung, ohne Lesezugriff auf die Mitteilung.",
-	"POST /api/duty-assignments/{id}/fulfill":         "Das Abhaken eines Dienstes ist ein Rollenrecht, kein Objektrecht: policy.CanFulfillAssignment lässt jeden Trainer/sportliche Leitung quittieren — wer am Spieltag vor Ort ist, bestätigt, nicht der Trainer der eingeteilten Mannschaft. Welle 1 hat die Route bewusst auf „Rolle + RowsAffected\" gehärtet (docs/agent/06-gotchas.md).",
-	"POST /api/duty-assignments/{id}/cash-substitute": "Gegenstück zu fulfill: Ablösesumme statt Dienst, gleiche Rollenlogik (policy.CanFulfillAssignment), gleiche Welle-1-Härtung.",
+	"PUT /api/venues/{id}":                             "Veranstaltungsorte sind Vereinsstammdaten ohne Eigentümer; CRUD liegt laut Auth-Tier-Tabelle (docs/agent/04-api-db.md) bei Vorstand + Trainer/sportliche Leitung. Ein Objektrecht existiert nicht — jeder Trainer pflegt dieselbe Hallenliste.",
+	"DELETE /api/venues/{id}":                          "Wie PUT: Hallenliste ist vereinsweites Stammdatum (Auth-Tier Vorstand + Trainer/sL), kein personenbezogenes Objekt.",
+	"GET /api/duty-templates/{id}":                     "Dienstvorlagen sind Vereinsstammdaten; der Lesezugriff hängt bewusst am Tier „Vorstand + Trainer + sportliche Leitung (read-only)\" (internal/app/router.go), damit jeder Planende die Vorlage eines Spieltags nachsehen kann.",
+	"GET /api/duty-templates/{id}/preview":             "Vorschau derselben Stammdaten-Vorlage gegen ein Datum — rein rechnend, ohne Personenbezug und ohne Schreibwirkung.",
+	"GET /api/kader/{id}":                              "Trainer und sportliche Leitung sehen bewusst alle Kader: Spieler werden über Mannschaftsgrenzen hinweg zugeordnet (Aushilfe, erweiterter Kader, Übungsgruppen). Der Kader selbst trägt keine Kontaktdaten.",
+	"GET /api/kader/{id}/member-suggestions":           "Vorschlagsliste für die Kaderpflege — vereinsweit gewollt, sonst könnte niemand einen noch nicht zugeordneten Spieler finden. Gleiches Tier wie GET /api/kader/{id}.",
+	"GET /api/kader/{id}/extended-member-suggestions":  "Wie member-suggestions, nur für den erweiterten Kader (Förderkinder aus anderen Mannschaften) — die Zielgruppe liegt per Definition außerhalb des eigenen Kaders.",
+	"GET /api/practice-groups/{id}":                    "Seit uebungsgruppen-trainer-zugriff dasselbe Tier und dieselbe Begründung wie GET /api/kader/{id}: Übungsgruppen sind vereinsweit sichtbar, kein Kontaktdatenträger.",
+	"GET /api/practice-groups/{id}/member-suggestions": "Wie GET /api/kader/{id}/member-suggestions — Vorschlagsliste für die Gruppenpflege, vereinsweit gewollt.",
+	"GET /api/users/{id}/contact":                      "Das Kontaktprofil ist vereinsweit lesbar und pro Feld opt-in: openspec/specs/person-contact/spec.md legt fest, dass jeder Eingeloggte Name + die selbst freigegebenen Felder (Telefon/Adresse/E-Mail/Foto) sieht. Ohne Freigabe kommt nur der Name.",
+	"POST /api/chat/broadcasts/{id}/read":              "Die Route markiert ausschließlich die eigene Lese-Zeile (UPDATE broadcast_reads … WHERE user_id = <self>) und legt keine an. Für einen Nicht-Empfänger trifft das UPDATE keine Zeile: 204 ohne Wirkung, ohne Lesezugriff auf die Mitteilung.",
+	"POST /api/duty-assignments/{id}/fulfill":          "Das Abhaken eines Dienstes ist ein Rollenrecht, kein Objektrecht: policy.CanFulfillAssignment lässt jeden Trainer/sportliche Leitung quittieren — wer am Spieltag vor Ort ist, bestätigt, nicht der Trainer der eingeteilten Mannschaft. Welle 1 hat die Route bewusst auf „Rolle + RowsAffected\" gehärtet (docs/agent/06-gotchas.md).",
+	"POST /api/duty-assignments/{id}/cash-substitute":  "Gegenstück zu fulfill: Ablösesumme statt Dienst, gleiche Rollenlogik (policy.CanFulfillAssignment), gleiche Welle-1-Härtung.",
 }
 
 // ── Noch ohne Fixture ────────────────────────────────────────────────────────
@@ -137,6 +139,10 @@ var knownGaps = map[string]objGap{
 	"PUT /api/kader/{id}":                    {http.StatusNoContent, "hoch — Befund Welle 2, offen: UpdateKader prüft nur das Tier (Vorstand/Trainer/sL). Ein fremder Trainer fügt Mitglieder und Trainer eines fremden Kaders hinzu oder entfernt sie; über kader_trainers verschafft er sich damit selbst Zugriff auf dessen Trainings, Anwesenheit und Videos."},
 	"DELETE /api/kader/{id}":                 {http.StatusNoContent, "hoch — Befund Welle 2, offen: DeleteKader prüft nur die Mitgliederzahl (409 bei besetztem Kader), nicht die Zugehörigkeit. Ein leerer fremder Kader — der Normalfall zu Saisonbeginn — lässt sich von jedem Trainer löschen."},
 	"PATCH /api/kader/{id}/games-per-season": {http.StatusNoContent, "mittel — Befund Welle 2, offen: kein Objekt-Check; die Spielzahl je Saison geht in die Dienst-Soll-Rechnung eines fremden Kaders ein."},
+
+	// ── Übungsgruppen (derselbe Befund wie Kader, seit uebungsgruppen-trainer-zugriff dasselbe Tier) ──
+	"PUT /api/practice-groups/{id}":    {http.StatusOK, "hoch — Befund Welle 2, offen (Übertrag von PUT /api/kader/{id}, seit uebungsgruppen-trainer-zugriff im selben Tier): Update prüft nur das Tier. Ein fremder Trainer benennt eine fremde Übungsgruppe um oder fügt ihr Mitglieder/Trainer hinzu."},
+	"DELETE /api/practice-groups/{id}": {http.StatusNoContent, "hoch — Befund Welle 2, offen (Übertrag von DELETE /api/kader/{id}): Delete prüft nur die Trainings-Zahl (409 bei belegter Gruppe), nicht die Zugehörigkeit. Eine leere fremde Übungsgruppe lässt sich von jedem Trainer löschen."},
 
 	// ── Änderungsanträge (Vorstand+Trainer+sL-Tier, ohne Objektbezug) ────
 	"POST /api/members/{id}/change-drafts/{draftId}/accept": {http.StatusOK, "hoch — Befund Welle 2, offen: AcceptChangeRequestHandler autorisiert nur über das Tier. Ein fremder Trainer übernimmt den Änderungsantrag eines beliebigen Mitglieds (Name/Adresse/DSGVO/SEPA) in dessen Stammdaten — die {id} im Pfad wird dabei nicht einmal gegen den Entwurf geprüft."},
@@ -177,45 +183,41 @@ var validationBeforeAuthz = map[string]string{}
 // echtes Objekt-Fixture.
 var tierOnly = map[string]string{
 	// Vorstand
-	"GET /api/practice-groups/{id}":                    "Vorstand-Tier",
-	"PUT /api/practice-groups/{id}":                    "Vorstand-Tier",
-	"DELETE /api/practice-groups/{id}":                 "Vorstand-Tier",
-	"GET /api/practice-groups/{id}/member-suggestions": "Vorstand-Tier",
-	"PUT /api/members/{id}":                            "Vorstand-Tier",
-	"PUT /api/members/{id}/status":                     "Vorstand-Tier",
-	"DELETE /api/members/{id}":                         "Vorstand-Tier",
-	"PUT /api/members/{id}/user":                       "Vorstand-Tier",
-	"POST /api/members/{id}/proxy-account":             "Vorstand-Tier",
-	"POST /api/members/{id}/welcome-email":             "Vorstand-Tier",
-	"POST /api/users/{id}/create-member":               "Vorstand-Tier",
-	"PUT /api/seasons/{id}":                            "Vorstand-Tier",
-	"PUT /api/seasons/{id}/activate":                   "Vorstand-Tier",
-	"DELETE /api/seasons/{id}":                         "Vorstand-Tier",
-	"PUT /api/seasons/{id}/duty-targets":               "Vorstand-Tier",
-	"PUT /api/teams/{id}":                              "Vorstand-Tier",
-	"PUT /api/users/{id}":                              "Vorstand-Tier",
-	"PUT /api/users/{id}/role":                         "Vorstand-Tier",
-	"PUT /api/users/{id}/recovery-email":               "Vorstand-Tier",
-	"DELETE /api/users/{id}":                           "Vorstand-Tier",
-	"DELETE /api/invitations/{id}":                     "Vorstand-Tier",
-	"POST /api/invitations/{id}/send":                  "Vorstand-Tier",
-	"PUT /api/invitations/{id}/member":                 "Vorstand-Tier",
-	"POST /api/membership-requests/{id}/approve":       "Vorstand-Tier",
-	"POST /api/membership-requests/{id}/reject":        "Vorstand-Tier",
-	"DELETE /api/membership-requests/{id}":             "Vorstand-Tier",
-	"PUT /api/duty-types/{id}":                         "Vorstand-Tier",
-	"PUT /api/duty-types/{id}/instruction":             "Vorstand-Tier",
-	"DELETE /api/duty-types/{id}":                      "Vorstand-Tier",
-	"PUT /api/ausrichter/{id}":                         "Vorstand-Tier",
-	"DELETE /api/ausrichter/{id}":                      "Vorstand-Tier",
-	"PUT /api/duty-templates/{id}":                     "Vorstand-Tier",
-	"DELETE /api/duty-templates/{id}":                  "Vorstand-Tier",
-	"POST /api/upload/member-photo/{id}":               "Vorstand-Tier",
-	"DELETE /api/upload/member-photo/{id}":             "Vorstand-Tier",
-	"PUT /api/age-class-rules/{ageClass}":              "Vorstand-Tier (Stammdaten, kein Objektbesitz)",
-	"DELETE /api/training-group-categories/{name}":     "Vorstand-Tier (Stammdaten, kein Objektbesitz)",
-	"PUT /api/stammvereine/{id}":                       "Vorstand-Tier (Stammdaten, kein Objektbesitz)",
-	"DELETE /api/stammvereine/{id}":                    "Vorstand-Tier (Stammdaten, kein Objektbesitz)",
+	"PUT /api/members/{id}":                        "Vorstand-Tier",
+	"PUT /api/members/{id}/status":                 "Vorstand-Tier",
+	"DELETE /api/members/{id}":                     "Vorstand-Tier",
+	"PUT /api/members/{id}/user":                   "Vorstand-Tier",
+	"POST /api/members/{id}/proxy-account":         "Vorstand-Tier",
+	"POST /api/members/{id}/welcome-email":         "Vorstand-Tier",
+	"POST /api/users/{id}/create-member":           "Vorstand-Tier",
+	"PUT /api/seasons/{id}":                        "Vorstand-Tier",
+	"PUT /api/seasons/{id}/activate":               "Vorstand-Tier",
+	"DELETE /api/seasons/{id}":                     "Vorstand-Tier",
+	"PUT /api/seasons/{id}/duty-targets":           "Vorstand-Tier",
+	"PUT /api/teams/{id}":                          "Vorstand-Tier",
+	"PUT /api/users/{id}":                          "Vorstand-Tier",
+	"PUT /api/users/{id}/role":                     "Vorstand-Tier",
+	"PUT /api/users/{id}/recovery-email":           "Vorstand-Tier",
+	"DELETE /api/users/{id}":                       "Vorstand-Tier",
+	"DELETE /api/invitations/{id}":                 "Vorstand-Tier",
+	"POST /api/invitations/{id}/send":              "Vorstand-Tier",
+	"PUT /api/invitations/{id}/member":             "Vorstand-Tier",
+	"POST /api/membership-requests/{id}/approve":   "Vorstand-Tier",
+	"POST /api/membership-requests/{id}/reject":    "Vorstand-Tier",
+	"DELETE /api/membership-requests/{id}":         "Vorstand-Tier",
+	"PUT /api/duty-types/{id}":                     "Vorstand-Tier",
+	"PUT /api/duty-types/{id}/instruction":         "Vorstand-Tier",
+	"DELETE /api/duty-types/{id}":                  "Vorstand-Tier",
+	"PUT /api/ausrichter/{id}":                     "Vorstand-Tier",
+	"DELETE /api/ausrichter/{id}":                  "Vorstand-Tier",
+	"PUT /api/duty-templates/{id}":                 "Vorstand-Tier",
+	"DELETE /api/duty-templates/{id}":              "Vorstand-Tier",
+	"POST /api/upload/member-photo/{id}":           "Vorstand-Tier",
+	"DELETE /api/upload/member-photo/{id}":         "Vorstand-Tier",
+	"PUT /api/age-class-rules/{ageClass}":          "Vorstand-Tier (Stammdaten, kein Objektbesitz)",
+	"DELETE /api/training-group-categories/{name}": "Vorstand-Tier (Stammdaten, kein Objektbesitz)",
+	"PUT /api/stammvereine/{id}":                   "Vorstand-Tier (Stammdaten, kein Objektbesitz)",
+	"DELETE /api/stammvereine/{id}":                "Vorstand-Tier (Stammdaten, kein Objektbesitz)",
 
 	// Vorstand + Kassierer
 	"GET /api/members/{id}":              "Vorstand+Kassierer-Tier",
@@ -720,6 +722,19 @@ func objectFixtures() map[string]objFixture {
 	add("GET /api/kader/{id}/member-suggestions", objFixture{who: personaT, params: kaderFixture, noOwnerProbe: true})
 	add("GET /api/kader/{id}/extended-member-suggestions", objFixture{who: personaT, params: kaderFixture, noOwnerProbe: true})
 	add("PATCH /api/kader/{id}/games-per-season", objFixture{who: personaT, params: kaderFixture, noOwnerProbe: true})
+
+	// ── Übungsgruppen (Vorstand+Trainer+sL-Tier seit uebungsgruppen-trainer-zugriff, aber objektgebunden) ──
+	practiceGroupFixture := func(w *objWorld) map[string]string { return p("id", w.bPracticeGroupID) }
+	add("GET /api/practice-groups/{id}", objFixture{who: personaT, params: practiceGroupFixture, noOwnerProbe: true})
+	add("PUT /api/practice-groups/{id}", objFixture{who: personaT, params: practiceGroupFixture, noOwnerProbe: true})
+	// Leere Gruppe: eine besetzte endet schon an der Trainings-Zählung mit 409
+	// und verdeckte damit, dass Delete kein Objektrecht prüft.
+	add("DELETE /api/practice-groups/{id}", objFixture{
+		who:          personaT,
+		params:       func(w *objWorld) map[string]string { return p("id", w.newEmptyPracticeGroup()) },
+		noOwnerProbe: true,
+	})
+	add("GET /api/practice-groups/{id}/member-suggestions", objFixture{who: personaT, params: practiceGroupFixture, noOwnerProbe: true})
 
 	// ── Änderungsanträge (Vorstand+Trainer+sL-Tier) ──────────────────────────
 	draftFixture := func(w *objWorld) map[string]string {
