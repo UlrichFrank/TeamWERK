@@ -67,7 +67,7 @@ describe('VideosPage — Rendering und Mehr laden', () => {
     void reply
   })
 
-  test('Upload-Button nur für berechtigte Personas', async () => {
+  test('Upload-Button für Trainer sichtbar', async () => {
     renderAsPersona(<VideosPage />, 'trainer', {
       mocks: [
         { url: /\/teams/, data: [] },
@@ -101,7 +101,12 @@ describe('VideosPage — Rendering und Mehr laden', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
-  test('kein Upload-Button für Spieler', async () => {
+  // Seit video-download-duty-upload (Commit 843cf264) zeigt der Button auch
+  // Standard-Nutzern ohne Rolle den Weg zum Encoder-Tool — sie können über einen
+  // Dienst mit grants_video_upload hochladeberechtigt sein, ohne Trainer/Vorstand
+  // zu sein. Der Button verlinkt nur Downloads; die tatsächliche Berechtigung
+  // prüft ausschließlich der Server (CanUploadForGameViaDuty).
+  test('Upload-Button auch für Spieler sichtbar — Server entscheidet über die tatsächliche Berechtigung', async () => {
     renderAsPersona(<VideosPage />, 'spieler', {
       mocks: [
         { url: /\/teams/, data: [] },
@@ -109,7 +114,7 @@ describe('VideosPage — Rendering und Mehr laden', () => {
       ],
     })
     await flushAsync()
-    expect(screen.queryByRole('button', { name: /Video hochladen/i })).toBeNull()
+    expect(screen.getByRole('button', { name: /Video hochladen/i })).toBeInTheDocument()
   })
 
   test('Statusfilter ändert Query', async () => {
