@@ -26,7 +26,26 @@ import {
   CheckCheck,
   Loader2,
   BarChart3,
+  Pin,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
 import AuthImage from "../components/AuthImage";
@@ -50,6 +69,7 @@ import ChatPollCard from "../components/ChatPollCard";
 import ChatPollVotesModal from "../components/ChatPollVotesModal";
 import { BTN_SMALL, HEADER_CTRL_ICON, HEADER_NEUTRAL } from '../lib/buttonStyles'
 import ChatSearchModal, { type SearchHit } from "../components/ChatSearchModal";
+import ActionMenu from "../components/ActionMenu";
 
 interface ConvMember {
   id: number;
@@ -68,6 +88,8 @@ interface Conversation {
   unreadCount: number;
   lastMessage: LastMessage | null;
   members: ConvMember[];
+  pinned: boolean;
+  pinOrder: number | null;
 }
 interface Reaction {
   emoji: string;
@@ -252,6 +274,107 @@ function smoothScrollToBottom(
     else box.scrollTop = box.scrollHeight; // Finaler Snap gegen sub-pixel-Rest
   };
   requestAnimationFrame(step);
+}
+
+// ConversationRow rendert eine Zeile der Chat-Liste. Der Drag-Handle (nur für
+// gepinnte Zeilen sichtbar) ist ein eigenes, dediziertes Icon statt „ganze
+// Zeile ziehen" — sonst kollidiert Drag mit dem Öffnen der Konversation per
+// Klick/Tap. useSortable muss pro Zeile in einer eigenen Komponente laufen
+// (nicht direkt in einer .map()-Callback des Elternteils), sonst variiert die
+// Zahl der Hook-Aufrufe mit der Listenlänge.
+function ConversationRow({
+  conv,
+  active,
+  draggable,
+  onOpen,
+  onTogglePin,
+  onDelete,
+  convName,
+}: {
+  conv: Conversation;
+  active: boolean;
+  draggable: boolean;
+  onOpen: (conv: Conversation) => void;
+  onTogglePin: (conv: Conversation) => void;
+  onDelete: (conv: Conversation) => void;
+  convName: (conv: Conversation) => string;
+}) {
+  const sortable = useSortable({ id: conv.id, disabled: !draggable });
+  const style: React.CSSProperties = draggable
+    ? {
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+        opacity: sortable.isDragging ? 0.5 : 1,
+      }
+    : {};
+
+  return (
+    <div
+      ref={draggable ? sortable.setNodeRef : undefined}
+      style={style}
+      className={`flex items-center border-b border-brand-border-subtle hover:bg-brand-table-select transition-colors ${active ? "bg-brand-table-select" : ""}`}
+    >
+      {draggable && (
+        <button
+          {...sortable.attributes}
+          {...sortable.listeners}
+          aria-label="Reihenfolge ändern"
+          className="shrink-0 px-2 py-3 text-brand-text-subtle hover:text-brand-text cursor-grab active:cursor-grabbing touch-none"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      )}
+      <button
+        onClick={() => onOpen(conv)}
+        className="flex-1 min-w-0 text-left px-4 py-3"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1 min-w-0 text-sm font-medium text-brand-text">
+            {conv.pinned && (
+              <Pin className="w-3 h-3 shrink-0 text-brand-text-subtle" />
+            )}
+            <span className="truncate">{convName(conv)}</span>
+          </span>
+          {conv.lastMessage && (
+            <span className="text-xs text-brand-text-muted shrink-0">
+              {conversationTimeLabel(
+                new Date(conv.lastMessage.sentAt),
+                new Date(),
+              )}
+            </span>
+          )}
+        </div>
+        {conv.lastMessage && (
+          <div className="flex items-center justify-between gap-2 mt-0.5">
+            <p className="flex items-center gap-1 min-w-0 text-xs text-brand-text-muted">
+              {conv.lastMessage.isPoll && (
+                <BarChart3 className="w-3 h-3 shrink-0" />
+              )}
+              <span className="truncate">{conv.lastMessage.body}</span>
+            </p>
+            {conv.unreadCount > 0 && (
+              <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 shrink-0">
+                {conv.unreadCount}
+              </span>
+            )}
+          </div>
+        )}
+      </button>
+      <ActionMenu
+        actions={[
+          {
+            label: conv.pinned ? "Lösen" : "Anpinnen",
+            onClick: () => onTogglePin(conv),
+          },
+          {
+            label: "Löschen",
+            onClick: () => onDelete(conv),
+            variant: "danger",
+          },
+        ]}
+      />
+    </div>
+  );
 }
 
 export default function ChatPage() {
@@ -917,6 +1040,9 @@ export default function ChatPage() {
       }
     }
     if (event === "chat:new-broadcast") loadBroadcasts();
+    // Pin-Status ist rein privat (kein Fan-out an andere Mitglieder) — das
+    // Event synct nur eigene offene Tabs/Geräte desselben Nutzers.
+    if (event === "chat:pin-updated") loadConversations();
   });
 
   const toggleReaction = async (msgId: number, emoji: string) => {
@@ -1377,6 +1503,60 @@ export default function ChatPage() {
     loadConversations();
   };
 
+  const togglePin = async (conv: Conversation) => {
+    try {
+      if (conv.pinned) {
+        await api.delete(`/chat/conversations/${conv.id}/pin`);
+      } else {
+        await api.put(`/chat/conversations/${conv.id}/pin`);
+      }
+      loadConversations();
+    } catch {}
+  };
+
+  // Optimistisch: die Reihenfolge wird sofort im State angewendet, damit die
+  // Drag-Geste nicht auf den Server-Roundtrip wartet. Bei Fehlschlag (z.B.
+  // 409, weil ein zweites Tab zwischenzeitlich gepinnt/gelöst hat) wird der
+  // Server-Stand per Re-Fetch zurückgeholt statt den lokalen State zu raten.
+  const reorderPinnedConversations = async (order: number[]) => {
+    setConversations((prev) => {
+      const rank = new Map(order.map((id, i) => [id, i]));
+      const pinned = prev
+        .filter((c) => c.pinned)
+        .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+      const unpinned = prev.filter((c) => !c.pinned);
+      return [...pinned, ...unpinned];
+    });
+    try {
+      await api.put("/chat/conversations/pinned-order", { order });
+    } catch {
+      setToast("Reihenfolge konnte nicht gespeichert werden");
+      setTimeout(() => setToast(null), 4000);
+      loadConversations();
+    }
+  };
+
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handlePinDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const pinnedIds = conversations.filter((c) => c.pinned).map((c) => c.id);
+    const oldIndex = pinnedIds.indexOf(active.id as number);
+    const newIndex = pinnedIds.indexOf(over.id as number);
+    if (oldIndex === -1 || newIndex === -1) return;
+    reorderPinnedConversations(arrayMove(pinnedIds, oldIndex, newIndex));
+  };
+
+  // Server liefert bereits vorsortiert (gepinnt nach pin_order, dann
+  // ungepinnt nach letzter Aktivität) — hier nur nach pinned aufgeteilt, kein
+  // erneutes Sortieren nötig.
+  const pinnedConversations = conversations.filter((c) => c.pinned);
+  const unpinnedConversations = conversations.filter((c) => !c.pinned);
+
   const deleteBroadcast = async (bc: Broadcast) => {
     if (!confirm("Mitteilung löschen?")) return;
     await api.delete(`/chat/broadcasts/${bc.id}`).catch(() => {});
@@ -1510,54 +1690,42 @@ export default function ChatPage() {
                     Noch keine Gespräche
                   </p>
                 )}
-                {conversations.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className={`flex items-center border-b border-brand-border-subtle hover:bg-brand-table-select transition-colors ${activeConv?.id === conv.id ? "bg-brand-table-select" : ""}`}
+                {pinnedConversations.length > 0 && (
+                  <DndContext
+                    sensors={dragSensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handlePinDragEnd}
                   >
-                    <button
-                      onClick={() => openConversation(conv)}
-                      className="flex-1 min-w-0 text-left px-4 py-3"
+                    <SortableContext
+                      items={pinnedConversations.map((c) => c.id)}
+                      strategy={verticalListSortingStrategy}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-brand-text truncate">
-                          {convName(conv)}
-                        </span>
-                        {conv.lastMessage && (
-                          <span className="text-xs text-brand-text-muted shrink-0">
-                            {conversationTimeLabel(
-                              new Date(conv.lastMessage.sentAt),
-                              new Date(),
-                            )}
-                          </span>
-                        )}
-                      </div>
-                      {conv.lastMessage && (
-                        <div className="flex items-center justify-between gap-2 mt-0.5">
-                          <p className="flex items-center gap-1 min-w-0 text-xs text-brand-text-muted">
-                            {conv.lastMessage.isPoll && (
-                              <BarChart3 className="w-3 h-3 shrink-0" />
-                            )}
-                            <span className="truncate">
-                              {conv.lastMessage.body}
-                            </span>
-                          </p>
-                          {conv.unreadCount > 0 && (
-                            <span className="bg-brand-yellow text-brand-black text-xs font-bold rounded-full px-1.5 shrink-0">
-                              {conv.unreadCount}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => deleteConversation(conv)}
-                      className="shrink-0 px-3 py-3 text-brand-text-subtle hover:text-brand-danger transition-colors"
-                      aria-label="Gespräch löschen"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                      {pinnedConversations.map((conv) => (
+                        <ConversationRow
+                          key={conv.id}
+                          conv={conv}
+                          active={activeConv?.id === conv.id}
+                          draggable
+                          onOpen={openConversation}
+                          onTogglePin={togglePin}
+                          onDelete={deleteConversation}
+                          convName={convName}
+                        />
+                      ))}
+                    </SortableContext>
+                  </DndContext>
+                )}
+                {unpinnedConversations.map((conv) => (
+                  <ConversationRow
+                    key={conv.id}
+                    conv={conv}
+                    active={activeConv?.id === conv.id}
+                    draggable={false}
+                    onOpen={openConversation}
+                    onTogglePin={togglePin}
+                    onDelete={deleteConversation}
+                    convName={convName}
+                  />
                 ))}
               </div>
             </>
