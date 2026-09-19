@@ -57,4 +57,4 @@ Stellen kommen ihre Termine bei den Betroffenen trotzdem nicht an:
   wer sie nicht will, schaltet den Schalter aus.
 - **Keine Berechtigungsänderung**: die Kader-Zugehörigkeit bleibt die einzige Auflösung, der
   Funktionsträger-Bypass bleibt draußen.
-- **CHANGELOG**: je ein `[feat] calendar: …` und ein `[fix] termine: …`-Eintrag.
+- **CHANGELOG**: entsteht aus den Commit-Betreffen (`make build` → `scripts/gen-changelog.py`).

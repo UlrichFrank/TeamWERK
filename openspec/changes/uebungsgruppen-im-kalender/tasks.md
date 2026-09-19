@@ -39,7 +39,7 @@
 
 - [x] 7.1 `make test` + `pnpm -C web test` + `make lint` grün
 - [ ] 7.2 `/verify-change` durchlaufen (Route→Tests, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`)
-- [x] 7.3 CHANGELOG-Einträge (`[feat] calendar: …`, `[fix] termine: …`)
+- [x] 7.3 Commit-Betreffe als `feat(calendar): …` / `fix(termine): …` — `web/public/CHANGELOG.md` wird von `make build` aus dem Git-Log erzeugt (`scripts/gen-changelog.py`), nicht von Hand gepflegt
 
 ## 8. Dokumentation
 
