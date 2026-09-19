@@ -1,0 +1,11 @@
+-- Sechster Feed-Toggle: Übungsgruppen-Termine (uebungsgruppen-im-kalender).
+-- Übungsgruppen-Termine (training_sessions.team_id IS NULL) fehlten im iCal-Feed
+-- strukturell, weil fetchTrainings über teams.id = ts.team_id auflöste. Der
+-- eigene Toggle trennt sie vom Mannschaftstraining: die Übungsgruppe ist ein
+-- Zusatzangebot mit eigenem Rhythmus, an dem oft nur ein Kind einer Familie
+-- teilnimmt.
+--
+-- DEFAULT 1 wie die fünf Bestandsspalten — die Termine fehlten bisher, ein
+-- Default 0 lieferte nach dem Deploy denselben leeren Kalender und verlagerte
+-- die Behebung auf eine Aktion, von der der Betroffene nichts weiß.
+ALTER TABLE calendar_tokens ADD COLUMN include_practice_groups INTEGER NOT NULL DEFAULT 1;
