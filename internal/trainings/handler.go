@@ -1170,7 +1170,12 @@ func (h *Handler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		to = time.Now().AddDate(0, 3, 0).Format("2006-01-02")
 	}
 
-	limit, offset := httpx.Paging(r, 100, 200)
+	// Deckel 1000 statt 200: ein Trainer mit mehreren Kadern und erst recht ein
+	// Funktionsträger (admin/vorstand/sportliche_leitung sehen alle Termine)
+	// kommt im Saisonfenster über 200 Termine — /termine fragt limit=500 an und
+	// bekam die Liste stillschweigend abgeschnitten. Der Deckel bleibt, er liegt
+	// nur jenseits der fachlichen Obergrenze.
+	limit, offset := httpx.Paging(r, 100, 1000)
 	// Serverseitiger Filter: ?exclude_series=1 → nur Einzeltermine (series_id IS NULL),
 	// ersetzt das frühere Client-filter(series_id===null) in AdminTrainingsPage.
 	excludeSeries := q.Get("exclude_series") == "1"

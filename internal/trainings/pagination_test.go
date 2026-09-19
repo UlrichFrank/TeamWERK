@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
@@ -132,3 +133,43 @@ func TestListSessions_ExcludeSeriesFilter(t *testing.T) {
 
 // Fehlerfall (401 ohne Token) ist bereits durch TestListSessions_Unauthenticated
 // in handler_test.go abgedeckt.
+
+// TestListSessions_LimitUeber200: /termine fragt mit limit=500 an. Bis zur
+// Anhebung des Deckels (httpx.Paging(r, 100, 200)) bekam die Seite davon nur
+// 200 Zeilen — ohne Fehler, ohne Hinweis, einfach ohne die letzten Termine.
+// Betroffen war jeder mit vielen Kadern (Trainer) und jeder Funktionsträger
+// (admin/vorstand/sportliche_leitung sehen alle Termine der Saison).
+func TestListSessions_LimitUeber200(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	const sessions = 250
+	start := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < sessions; i++ {
+		testutil.CreateTrainingSessionForKader(t, db, kaderID, seasonID,
+			start.AddDate(0, 0, i).Format("2006-01-02"), "Serientermin")
+	}
+
+	adminUserID := testutil.CreateUser(t, db, "admin")
+	h := trainings.NewHandler(db, testutil.TestConfig(), hub.NewHub())
+	srv := testServer(t, h)
+	token := testutil.Token(t, adminUserID, "admin", nil)
+
+	res := testutil.Get(t, srv, "/api/training-sessions?from=2026-01-01&to=2027-12-31&limit=500", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var page sessionsListResponse
+	if err := json.NewDecoder(res.Body).Decode(&page); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if page.Total != sessions {
+		t.Errorf("total = %d, erwartet %d", page.Total, sessions)
+	}
+	if len(page.Items) != sessions {
+		t.Errorf("items = %d, erwartet %d — die Liste wird abgeschnitten", len(page.Items), sessions)
+	}
+}
