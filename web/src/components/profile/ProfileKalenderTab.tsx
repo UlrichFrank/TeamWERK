@@ -10,6 +10,7 @@ type Toggles = {
   include_training: boolean
   include_generisch: boolean
   include_duty: boolean
+  include_practice_groups: boolean
 }
 
 type TokenResponse = Toggles & { token: string }
@@ -20,6 +21,7 @@ const ALL_ON: Toggles = {
   include_training: true,
   include_generisch: true,
   include_duty: true,
+  include_practice_groups: true,
 }
 
 const labels: Record<keyof Toggles, string> = {
@@ -28,6 +30,10 @@ const labels: Record<keyof Toggles, string> = {
   include_training: 'Trainings',
   include_generisch: 'Sonstige Events',
   include_duty: 'Dienste',
+  // Eigener Schalter neben "Trainings": das Mannschaftstraining ist der
+  // Pflichttermin der eigenen Mannschaft, die Übungsgruppe ein Zusatzangebot
+  // mit eigenem Rhythmus.
+  include_practice_groups: 'Übungsgruppen',
 }
 
 
@@ -51,6 +57,7 @@ export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { ap
           include_training: r.data.include_training,
           include_generisch: r.data.include_generisch,
           include_duty: r.data.include_duty,
+          include_practice_groups: r.data.include_practice_groups,
         })
       })
       .catch(() => {
