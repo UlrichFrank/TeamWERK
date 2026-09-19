@@ -11,8 +11,8 @@ type Persona struct {
 	IsParent      bool
 }
 
-// Personas enthält die 11 kanonischen Test-Personas.
-// Quelle der Wahrheit: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §1
+// Personas enthält die 12 kanonischen Test-Personas.
+// Quelle der Wahrheit: openspec/specs/permissions/spec.md, Requirement „Persona-Definition".
 var Personas = []Persona{
 	{ID: "admin", Role: "admin", ClubFunctions: []string{}, IsParent: false},
 	{ID: "vorstand", Role: "standard", ClubFunctions: []string{"vorstand"}, IsParent: false},
@@ -25,4 +25,9 @@ var Personas = []Persona{
 	{ID: "sportliche_leitung_elternteil", Role: "standard", ClubFunctions: []string{"sportliche_leitung"}, IsParent: true},
 	{ID: "spieler", Role: "standard", ClubFunctions: []string{"spieler"}, IsParent: false},
 	{ID: "elternteil", Role: "standard", ClubFunctions: []string{}, IsParent: true},
+	// medien (Migration 024): Spielbericht-Freigabe. Ohne diese Persona wäre das
+	// Freigeber-Tier RequireClubFunction("medien","vorstand") nur über den
+	// Admin-Bypass geprüft. Bewusst am Ende, damit die Token-User-IDs (i+100)
+	// der bestehenden Personas stabil bleiben.
+	{ID: "medien", Role: "standard", ClubFunctions: []string{"medien"}, IsParent: false},
 }
