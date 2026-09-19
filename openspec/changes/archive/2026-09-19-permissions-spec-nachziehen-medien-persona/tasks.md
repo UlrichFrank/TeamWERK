@@ -18,5 +18,5 @@ _3.1: Skript im Scratchpad, Ergebnis 0 Abweichungen für alle sieben Gates (die 
 
 ## 4. Abschluss
 
-- [ ] 4.1 `make test` (inkl. Tier- und Objektrechte-Matrix) und `pnpm -C web test` grün; `openspec validate --all` grün.
-- [ ] 4.2 Change archivieren, Delta-Specs nach `openspec/specs/permissions`, `me-capabilities`, `nav-visibility` synchronisieren. Verifikation: Archiv-Verzeichnis vorhanden, `openspec validate --specs` grün.
+- [x] 4.1 `make test` (inkl. Tier- und Objektrechte-Matrix) und `pnpm -C web test` grün; `openspec validate --all` grün.
+- [x] 4.2 Change archivieren, Delta-Specs nach `openspec/specs/permissions`, `me-capabilities`, `nav-visibility` synchronisieren. Verifikation: Archiv-Verzeichnis vorhanden, `openspec validate --specs` grün.

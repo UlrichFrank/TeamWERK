@@ -239,7 +239,7 @@ Die Sichtbarkeit der Navigation SHALL serverseitig in `policy.NavFor` entschiede
 
 **Modul „Verein“**
 - „Mein Team“, „Dokumente“, „Dienste“, „Dienst-Rangliste“, „Mitfahrten“, „Nachrichten“, „Spielberichte“ — alle
-- „Berichte prüfen“ — `admin`, `medien`, `vorstand`
+- „Berichte prüfen“ (AppShell-Beschriftung „Spielbericht prüfen“, Ziel `/spielberichte/pruefen`) — `admin`, `medien`, `vorstand`
 
 **Modul „Verwaltung“**
 
@@ -268,7 +268,7 @@ Wenn alle Items eines Moduls für eine Persona ausgeblendet sind, SHALL auch der
 
 #### Scenario: medien sieht „Berichte prüfen“, aber kein Verwaltungs-Modul
 - **WHEN** Persona `medien` rendert AppShell
-- **THEN** ist „Berichte prüfen“ im DOM und das Modul „VERWALTUNG“ nicht
+- **THEN** ist der Eintrag mit Ziel `/spielberichte/pruefen` im DOM und das Modul „VERWALTUNG“ nicht
 
 #### Scenario: admin sieht kein „Mein Profil"
 - **WHEN** Persona `admin` ohne eigenen Mitglieds-Datensatz und ohne Kind rendert AppShell
