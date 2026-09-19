@@ -196,6 +196,35 @@ func CreateTrainingSession(t *testing.T, database *sql.DB, teamID, seasonID int,
 	return int(id)
 }
 
+// CreateTrainingSessionForKader inserts a training session owned by an EXISTING
+// kader and returns its ID. Anders als CreateTrainingSession legt es keinen
+// zweiten Kader für dasselbe (team, season) an — nötig überall dort, wo der
+// Testnutzer an einem bestimmten Kader hängt und der Code unter Test über
+// `training_sessions.kader_id` auflöst (iCal-Feed, trainings.ListSessions).
+//
+// team_id wird aus dem Kader projiziert: NULL bei einer Übungsgruppe
+// (kind='practice'), sonst dessen teams.id — genau wie im Produktivpfad.
+func CreateTrainingSessionForKader(t *testing.T, database *sql.DB, kaderID, seasonID int, date, title string) int {
+	t.Helper()
+	var teamID sql.NullInt64
+	if err := database.QueryRow(`SELECT team_id FROM kader WHERE id = ?`, kaderID).Scan(&teamID); err != nil {
+		t.Fatalf("CreateTrainingSessionForKader: Kader %d lesen: %v", kaderID, err)
+	}
+	var teamArg any
+	if teamID.Valid {
+		teamArg = teamID.Int64
+	}
+	res, err := database.Exec(
+		`INSERT INTO training_sessions (kader_id, team_id, season_id, date, start_time, end_time, title)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		kaderID, teamArg, seasonID, date, "18:00", "20:00", title)
+	if err != nil {
+		t.Fatalf("CreateTrainingSessionForKader: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	return int(id)
+}
+
 // CreateTrainingSessionForSeries inserts a training session linked to a series
 // (series_id set) and returns its ID. Needed to exercise series-unavailability
 // derivation (which never applies to sessions with series_id NULL).

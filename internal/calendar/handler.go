@@ -31,6 +31,12 @@ type tokenSettings struct {
 	IncludeTraining  bool   `json:"include_training"`
 	IncludeGenerisch bool   `json:"include_generisch"`
 	IncludeDuty      bool   `json:"include_duty"`
+	// IncludePracticeGroups steuert Übungsgruppen-Termine (kader.kind='practice',
+	// erkennbar an training_sessions.team_id IS NULL) und ist von
+	// IncludeTraining unabhängig — das Mannschaftstraining ist der Pflichttermin
+	// der eigenen Mannschaft, die Übungsgruppe ein Zusatzangebot mit eigenem
+	// Rhythmus.
+	IncludePracticeGroups bool `json:"include_practice_groups"`
 }
 
 // GET /api/calendar/token
@@ -38,9 +44,9 @@ func (h *Handler) GetToken(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	var s tokenSettings
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT token, include_heim, include_auswaerts, include_training, include_generisch, include_duty
+		`SELECT token, include_heim, include_auswaerts, include_training, include_generisch, include_duty, include_practice_groups
 		 FROM calendar_tokens WHERE user_id = ?`, claims.UserID).
-		Scan(&s.Token, &s.IncludeHeim, &s.IncludeAuswaerts, &s.IncludeTraining, &s.IncludeGenerisch, &s.IncludeDuty)
+		Scan(&s.Token, &s.IncludeHeim, &s.IncludeAuswaerts, &s.IncludeTraining, &s.IncludeGenerisch, &s.IncludeDuty, &s.IncludePracticeGroups)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -82,12 +88,12 @@ func (h *Handler) UpsertToken(w http.ResponseWriter, r *http.Request) {
 			hex.EncodeToString(b[8:10]) + "-" +
 			hex.EncodeToString(b[10:])
 		_, err = h.db.ExecContext(r.Context(),
-			`INSERT INTO calendar_tokens (user_id, token, include_heim, include_auswaerts, include_training, include_generisch, include_duty)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO calendar_tokens (user_id, token, include_heim, include_auswaerts, include_training, include_generisch, include_duty, include_practice_groups)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			claims.UserID, token,
 			boolToInt(req.IncludeHeim), boolToInt(req.IncludeAuswaerts),
 			boolToInt(req.IncludeTraining), boolToInt(req.IncludeGenerisch),
-			boolToInt(req.IncludeDuty))
+			boolToInt(req.IncludeDuty), boolToInt(req.IncludePracticeGroups))
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -99,11 +105,11 @@ func (h *Handler) UpsertToken(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// Update settings, keep existing token.
 		_, err = h.db.ExecContext(r.Context(),
-			`UPDATE calendar_tokens SET include_heim=?, include_auswaerts=?, include_training=?, include_generisch=?, include_duty=?
+			`UPDATE calendar_tokens SET include_heim=?, include_auswaerts=?, include_training=?, include_generisch=?, include_duty=?, include_practice_groups=?
 			 WHERE user_id=?`,
 			boolToInt(req.IncludeHeim), boolToInt(req.IncludeAuswaerts),
 			boolToInt(req.IncludeTraining), boolToInt(req.IncludeGenerisch),
-			boolToInt(req.IncludeDuty), claims.UserID)
+			boolToInt(req.IncludeDuty), boolToInt(req.IncludePracticeGroups), claims.UserID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -155,9 +161,9 @@ func (h *Handler) GetChildToken(w http.ResponseWriter, r *http.Request) {
 	}
 	var s tokenSettings
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT token, include_heim, include_auswaerts, include_training, include_generisch, include_duty
+		`SELECT token, include_heim, include_auswaerts, include_training, include_generisch, include_duty, include_practice_groups
 		 FROM calendar_tokens WHERE user_id = ?`, childUID).
-		Scan(&s.Token, &s.IncludeHeim, &s.IncludeAuswaerts, &s.IncludeTraining, &s.IncludeGenerisch, &s.IncludeDuty)
+		Scan(&s.Token, &s.IncludeHeim, &s.IncludeAuswaerts, &s.IncludeTraining, &s.IncludeGenerisch, &s.IncludeDuty, &s.IncludePracticeGroups)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -200,12 +206,12 @@ func (h *Handler) UpsertChildToken(w http.ResponseWriter, r *http.Request) {
 			hex.EncodeToString(b[8:10]) + "-" +
 			hex.EncodeToString(b[10:])
 		_, err = h.db.ExecContext(r.Context(),
-			`INSERT INTO calendar_tokens (user_id, token, include_heim, include_auswaerts, include_training, include_generisch, include_duty)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO calendar_tokens (user_id, token, include_heim, include_auswaerts, include_training, include_generisch, include_duty, include_practice_groups)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 			childUID, token,
 			boolToInt(req.IncludeHeim), boolToInt(req.IncludeAuswaerts),
 			boolToInt(req.IncludeTraining), boolToInt(req.IncludeGenerisch),
-			boolToInt(req.IncludeDuty))
+			boolToInt(req.IncludeDuty), boolToInt(req.IncludePracticeGroups))
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -216,11 +222,11 @@ func (h *Handler) UpsertChildToken(w http.ResponseWriter, r *http.Request) {
 		return
 	} else {
 		_, err = h.db.ExecContext(r.Context(),
-			`UPDATE calendar_tokens SET include_heim=?, include_auswaerts=?, include_training=?, include_generisch=?, include_duty=?
+			`UPDATE calendar_tokens SET include_heim=?, include_auswaerts=?, include_training=?, include_generisch=?, include_duty=?, include_practice_groups=?
 			 WHERE user_id=?`,
 			boolToInt(req.IncludeHeim), boolToInt(req.IncludeAuswaerts),
 			boolToInt(req.IncludeTraining), boolToInt(req.IncludeGenerisch),
-			boolToInt(req.IncludeDuty), childUID)
+			boolToInt(req.IncludeDuty), boolToInt(req.IncludePracticeGroups), childUID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -252,9 +258,9 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 	var s tokenSettings
 	var userID int
 	err := h.db.QueryRowContext(r.Context(),
-		`SELECT user_id, token, include_heim, include_auswaerts, include_training, include_generisch, include_duty
+		`SELECT user_id, token, include_heim, include_auswaerts, include_training, include_generisch, include_duty, include_practice_groups
 		 FROM calendar_tokens WHERE token = ?`, token).
-		Scan(&userID, &s.Token, &s.IncludeHeim, &s.IncludeAuswaerts, &s.IncludeTraining, &s.IncludeGenerisch, &s.IncludeDuty)
+		Scan(&userID, &s.Token, &s.IncludeHeim, &s.IncludeAuswaerts, &s.IncludeTraining, &s.IncludeGenerisch, &s.IncludeDuty, &s.IncludePracticeGroups)
 	if err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
@@ -277,9 +283,11 @@ func (h *Handler) Feed(w http.ResponseWriter, r *http.Request) {
 		events = append(events, games...)
 	}
 
-	// Trainings (training_sessions table — separate from games).
-	if s.IncludeTraining {
-		trainings, err := h.fetchTrainings(r, userID)
+	// Trainings (training_sessions table — separate from games). Mannschafts-
+	// und Übungsgruppentermine liegen in derselben Tabelle und werden von zwei
+	// unabhängigen Toggles gesteuert; ist keiner gesetzt, entfällt die Abfrage.
+	if s.IncludeTraining || s.IncludePracticeGroups {
+		trainings, err := h.fetchTrainings(r, userID, s.IncludeTraining, s.IncludePracticeGroups)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -442,20 +450,40 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 	return events, rows.Err()
 }
 
-func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error) {
+// fetchTrainings liefert Mannschafts- und Übungsgruppentermine. Der Kader wird
+// über `ts.kader_id` aufgelöst, nicht über `team_id` + `season_id`: die frühere
+// Doppelbedingung rekonstruierte den Kader aus Team und Saison, obwohl er
+// direkt an der Zeile hängt — und bei einer Übungsgruppe ist `team_id` NULL, der
+// JOIN matchte nie. Damit folgt der Feed derselben Auflösung wie
+// `trainings.ListSessions`.
+//
+// includeTeams/includePractice müssen nicht beide gesetzt sein; ist keiner
+// gesetzt, ruft `Feed` die Funktion gar nicht erst auf.
+func (h *Handler) fetchTrainings(r *http.Request, userID int, includeTeams, includePractice bool) ([]calEvent, error) {
+	// team_id IS NULL ist das Kennzeichen der Übungsgruppe (Gotcha
+	// „Übungsgruppen": die Spalte ist eine nullable Projektion von
+	// kader.team_id). Sind beide Arten gewünscht, entfällt der Filter.
+	kindFilter := ""
+	switch {
+	case includeTeams && !includePractice:
+		kindFilter = "AND ts.team_id IS NOT NULL"
+	case !includeTeams && includePractice:
+		kindFilter = "AND ts.team_id IS NULL"
+	}
+
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT DISTINCT
 		    ts.id, ts.date, ts.start_time, ts.end_time,
-		    COALESCE(t.name, ''), ts.note,
+		    COALESCE(t.name, k.name, ''), ts.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
 		    mem.is_extended
 		FROM training_sessions ts
-		JOIN teams t ON t.id = ts.team_id
-		JOIN kader k ON k.team_id = ts.team_id AND k.season_id = ts.season_id
+		JOIN kader k ON k.id = ts.kader_id
+		LEFT JOIN teams t ON t.id = ts.team_id
 		JOIN (`+kaderMembership+`) mem ON mem.kader_id = k.id
 		JOIN members m ON m.id = mem.member_id
 		LEFT JOIN venues v ON v.id = ts.venue_id
-		WHERE m.user_id = ? AND ts.status = 'active'
+		WHERE m.user_id = ? AND ts.status = 'active' `+kindFilter+`
 		ORDER BY ts.date, ts.start_time, mem.is_extended`, userID)
 	if err != nil {
 		return nil, err
@@ -469,10 +497,14 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 	seen := map[int]bool{}
 	for rows.Next() {
 		var id int
-		var date, startTime, endTime, teamName, note string
+		// groupName ist der Mannschaftsname, bei einer Übungsgruppe (kein Team)
+		// deren kader.name. Bewusst nicht ts.title: der Titel ist pro Termin
+		// frei und driftet innerhalb derselben Serie, ein Kalendereintrag soll
+		// wiedererkennbar bleiben.
+		var date, startTime, endTime, groupName, note string
 		var vName, vStreet, vPostal, vCity string
 		var isExtended bool
-		if err := rows.Scan(&id, &date, &startTime, &endTime, &teamName, &note,
+		if err := rows.Scan(&id, &date, &startTime, &endTime, &groupName, &note,
 			&vName, &vStreet, &vPostal, &vCity, &isExtended); err != nil {
 			continue
 		}
@@ -481,8 +513,8 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int) ([]calEvent, error
 		}
 		seen[id] = true
 		summary := "Training"
-		if teamName != "" {
-			summary = "Training: " + kaderLabel(teamName, isExtended, lineupNone)
+		if groupName != "" {
+			summary = "Training: " + kaderLabel(groupName, isExtended, lineupNone)
 		}
 		var location string
 		if vName != "" {

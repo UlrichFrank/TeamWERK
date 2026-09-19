@@ -67,7 +67,7 @@ func postToken(t *testing.T, srv *httptest.Server, userToken string, body map[st
 func allTogglesOn() map[string]any {
 	return map[string]any{
 		"include_heim": true, "include_auswaerts": true, "include_training": true,
-		"include_generisch": true, "include_duty": true,
+		"include_generisch": true, "include_duty": true, "include_practice_groups": true,
 	}
 }
 
@@ -534,7 +534,7 @@ func noteCalendarFixture(t *testing.T) (*httptest.Server, *sql.DB, int, int, str
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
 	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
 	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-08-15")
-	trainingID := testutil.CreateTrainingSession(t, db, teamID, seasonID, "2026-08-16")
+	trainingID := testutil.CreateTrainingSessionForKader(t, db, kaderID, seasonID, "2026-08-16", "Test Session")
 	srv := prodserver.New(t, db)
 	userToken := testutil.Token(t, userID, "standard", nil)
 	return srv, db, gameID, trainingID, userToken
