@@ -70,13 +70,15 @@ func effectiveDiskBytes(status string, sizeBytes, diskBytes sql.NullInt64) *int6
 
 // visibilityFilter liefert ein SQL-Fragment (ohne führendes AND/WHERE) plus die
 // zugehörigen Argumente, das v.team_id auf die für den Aufrufer sichtbaren Teams
-// einschränkt. admin/vorstand sehen alles → ("", nil). Andernfalls spiegelt das
-// Fragment exakt userBelongsToTeam (aktiver Spieler / Trainer / erweiterter
+// einschränkt. admin/vorstand/trainer sehen alles → ("", nil) — muss deckungsgleich
+// mit CanViewVideo (access.go) bleiben, das Trainer aus demselben Grund
+// teamübergreifend zulässt. Andernfalls spiegelt das Fragment exakt
+// userBelongsToTeam (aktiver Spieler / Trainer des eigenen Teams / erweiterter
 // Kader / Elternteil eines der beiden, jeweils in der aktiven Saison) — inklusive
 // des dort begründeten Statusfilters `<> 'ausgetreten'` für die Zweige des
 // erweiterten Kaders.
 func visibilityFilter(claims *auth.Claims) (string, []any) {
-	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("trainer") {
 		return "", nil
 	}
 	frag := `v.team_id IN (

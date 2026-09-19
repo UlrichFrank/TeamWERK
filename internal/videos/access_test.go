@@ -226,6 +226,7 @@ func TestCanViewVideo(t *testing.T) {
 		{"vorstand always", claims(testutil.CreateUser(t, db, "standard"), "standard", "vorstand"), videoA, true},
 		{"active player of team", claims(playerUser, "standard", "spieler"), videoA, true},
 		{"trainer of team", claims(trainerUser, "standard", "trainer"), videoA, true},
+		{"trainer sees foreign team too", claims(trainerUser, "standard", "trainer"), videoB, true},
 		{"parent of player", claims(parentUser, "standard"), videoA, true},
 		{"player of foreign team", claims(playerUser, "standard", "spieler"), videoB, false},
 		{"outsider", claims(outsiderUser, "standard"), videoA, false},

@@ -72,16 +72,18 @@ func (h *Handler) CanManageTeamVideos(claims *auth.Claims, teamID int) (bool, er
 }
 
 // CanViewVideo meldet, ob der Aufrufer ein Video ansehen darf. Sichtbar sind
-// Videos eines Teams nur für (siehe design.md "Strenge Berechtigung"):
-//   - Vorstand und Admin (immer)
+// Videos eines Teams für (siehe design.md "Strenge Berechtigung"):
+//   - Vorstand und Admin (immer, teamübergreifend)
+//   - Trainer (Vereinsfunktion, immer, teamübergreifend — Trainer sehen auch
+//     Videos fremder Mannschaften, unabhängig von einer eigenen
+//     trainer_memberships-Zuordnung zu genau diesem Team)
 //   - aktive Spieler des Teams
-//   - Trainer des Teams
 //   - Eltern aktiver Spieler des Teams
 func (h *Handler) CanViewVideo(claims *auth.Claims, video *Video) (bool, error) {
 	if claims == nil || video == nil {
 		return false, nil
 	}
-	if claims.Role == "admin" || claims.HasFunction("vorstand") {
+	if claims.Role == "admin" || claims.HasFunction("vorstand") || claims.HasFunction("trainer") {
 		return true, nil
 	}
 	return h.userBelongsToTeam(claims, video.TeamID)

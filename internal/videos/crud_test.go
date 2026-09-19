@@ -108,7 +108,7 @@ func TestList_VisibilityPerPersona(t *testing.T) {
 	}{
 		{"player sees only team A", testutil.Token(t, playerUser, "standard", []string{"spieler"}), 1, teamA},
 		{"parent sees only team A", testutil.Token(t, parentUser, "standard", nil), 1, teamA},
-		{"trainer sees only team B", testutil.Token(t, trainerUser, "standard", []string{"trainer"}), 1, teamB},
+		{"trainer sees all teams", testutil.Token(t, trainerUser, "standard", []string{"trainer"}), 2, 0},
 		{"vorstand sees all", testutil.Token(t, vorstandUser, "standard", []string{"vorstand"}), 2, 0},
 	}
 	for _, tc := range cases {
