@@ -20,6 +20,7 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/background"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 )
 
 // maxUploadSize ist das 15-GB-Hard-Limit pro Datei (tusd Config.MaxSize).
@@ -152,16 +153,37 @@ func (h *Handler) CreateUpload(w http.ResponseWriter, r *http.Request) {
 	// Dienst-basierter Fallback (video-download-duty-upload): ohne Rollen-
 	// Berechtigung, aber mit einer Video-Upload-Dienst-Zuweisung für genau
 	// dieses Spiel.
+	viaDuty := false
 	if !ok && req.GameID != nil {
 		ok, err = h.CanUploadForGameViaDuty(claims, *req.GameID)
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		viaDuty = ok
 	}
 	if !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
+	}
+	// Dienst-Pfad (video-upload-eligible-teams): die Berechtigung hängt am
+	// Spiel, also muss auch das Ziel-Team eines seiner Teams sein — sonst
+	// würde das Video über visibilityFilter bei einer unbeteiligten Mannschaft
+	// sichtbar. 400 statt 403: Spiel und Team passen nicht zusammen, die
+	// Berechtigung selbst ist geprüft (deshalb NACH der Autorisierung, kein
+	// Befund „Validierung vor Autorisierung" in der Objektrechte-Matrix). Der
+	// Rollen-Pfad bleibt frei — Vorstand darf ein Video bewusst einer anderen
+	// Mannschaft zuordnen.
+	if viaDuty {
+		inGame, err := h.rowExists("SELECT 1 FROM game_teams WHERE game_id = ? AND team_id = ?", *req.GameID, req.TeamID)
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		if !inGame {
+			httpx.WriteError(w, r, http.StatusBadRequest, "team_not_in_game", nil)
+			return
+		}
 	}
 
 	// Disk-Guard (Ebene 1): free ≥ size × 2.5 + RESERVED. Faktor 2.5 deckt
