@@ -399,3 +399,47 @@ describe('TerminePage — Textfilter (?q=)', () => {
     expect(screen.queryByText('Filter zurücksetzen')).toBeNull()
   })
 })
+
+// Der Weg, auf dem der Fehler gemeldet wurde: in /kalender einen Termin
+// antippen → „In Terminen öffnen" → /termine?focus=training-<id>. Fällt der
+// Termin aus dem Ladefenster, findet die Seite ihn nicht und zeigt „Dieser
+// Termin ist nicht verfügbar." — der Kalender zeigt ihn also, das Öffnen
+// scheitert.
+//
+// Anders als seedRoutes bildet seedRoutesWithWindow das from/to-Fenster
+// tatsächlich nach. Ohne das liefe der Test auch mit zu engem Fenster grün und
+// bewiese nichts.
+describe('TerminePage — Deep-Link auf einen Termin jenseits des Saisonendes', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    authState.is_parent = false
+  })
+
+  function seedRoutesWithWindow(sessions: { date: string }[]) {
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/seasons/active')) return Promise.resolve({ data: SEASON })
+      if (url.startsWith('/training-sessions')) {
+        const params = new URLSearchParams(url.slice(url.indexOf('?') + 1))
+        const from = params.get('from') ?? ''
+        const to = params.get('to') ?? ''
+        return Promise.resolve({ data: sessions.filter(s => s.date >= from && s.date <= to) })
+      }
+      return Promise.resolve({ data: [] })
+    })
+  }
+
+  test('öffnet einen Übungsgruppen-Termin nach dem Saisonende', async () => {
+    const id = 1290
+    // Genau der Prod-Fall: Serie „Förderkinder" bis 03.07.2027, Saison bis 30.06.2027.
+    seedRoutesWithWindow([trainingSession({ id, date: '2027-07-03', title: 'Förderkinder 2016', team_id: 0, kader_id: 34 })])
+
+    render(
+      <MemoryRouter initialEntries={[`/termine?focus=training-${id}`]}>
+        <TerminePage />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(document.getElementById(`termin-training-${id}`)).toBeTruthy())
+    expect(screen.queryByText('Dieser Termin ist nicht verfügbar.')).toBeNull()
+  })
+})
