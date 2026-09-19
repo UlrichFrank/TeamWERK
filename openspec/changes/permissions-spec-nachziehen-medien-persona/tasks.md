@@ -11,8 +11,10 @@
 
 ## 3. Spec-Konsistenz prüfen
 
-- [ ] 3.1 Endpunktlisten der Gate-Requirements im Delta gegen die Expected-Maps der Matrix abgleichen (Skript: Routen je Map aus `matrix_test.go` parsen, mit den Listen in `specs/permissions/spec.md` vergleichen; Abweichungen im Delta korrigieren). Verifikation: Skript meldet 0 Abweichungen für exTrainer, exVorstandTrainer, exVorstand, exVorstandKassierer, exMembersList, exSeasonsRead, exMatchReportPublisher.
-- [ ] 3.2 Frontend-Tabellen (RoleRoute, Nav, Inline-Gates) gegen `App.tsx`, `policy.NavFor` und die `hasCapability`-Aufrufe gegenlesen; `openspec validate --all` grün.
+- [x] 3.1 Endpunktlisten der Gate-Requirements im Delta gegen die Expected-Maps der Matrix abgleichen (Skript: Routen je Map aus `matrix_test.go` parsen, mit den Listen in `specs/permissions/spec.md` vergleichen; Abweichungen im Delta korrigieren). Verifikation: Skript meldet 0 Abweichungen für exTrainer, exVorstandTrainer, exVorstand, exVorstandKassierer, exMembersList, exSeasonsRead, exMatchReportPublisher.
+- [x] 3.2 Frontend-Tabellen (RoleRoute, Nav, Inline-Gates) gegen `App.tsx`, `policy.NavFor` und die `hasCapability`-Aufrufe gegenlesen; `openspec validate --all` grün.
+
+_3.1: Skript im Scratchpad, Ergebnis 0 Abweichungen für alle sieben Gates (die einzige Meldung war `GET /api/seasons/active`, das im Saisons-Requirement bewusst als Authenticated-Gegenstück genannt ist)._
 
 ## 4. Abschluss
 

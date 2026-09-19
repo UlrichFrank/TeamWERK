@@ -256,7 +256,7 @@ type endpointCase struct {
 }
 
 // matrix enthält einen Eintrag pro registrierter HTTP-Route.
-// Quelle der Wahrheit: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md
+// Quelle der Wahrheit: openspec/specs/permissions/spec.md
 // Ausschlüsse:
 //   - SSE-Routen (/api/events, /api/chat/events): CookieMiddleware, kein Bearer-Token-Flow.
 //   - SPA-Fallback (GET /*): kein API-Endpoint.
