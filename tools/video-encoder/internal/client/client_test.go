@@ -384,35 +384,15 @@ func TestAPI_CreateVideoSeasonsGames(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"id": 3, "name": "2025/26"})
 	})
-	mux.HandleFunc("GET /api/games", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("season_id") != "3" {
-			t.Errorf("games must be queried for the active season, got %q", r.URL.RawQuery)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"items": []map[string]any{
-			{"id": 4, "date": "2026-01-11T00:00:00Z", "opponent": "TSV Altstadt", "teams": []map[string]any{{"id": 7}}},
-			{"id": 5, "date": "2026-03-01T00:00:00Z", "opponent": "TV Musterstadt", "teams": []map[string]any{{"id": 7}}},
-			{"id": 6, "date": "2026-03-08T00:00:00Z", "opponent": "SV Beispiel", "teams": []map[string]any{{"id": 99}}},
-			{"id": 9, "date": "2026-12-01T00:00:00Z", "opponent": "Zukunftsgegner", "teams": []map[string]any{{"id": 7}}},
-		}})
-	})
 	srv := httptest.NewTLSServer(mux)
 	defer srv.Close()
 	c, _ := New(srv.URL, srv.Client())
-	c.now = func() time.Time { return time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC) }
 	ctx := context.Background()
 
 	season, err := c.ActiveSeasonID(ctx)
 	if err != nil || season != 3 {
 		t.Fatalf("ActiveSeasonID = %d, %v", season, err)
 	}
-	// Nur vergangene Spiele des eigenen Teams, jüngstes zuerst: das
-	// Zukunftsspiel (id 9) und das fremde Team (id 6) fallen weg.
-	games, err := c.Games(ctx, 3, 7)
-	if err != nil || len(games) != 2 || games[0].ID != 5 || games[1].ID != 4 ||
-		games[0].Label() != "01.03.2026 · TV Musterstadt" {
-		t.Fatalf("Games = %+v, %v", games, err)
-	}
-
 	game := 5
 	id, err := c.CreateVideo(ctx, NewVideo{TeamID: 7, SeasonID: 3, GameID: &game, SizeBytes: 1234})
 	if err != nil || id != 7 {
@@ -434,28 +414,43 @@ func TestAPI_CreateVideoSeasonsGames(t *testing.T) {
 	}
 }
 
-// TestEligibleGameIDs: /api/videos/upload-eligible-games liefert die Menge der
-// Spiele, für die der Nutzer laut Server hochladen darf (video-download-duty-
-// upload) — das Tool nutzt sie zur Vorauswahl-Filterung, nicht zur Autorisierung.
-func TestEligibleGameIDs(t *testing.T) {
+// TestEligible: /api/videos/upload-eligible-games liefert Mannschaften (mit
+// Rollen-Flag) und Spiele (mit erlaubten Team-IDs), aus denen das Tool die
+// Auswahl baut — zur Vorauswahl, nicht zur Autorisierung.
+func TestEligible(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/videos/upload-eligible-games", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"game_ids": []int{4, 5}})
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"game_ids": []int{4, 5},
+			"teams": []map[string]any{
+				{"id": 7, "name": "mB2", "upload_without_game": true},
+				{"id": 9, "name": "mA2", "upload_without_game": false},
+			},
+			"games": []map[string]any{
+				{"id": 4, "date": "2026-01-11T00:00:00Z", "opponent": "TSV Altstadt", "event_type": "heim", "season_id": 3, "team_ids": []int{7}},
+				{"id": 5, "date": "2026-03-01T00:00:00Z", "opponent": "", "event_type": "auswaerts", "season_id": 3, "team_ids": []int{9}},
+			},
+		})
 	})
 	srv := httptest.NewTLSServer(mux)
 	defer srv.Close()
 	c, _ := New(srv.URL, srv.Client())
-	ctx := context.Background()
 
-	ids, err := c.EligibleGameIDs(ctx)
+	e, err := c.Eligible(context.Background())
 	if err != nil {
-		t.Fatalf("EligibleGameIDs: %v", err)
+		t.Fatalf("Eligible: %v", err)
 	}
-	if len(ids) != 2 || !ids[4] || !ids[5] {
-		t.Fatalf("EligibleGameIDs = %v, want {4:true, 5:true}", ids)
+	if len(e.GameIDs) != 2 || e.GameIDs[0] != 4 {
+		t.Errorf("GameIDs = %v", e.GameIDs)
 	}
-	if ids[6] {
-		t.Error("game 6 must not be in the set")
+	if len(e.Teams) != 2 || e.Teams[0].Name != "mB2" || !e.Teams[0].UploadWithoutGame || e.Teams[1].UploadWithoutGame {
+		t.Errorf("Teams = %+v", e.Teams)
+	}
+	if len(e.Games) != 2 || e.Games[1].TeamIDs[0] != 9 || e.Games[1].SeasonID != 3 {
+		t.Errorf("Games = %+v", e.Games)
+	}
+	if e.Games[0].Label() != "11.01.2026 · TSV Altstadt" || e.Games[1].Label() != "01.03.2026 · Spiel" {
+		t.Errorf("Labels = %q / %q", e.Games[0].Label(), e.Games[1].Label())
 	}
 }
 

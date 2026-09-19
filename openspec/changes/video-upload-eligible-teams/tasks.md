@@ -7,17 +7,19 @@
 
 - [x] 2.1 `internal/videos/upload.go`: wenn die Berechtigung ausschließlich über `CanUploadForGameViaDuty` kommt, `team_id` gegen `game_teams` des Spiels prüfen und bei Fehltreffer HTTP 400 (`team_not_in_game`) antworten — nach der Berechtigungsprüfung, ohne DB-Eintrag. Verifikation: bestehende Upload-Tests grün.
 - [x] 2.2 Tests in `internal/videos/`: Dienst-Nutzer mit passendem `team_id` → 201; mit fremdem `team_id` → 400 und keine `videos`-Zeile; Trainer/Vorstand mit fremdem `team_id` weiterhin wie bisher (Rollen-Pfad unberührt). Verifikation: `go test ./internal/videos/ -run TestCreateUpload`.
-- [ ] 2.3 `make test` und `make lint` für das Backend grün (inkl. Broadcast-Gate: Route bleibt Lese-Route in der Allowlist, Objektrechte-Matrix unverändert).
+- [x] 2.3 `make test` und `make lint` für das Backend grün (inkl. Broadcast-Gate: Route bleibt Lese-Route in der Allowlist, Objektrechte-Matrix unverändert).
 
 ## 3. Desktop-Tool — Client und Auswahl-Logik
 
-- [ ] 3.1 `tools/video-encoder/internal/client`: `Eligible`-Typ (`GameIDs`, `Teams`, `Games`) und `Eligible(ctx)` als Ersatz für `EligibleGameIDs`; `Teams()`, `Games()`, `Team`, `Game` des alten Vertrags entfernen, `Label()`/`dateOnly` auf den neuen `Game`-Typ übernehmen. Tests `TestEligibleGameIDs` → `TestEligible` (neues Parsing inkl. `upload_without_game` und `team_ids`), `TestAPI_CreateVideoSeasonsGames` ohne `/api/games`-Teil. Verifikation: `cd tools/video-encoder && go test ./internal/client/`.
-- [ ] 3.2 Neues Paket `tools/video-encoder/internal/pick` mit `Teams`, `Games` (Filter Team + aktive Saison + Datum ≤ heute, jüngstes zuerst) und `AllowFreeTitle`; Tests decken die vier Spec-Szenarien ab (Dienst-only-Team ohne Freier Titel, Trainer-Team mit Freier Titel, keine Berechtigung → leer, Dienst mit nur Zukunftsspiel → Team wählbar, Spiele leer) sowie Dedup eines Teams, das Rollen- und Dienst-Team zugleich ist. Verifikation: `go test ./internal/pick/`.
+- [x] 3.1 `tools/video-encoder/internal/client`: `Eligible`-Typ (`GameIDs`, `Teams`, `Games`) und `Eligible(ctx)` als Ersatz für `EligibleGameIDs`; `Teams()`, `Games()`, `Team`, `Game` des alten Vertrags entfernen, `Label()`/`dateOnly` auf den neuen `Game`-Typ übernehmen. Tests `TestEligibleGameIDs` → `TestEligible` (neues Parsing inkl. `upload_without_game` und `team_ids`), `TestAPI_CreateVideoSeasonsGames` ohne `/api/games`-Teil. Verifikation: `cd tools/video-encoder && go test ./internal/client/`.
+- [x] 3.2 Neues Paket `tools/video-encoder/internal/pick` mit `Teams`, `Games` (Filter Team + aktive Saison + Datum ≤ heute, jüngstes zuerst) und `AllowFreeTitle`; Tests decken die vier Spec-Szenarien ab (Dienst-only-Team ohne Freier Titel, Trainer-Team mit Freier Titel, keine Berechtigung → leer, Dienst mit nur Zukunftsspiel → Team wählbar, Spiele leer) sowie Dedup eines Teams, das Rollen- und Dienst-Team zugleich ist. Verifikation: `go test ./internal/pick/`.
 
 ## 4. Desktop-Tool — Oberfläche
 
-- [ ] 4.1 `tools/video-encoder/ui.go`: Login lädt nur noch `ActiveSeasonID` + `Eligible`; `setTeams` aus `pick.Teams`, `onTeamChanged` aus `pick.Games` (kein `/api/games`-Aufruf mehr), „Freier Titel" nur bei `pick.AllowFreeTitle`, andernfalls erstes Spiel vorausgewählt; `eligibleGames`-Map durch die `Eligible`-Antwort ersetzen. Verifikation: `cd tools/video-encoder && go vet ./... && go build ./...` (CGo/Fyne lokal vorhanden), manueller Durchlauf gegen lokalen Server mit Dienst-only-Nutzer zeigt das Dienst-Team.
-- [ ] 4.2 Hinweistexte ersetzen: leere Mannschaftsliste → „weder Trainer-/Vorstands-Berechtigung noch Video-Dienst hinterlegt"; leere Spielliste bei Dienst-only-Team → „Upload erst nach dem Spiel möglich"; Kommentar zu `/api/teams` im Tool entfernen. Verifikation: Texte in `ui.go` vorhanden, `go build` grün.
+_3.1, 3.2, 4.1 und 4.2 in einem Commit: der neue Client-Vertrag, `pick` und die Oberfläche hängen typseitig zusammen, ein Zwischenstand hätte das Tool nicht gebaut._
+
+- [x] 4.1 `tools/video-encoder/ui.go`: Login lädt nur noch `ActiveSeasonID` + `Eligible`; `setTeams` aus `pick.Teams`, `onTeamChanged` aus `pick.Games` (kein `/api/games`-Aufruf mehr), „Freier Titel" nur bei `pick.AllowFreeTitle`, andernfalls erstes Spiel vorausgewählt; `eligibleGames`-Map durch die `Eligible`-Antwort ersetzen. Verifikation: `cd tools/video-encoder && go vet ./... && go build ./...` (CGo/Fyne lokal vorhanden), manueller Durchlauf gegen lokalen Server mit Dienst-only-Nutzer zeigt das Dienst-Team.
+- [x] 4.2 Hinweistexte ersetzen: leere Mannschaftsliste → „weder Trainer-/Vorstands-Berechtigung noch Video-Dienst hinterlegt"; leere Spielliste bei Dienst-only-Team → „Upload erst nach dem Spiel möglich"; Kommentar zu `/api/teams` im Tool entfernen. Verifikation: Texte in `ui.go` vorhanden, `go build` grün.
 
 ## 5. Doku und Abschluss
 

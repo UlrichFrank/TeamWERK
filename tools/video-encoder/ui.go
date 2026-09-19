@@ -21,6 +21,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/tools/video-encoder/internal/client"
 	"github.com/teamstuttgart/teamwerk/tools/video-encoder/internal/encode"
 	"github.com/teamstuttgart/teamwerk/tools/video-encoder/internal/ffmpegbin"
+	"github.com/teamstuttgart/teamwerk/tools/video-encoder/internal/pick"
 	"github.com/teamstuttgart/teamwerk/tools/video-encoder/internal/progress"
 )
 
@@ -71,13 +72,13 @@ type ui struct {
 	win      fyne.Window
 	cacheDir string
 
-	client        *client.Client
-	email         string
-	seasonID      int
-	teamIDs       map[string]int
-	gameIDs       map[string]int
-	videosByGame  map[int]client.ExistingVideo // gameID → bereits vorhandene(s) Video(s), für die Ersetzen-Auswahl
-	eligibleGames map[int]bool                 // game_id → darf der Nutzer hochladen (video-download-duty-upload); reine Vorauswahl-Filterung, Server entscheidet verbindlich
+	client       *client.Client
+	email        string
+	seasonID     int
+	teamIDs      map[string]int
+	gameIDs      map[string]int
+	videosByGame map[int]client.ExistingVideo // gameID → bereits vorhandene(s) Video(s), für die Ersetzen-Auswahl
+	eligible     client.Eligible              // Mannschaften + Spiele, für die der Nutzer hochladen darf (video-upload-eligible-teams); reine Vorauswahl, Server entscheidet verbindlich
 
 	srcPath      string
 	fileLabel    *widget.Label
@@ -242,8 +243,7 @@ func (u *ui) login(server, email, password string) {
 		defer cancel()
 		var (
 			seasonID int
-			teams    []client.Team
-			eligible map[int]bool
+			eligible client.Eligible
 		)
 		c, err := client.New(server, nil)
 		if err == nil {
@@ -253,10 +253,7 @@ func (u *ui) login(server, email, password string) {
 			seasonID, err = c.ActiveSeasonID(ctx)
 		}
 		if err == nil {
-			teams, err = c.Teams(ctx)
-		}
-		if err == nil {
-			eligible, err = c.EligibleGameIDs(ctx)
+			eligible, err = c.Eligible(ctx)
 		}
 		fyne.Do(func() {
 			u.status.SetText("")
@@ -267,16 +264,16 @@ func (u *ui) login(server, email, password string) {
 			u.app.Preferences().SetString(prefServer, c.BaseURL())
 			u.app.Preferences().SetString(prefEmail, email)
 			u.client, u.email, u.seasonID = c, email, seasonID
-			u.eligibleGames = eligible
+			u.eligible = eligible
 			u.account.SetText("Angemeldet als " + email + " bei " + c.BaseURL())
-			u.setTeams(teams)
+			u.setTeams(pick.Teams(eligible))
 		})
 	}()
 }
 
 func (u *ui) accountKey() string { return u.client.BaseURL() + "|" + u.email }
 
-func (u *ui) setTeams(teams []client.Team) {
+func (u *ui) setTeams(teams []client.EligibleTeam) {
 	prev := u.teamSelect.Selected
 	u.teamIDs = map[string]int{}
 	var labels []string
@@ -290,10 +287,12 @@ func (u *ui) setTeams(teams []client.Team) {
 	}
 	u.teamSelect.SetOptions(labels)
 	if len(labels) == 0 {
-		// /api/teams liefert nur Mannschaften mit Kader in der aktiven Saison,
-		// für Trainer nur die eigenen — ohne Hinweis stünde hier eine leere Liste.
-		u.status.SetText("Für dieses Konto gibt es in der aktiven Saison keine Mannschaft. " +
-			"Bitte den Vorstand bitten, dich als Trainer im Kader einzutragen.")
+		// Die Liste kommt aus der Upload-Berechtigung (Rolle ODER Video-Dienst),
+		// nicht aus der Kader-Zugehörigkeit — ohne Hinweis stünde hier eine
+		// leere Liste, obwohl der Nutzer z. B. als Spieler durchaus Teams hat.
+		u.status.SetText("Für dieses Konto ist weder eine Trainer-/Vorstands-Berechtigung " +
+			"noch ein Video-Dienst hinterlegt. Bitte den Vorstand bitten, dich als Trainer " +
+			"im Kader oder für den Video-Dienst des Spiels einzutragen.")
 	}
 	if _, ok := u.teamIDs[prev]; ok {
 		u.teamSelect.SetSelected(prev)
@@ -312,35 +311,35 @@ func (u *ui) onTeamChanged(label string) {
 	if !ok || u.client == nil {
 		return
 	}
-	c, seasonID := u.client, u.seasonID
+	// Spiele kommen aus der Berechtigungs-Antwort (pick), nicht aus
+	// /api/games — dessen Sichtbarkeit kennt nur Kader-Zugehörigkeit und
+	// ließe ein Dienst-Spiel bei einer fremden Mannschaft verschwinden.
+	games := pick.Games(u.eligible, teamID, time.Now().Format("2006-01-02"))
+	freeTitle := pick.AllowFreeTitle(u.eligible, teamID)
+	c := u.client
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		games, err := c.Games(ctx, seasonID, teamID)
 		// Video-Info je Spiel ist eine Zugabe, kein Kernbestandteil der Auswahl:
-		// schlägt der Abruf fehl, bleibt die Liste einfach ohne Hinweistext
-		// nutzbar statt die ganze Spiel-Auswahl scheitern zu lassen.
+		// schlägt der Abruf fehl (oder ist die Liste für ein reines Dienst-Team
+		// leer, weil /api/videos der Video-Sichtbarkeit folgt), bleibt die
+		// Liste einfach ohne Hinweistext nutzbar.
 		videosByGame, _ := c.VideosByGame(ctx, teamID)
 		fyne.Do(func() {
 			if u.teamSelect.Selected != label {
 				return // inzwischen andere Mannschaft gewählt
 			}
-			if err != nil {
-				u.status.SetText("Spiele konnten nicht geladen werden: " + userMessage(err))
-				return
-			}
 			u.videosByGame = videosByGame
 			u.gameIDs = map[string]int{}
-			opts := []string{noGame}
+			var opts []string
+			// „Freier Titel" (Upload ohne Spielbezug) nur, wenn der Server ihn
+			// für diese Mannschaft zulässt (Rollen-Pfad). Für ein reines
+			// Dienst-Team ist die Option gar nicht da statt erst im Klick mit
+			// 403 zu scheitern.
+			if freeTitle {
+				opts = append(opts, noGame)
+			}
 			for _, g := range games {
-				// Vorauswahl auf upload-berechtigte Spiele beschränken
-				// (video-download-duty-upload): eligibleGames vereint bereits
-				// Rollen-Berechtigung (Trainer/sportl. Leitung/Vorstand sehen
-				// alle Spiele ihrer Teams) und Video-Dienst-Zuweisungen — kein
-				// gesonderter Rollen-Check hier nötig.
-				if !u.eligibleGames[g.ID] {
-					continue
-				}
 				l := g.Label()
 				if v, ok := videosByGame[g.ID]; ok {
 					l += " · " + v.Describe(formatSize)
@@ -352,9 +351,19 @@ func (u *ui) onTeamChanged(label string) {
 				opts = append(opts, l)
 			}
 			u.gameSelect.SetOptions(opts)
-			if len(opts) == 1 {
-				u.status.SetText("Für dieses Konto gibt es bei dieser Mannschaft kein Spiel, für das ein " +
-					"Video-Upload erlaubt ist (Trainer/sportliche Leitung/Vorstand oder ein zugewiesener Video-Dienst).")
+			switch {
+			case len(opts) == 0:
+				u.gameSelect.ClearSelected()
+				u.status.SetText("Dein Video-Dienst bei dieser Mannschaft betrifft ein Spiel, das noch nicht " +
+					"stattgefunden hat — der Upload ist erst nach dem Spiel möglich.")
+			case freeTitle:
+				u.gameSelect.SetSelected(noGame)
+				if len(opts) == 1 {
+					u.status.SetText("Für diese Mannschaft gibt es in der aktiven Saison noch kein gespieltes Spiel — " +
+						"„Freier Titel“ verwenden.")
+				}
+			default:
+				u.gameSelect.SetSelected(opts[0])
 			}
 		})
 	}()
@@ -474,6 +483,10 @@ func (u *ui) start() {
 		return
 	case m.teamID == 0:
 		u.status.SetText("Bitte eine Mannschaft auswählen.")
+		return
+	case m.gameID == 0 && !pick.AllowFreeTitle(u.eligible, m.teamID):
+		// Reines Dienst-Team: der Server nimmt ohne game_id keinen Upload an.
+		u.status.SetText("Für diese Mannschaft muss ein Spiel ausgewählt werden.")
 		return
 	case m.title == "" && m.gameID == 0:
 		u.status.SetText("Bitte einen Titel angeben oder ein Spiel auswählen.")

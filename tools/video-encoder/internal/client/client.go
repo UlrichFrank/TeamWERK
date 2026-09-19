@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,7 +64,6 @@ type Client struct {
 
 	// now ist für Tests injizierbar (Default time.Now) — bestimmt, welche Spiele
 	// in Games() als "vergangen" gelten.
-	now func() time.Time
 }
 
 // New baut einen Client für baseURL (z. B. https://teamwerk.team-stuttgart.org).
@@ -93,7 +91,6 @@ func New(baseURL string, hc *http.Client) (*Client, error) {
 		retryDelays: []time.Duration{time.Second, 3 * time.Second, 5 * time.Second, 10 * time.Second,
 			20 * time.Second, 30 * time.Second, 60 * time.Second, 60 * time.Second, 60 * time.Second, 60 * time.Second},
 		sleep: ctxSleep,
-		now:   time.Now,
 	}, nil
 }
 
@@ -263,36 +260,13 @@ func (c *Client) getJSON(ctx context.Context, op, path string, v any) error {
 	return nil
 }
 
-// Team ist eine Mannschaft aus GET /api/teams.
-type Team struct {
-	ID       int    `json:"id"`
-	Name     string `json:"name"`
-	IsActive bool   `json:"is_active"`
-}
-
-// Teams liefert die aktiven Mannschaften. Ob der Nutzer für eine davon
-// hochladen darf, entscheidet der Server beim Anlegen (403).
-func (c *Client) Teams(ctx context.Context) ([]Team, error) {
-	var all []Team
-	if err := c.getJSON(ctx, "Mannschaften laden", "/api/teams", &all); err != nil {
-		return nil, err
-	}
-	active := all[:0]
-	for _, t := range all {
-		if t.IsActive {
-			active = append(active, t)
-		}
-	}
-	return active, nil
-}
-
 // ActiveSeasonID liefert die aktive Saison (GET /api/seasons/active,
 // Authenticated-Tier — jedes eingeloggte Konto darf das lesen, anders als die
 // vollständige Saisonhistorie unter GET /api/seasons). Video-Upload-Recht wird
 // seit video-download-duty-upload nicht mehr pauschal über die Vereinsfunktion
 // entschieden (Trainer/sportl. Leitung/Vorstand ODER eine passende
 // Video-Dienst-Zuweisung), deshalb ist ein 403 an dieser Stelle kein sinnvolles
-// Signal mehr — EligibleGameIDs entscheidet das später pro Spiel.
+// Signal mehr — Eligible entscheidet das später pro Mannschaft und Spiel.
 func (c *Client) ActiveSeasonID(ctx context.Context) (int, error) {
 	var season struct {
 		ID int `json:"id"`
@@ -308,40 +282,31 @@ func (c *Client) ActiveSeasonID(ctx context.Context) (int, error) {
 	return season.ID, nil
 }
 
-// EligibleGameIDs liefert die Menge der Spiele, für die der angemeldete Nutzer
-// aktuell ein Video hochladen darf (GET /api/videos/upload-eligible-games,
-// video-download-duty-upload) — Vereinigung aus Rollen-Berechtigung
-// (Trainer/sportl. Leitung/Vorstand/Admin: alle Spiele ihrer Teams) und
-// Video-Dienst-Zuweisungen (genau das zugewiesene Spiel). Die UI filtert die
-// Spielauswahl darauf; die eigentliche Autorisierung bleibt serverseitig bei
-// CreateVideo — diese Menge ist reine Vorauswahl.
-func (c *Client) EligibleGameIDs(ctx context.Context) (map[int]bool, error) {
-	var resp struct {
-		GameIDs []int `json:"game_ids"`
-	}
-	if err := c.getJSON(ctx, "Berechtigte Spiele laden", "/api/videos/upload-eligible-games", &resp); err != nil {
-		return nil, err
-	}
-	ids := make(map[int]bool, len(resp.GameIDs))
-	for _, id := range resp.GameIDs {
-		ids[id] = true
-	}
-	return ids, nil
+// EligibleTeam ist eine Mannschaft, für die der Nutzer hochladen darf.
+// UploadWithoutGame ist nur beim Rollen-Pfad (Trainer/sportl. Leitung/
+// Vorstand/Admin) wahr; nur dann nimmt POST /api/videos einen Upload ohne
+// game_id an („Freier Titel").
+type EligibleTeam struct {
+	ID                int    `json:"id"`
+	Name              string `json:"name"`
+	UploadWithoutGame bool   `json:"upload_without_game"`
 }
 
-// Game ist ein Spiel aus GET /api/games.
+// Game ist ein upload-berechtigtes Spiel der aktiven Saison aus
+// GET /api/videos/upload-eligible-games. TeamIDs sind die Mannschaften des
+// Spiels, unter denen der Upload erlaubt ist.
 type Game struct {
-	ID       int    `json:"id"`
-	Date     string `json:"date"`
-	Opponent string `json:"opponent"`
-	Teams    []struct {
-		ID int `json:"id"`
-	} `json:"teams"`
+	ID        int    `json:"id"`
+	Date      string `json:"date"`
+	Opponent  string `json:"opponent"`
+	EventType string `json:"event_type"`
+	SeasonID  int    `json:"season_id"`
+	TeamIDs   []int  `json:"team_ids"`
 }
 
 // Label bildet die Auswahl-Beschriftung „DD.MM.YYYY · Gegner" (wie im Web).
 func (g Game) Label() string {
-	d := dateOnly(g.Date)
+	d := DateOnly(g.Date)
 	if p := strings.SplitN(d, "-", 3); len(p) == 3 {
 		d = p[2] + "." + p[1] + "." + p[0]
 	}
@@ -352,44 +317,37 @@ func (g Game) Label() string {
 	return d + " · " + opp
 }
 
-// dateOnly truncated einen SQLite-DATE-Wert von seiner ISO-Timestamp-Form
+// DateOnly truncated einen SQLite-DATE-Wert von seiner ISO-Timestamp-Form
 // ("2026-03-08T00:00:00Z") auf "2026-03-08" — Vergleichs- und Sortierschlüssel
 // bleiben so lexikographisch korrekt (siehe Gotcha „SQLite DATE-Felder").
-func dateOnly(s string) string {
+func DateOnly(s string) string {
 	if len(s) >= 10 {
 		return s[:10]
 	}
 	return s
 }
 
-// Games liefert die BEREITS VERGANGENEN Spiele der Saison (Datum ≤ heute, in
-// absteigender Reihenfolge — das jüngste zuerst), an denen teamID beteiligt
-// ist: ein Upload gehört immer zu einem schon gespielten Spiel, ein
-// zukünftiges Spiel in der Auswahl wäre nur Rauschen. Die Liste ist
-// serverseitig auf 200 Einträge gedeckelt (httpx.Paging).
-func (c *Client) Games(ctx context.Context, seasonID, teamID int) ([]Game, error) {
-	var page struct {
-		Items []Game `json:"items"`
+// Eligible ist die Antwort von GET /api/videos/upload-eligible-games
+// (video-upload-eligible-teams): Mannschaften und Spiele, für die der
+// angemeldete Nutzer hochladen darf — Vereinigung aus Rollen-Berechtigung und
+// Video-Dienst-Zuweisungen. Das Tool baut daraus Mannschafts- und Spielauswahl
+// (internal/pick) und fragt bewusst NICHT /api/teams oder /api/games ab: beide
+// kennen nur Kader-Zugehörigkeit, ein Dienst bei einer fremden Mannschaft wäre
+// dort unsichtbar. Die Autorisierung bleibt serverseitig bei POST /api/videos;
+// diese Antwort ist reine Vorauswahl.
+type Eligible struct {
+	GameIDs []int          `json:"game_ids"`
+	Teams   []EligibleTeam `json:"teams"`
+	Games   []Game         `json:"games"`
+}
+
+// Eligible lädt die upload-berechtigten Mannschaften und Spiele.
+func (c *Client) Eligible(ctx context.Context) (Eligible, error) {
+	var e Eligible
+	if err := c.getJSON(ctx, "Berechtigte Spiele laden", "/api/videos/upload-eligible-games", &e); err != nil {
+		return Eligible{}, err
 	}
-	path := fmt.Sprintf("/api/games?season_id=%d&limit=200", seasonID)
-	if err := c.getJSON(ctx, "Spiele laden", path, &page); err != nil {
-		return nil, err
-	}
-	today := c.now().Format("2006-01-02")
-	var out []Game
-	for _, g := range page.Items {
-		if dateOnly(g.Date) > today {
-			continue
-		}
-		for _, t := range g.Teams {
-			if t.ID == teamID {
-				out = append(out, g)
-				break
-			}
-		}
-	}
-	sort.Slice(out, func(i, j int) bool { return dateOnly(out[i].Date) > dateOnly(out[j].Date) })
-	return out, nil
+	return e, nil
 }
 
 // ExistingVideo beschreibt die Videos, die einem Spiel bereits zugeordnet
