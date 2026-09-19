@@ -60,20 +60,31 @@ function personaCapabilities(p: Persona): string[] {
 }
 
 // Mirror of internal/policy.NavFor — keep route list in sync with rules.go.
+// Reihenfolge und Bedingungen wie dort; die Persona-Tests vergleichen gegen
+// diese Liste, deshalb muss sie vollständig sein (nicht nur ein Ausschnitt).
 function personaNavRoutes(p: Persona): string[] {
   const cf = p.clubFunctions
   const isAdmin = p.role === 'admin'
   const isVorstandLike = isAdmin || cf.includes('vorstand')
   const isTrainerLike = isAdmin || cf.includes('trainer') || cf.includes('sportliche_leitung')
   const isKassiererLike = isVorstandLike || cf.includes('kassierer')
+  const isMatchReportReviewer = isAdmin || cf.includes('medien') || cf.includes('vorstand')
   const routes = ['/']
-  if (!isAdmin) routes.push('/profil')
-  routes.push('/kalender', '/termine', '/videos', '/mein-team', '/dokumente', '/dienste', '/mitfahrgelegenheiten', '/chat')
-  if (isTrainerLike || isVorstandLike) routes.push('/kader')
+  // NavFor: role != admin || HasMember || IsParent — die Test-Personas tragen
+  // kein Mitglied, der Admin sieht den Eintrag deshalb nur als Elternteil.
+  if (!isAdmin || p.isParent) routes.push('/profil')
+  routes.push('/kalender', '/termine', '/videos')
+  if (isTrainerLike) routes.push('/anwesenheit')
+  if (isTrainerLike || isVorstandLike) routes.push('/trainingstagebuch')
+  if (cf.includes('spieler')) routes.push('/profil/trainingstagebuch')
+  routes.push('/mein-team', '/dokumente', '/dienste', '/dienste/rangliste', '/mitfahrgelegenheiten', '/chat', '/spielberichte')
+  if (isMatchReportReviewer) routes.push('/spielberichte/pruefen')
+  if (isTrainerLike || isVorstandLike) routes.push('/kader', '/uebungsgruppen')
   if (isVorstandLike) routes.push('/nutzer')
   if (isKassiererLike) routes.push('/mitglieder')
   if (isVorstandLike) routes.push('/diensttypen', '/dienstplan-vorlagen', '/veranstaltungsorte')
-  if (isKassiererLike) routes.push('/beitragslauf', '/einstellungen')
+  if (isKassiererLike) routes.push('/beitragslauf', '/tresor', '/einstellungen')
+  if (isAdmin) routes.push('/wartung')
   return routes
 }
 

@@ -1,7 +1,7 @@
 /**
  * TermineDetailPage inline gate: isTrainer = admin || trainer || sportliche_leitung
  * Steuert die Anwesenheitsliste-Editierbarkeit (Checkbox für Trainer vs. read-only).
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Inline-Gates auf Pages"
+ * Quelle: openspec/specs/permissions/spec.md §"Inline-Gates auf Pages"
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'

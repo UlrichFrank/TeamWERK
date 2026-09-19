@@ -4,7 +4,7 @@
  *   isAdmin = user.role === 'admin'
  *   isVorstand = hasFunction(user, 'vorstand')
  *
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Inline-Gates auf Pages"
+ * Quelle: openspec/specs/permissions/spec.md §"Inline-Gates auf Pages"
  *
  * Designloch (§10): Die Spec listet nur isVorstand ohne admin. Tatsächlich inkludiert
  * canDeleteSepa auch isAdmin — admin kann das Dokument löschen.

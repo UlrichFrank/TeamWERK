@@ -1,7 +1,7 @@
 /**
  * MemberDetailPage inline gate: isAdmin = admin || vorstand
  * Steuert die Tabs "Datenschutz", "Familie", "Admin" (nur bei vorhandenem Mitglied).
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Inline-Gates auf Pages"
+ * Quelle: openspec/specs/permissions/spec.md §"Inline-Gates auf Pages"
  *
  * Hinweis: Nicht-vorstand-Personas landen per RoleRoute auf "/" (nie auf dieser Page).
  * Dieser Test prüft die defensive Logik der Page-Komponente selbst.

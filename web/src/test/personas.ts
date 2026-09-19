@@ -1,7 +1,7 @@
 // Persona-Definitionen für Frontend-Permission-Tests.
 // Spiegelbildlich zu internal/permissions/personas_test.go —
 // bei Änderungen beide Dateien aktualisieren.
-// Quelle der Wahrheit: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §1
+// Quelle der Wahrheit: openspec/specs/permissions/spec.md, Requirement „Persona-Definition“
 
 export type Persona = {
   id: string
@@ -23,6 +23,9 @@ export const PERSONAS: Persona[] = [
   { id: 'sportliche_leitung_elternteil', label: 'Sportliche Leitung-Elternteil', role: 'standard', clubFunctions: ['sportliche_leitung'], isParent: true },
   { id: 'spieler', label: 'Spieler', role: 'standard', clubFunctions: ['spieler'], isParent: false },
   { id: 'elternteil', label: 'Elternteil', role: 'standard', clubFunctions: [], isParent: true },
+  // medien (Migration 024): Spielbericht-Freigabe — einzige Funktion mit eigenem
+  // Router-Tier, das keine andere Persona außer vorstand/admin erreicht.
+  { id: 'medien', label: 'Medien', role: 'standard', clubFunctions: ['medien'], isParent: false },
 ]
 
 export function personaById(id: string): Persona {
