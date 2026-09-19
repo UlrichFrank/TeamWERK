@@ -3,7 +3,7 @@
  * Wenn isTrainer = true UND weder eigener my_rsvp gesetzt NOCH Elternteil,
  * werden RSVP-Buttons pro Termin ausgeblendet. Trainer-Elternteile sehen
  * die Kind-Buttons (Fix „Trainer-Eltern sehen für Kind nichts").
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Inline-Gates auf Pages"
+ * Quelle: openspec/specs/permissions/spec.md §"Inline-Gates auf Pages"
  *
  * Hinweis: Die TerminePage hat keinen "Training anlegen"-Button — die spec.md §design.md §5
  * nennt ihn als Ziel, er existiert aber in der aktuellen Codebasis noch nicht.

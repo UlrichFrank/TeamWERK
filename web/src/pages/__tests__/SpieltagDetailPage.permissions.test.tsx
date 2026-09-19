@@ -3,7 +3,7 @@
  * isTrainer = admin || trainer || sportliche_leitung
  * Steuert die Aufstellungs-Checkboxen (onToggleLineup).
  *
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Inline-Gates auf Pages"
+ * Quelle: openspec/specs/permissions/spec.md §"Inline-Gates auf Pages"
  *
  * Designloch (§10): isTrainer schließt vorstand aus, obwohl canEdit in KalenderPage
  * vorstand einschließt. Spiegelbild: internal/permissions/matrix_test.go

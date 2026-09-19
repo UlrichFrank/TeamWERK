@@ -1,13 +1,5 @@
-# permissions Specification
+## MODIFIED Requirements
 
-## Purpose
-
-Definiert die verbindliche Autorisierungs-Matrix von TeamWERK: welche Persona
-(Kombination aus System-Rolle, Vereinsfunktionen und Eltern-Status) welche
-Backend-Routen erreichen darf und welche Frontend-Routen, Navigations-Items und
-Page-internen Aktionen sichtbar sind. Dient als Quelle der Wahrheit für die
-mechanischen Drift-Tests (`TestPermissionMatrix_Backend`, Vitest-Smoke-Tests).
-## Requirements
 ### Requirement: Persona-Definition
 
 Das System SHALL die folgenden 12 Personas als Test-Fixtures bereitstellen. Sie decken alle praktisch relevanten Kombinationen aus System-Rolle, Vereinsfunktion(en) und Eltern-Status ab, mit besonderem Fokus auf den im Verein häufigen Fall, dass funktionsführende Mitglieder gleichzeitig Eltern sind.
@@ -44,17 +36,7 @@ Kurzcodes für die folgenden Matrix-Tabellen: `a`=admin, `v`=vorstand, `ve`=vors
 - **WHEN** eine Expected-Map der Tier-Matrix keinen Eintrag für `medien` trägt
 - **THEN** meldet `TestPermissionMatrix_Backend` die fehlende Persona für den betroffenen Endpoint
 
-### Requirement: Public Endpoints sind ohne Auth zugänglich
-
-Die Routen `POST /api/auth/login`, `POST /api/auth/refresh`, `POST /api/auth/logout`, `POST /api/auth/request-membership`, `POST /api/auth/register`, `GET /api/auth/token-info`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, `GET /api/profile/email/confirm`, `GET /api/files/{id}/download`, `GET /api/members/{id}/sepa-mandat/download` SHALL ohne Bearer-Token erreichbar sein und dürfen NICHT mit 401 antworten, nur weil kein Token vorliegt. `GET /api/uploads/*` ist NICHT mehr Teil dieser Liste und SHALL nicht ohne Authentifizierung ausgeliefert werden (siehe Anforderung „Upload-Auslieferung erfordert Authentifizierung").
-
-#### Scenario: Login ohne Token
-- **WHEN** ein Aufruf an `POST /api/auth/login` mit gültigem Body und ohne `Authorization`-Header gemacht wird
-- **THEN** antwortet der Server NICHT mit 401 (200/400 je nach Body-Validität ist erlaubt)
-
-#### Scenario: Unauthentifizierter Upload-Zugriff wird abgelehnt
-- **WHEN** ein Aufruf an `GET /api/uploads/<datei>` ohne gültiges Refresh-Cookie gemacht wird
-- **THEN** antwortet der Server mit 401 und liefert die Datei NICHT aus
+---
 
 ### Requirement: Authenticated-Endpoints erfordern gültiges Bearer-Token
 
@@ -87,6 +69,8 @@ Betroffene Endpoint-Gruppen (Auswahl, vollständige Liste im Matrix-Test):
 - **WHEN** eine beliebige Persona einen Aufruf an `GET /api/dashboard` mit gültigem Token sendet
 - **THEN** antwortet der Server mit 200 (Inhaltsfilterung ist Sache des Handlers)
 
+---
+
 ### Requirement: Trainer-und-Sportliche-Leitung-Gate
 
 Die Routen unter `RequireClubFunction("trainer", "sportliche_leitung")` SHALL nur für `admin`, `trainer`, `trainer_elternteil`, `sportliche_leitung`, `sportliche_leitung_elternteil` mit 2xx antworten. Für `vorstand`, `vorstand_elternteil`, `vorstand_beisitzer`, `kassierer`, `spieler`, `elternteil`, `medien` SHALL der Server mit 403 antworten. Das Gate ist bewusst enger als das Vorstand-Trainer-sL-Gate: Trainingsbetrieb und Anwesenheit sind Trainer-Arbeit, der reine Vorstand hat hier keinen Zugang.
@@ -115,6 +99,8 @@ Nicht mehr in diesem Gate (frühere Fehlzuordnung der Spec): `GET /api/venues` l
 #### Scenario: medien wird vom Trainer-Gate geblockt
 - **WHEN** Persona `medien` `POST /api/duty-assignments/{id}/fulfill` aufruft
 - **THEN** antwortet der Server mit 403
+
+---
 
 ### Requirement: Vorstand-Trainer-Sportliche-Leitung-Gate
 
@@ -154,6 +140,8 @@ Nicht mehr in diesem Gate: `GET /api/seasons` hat ein eigenes Saisons-Lese-Gate 
 - **WHEN** Persona `vorstand` `GET /api/venues` aufruft
 - **THEN** antwortet der Server NICHT mit 403
 
+---
+
 ### Requirement: Vorstand-Gate
 
 Die Routen unter `RequireClubFunction("vorstand")` SHALL ausschließlich für `admin`, `vorstand` und `vorstand_elternteil` mit 2xx antworten. Für alle anderen Personas (inklusive `vorstand_beisitzer`, `kassierer`, `trainer`, `trainer_elternteil`, `sportliche_leitung`, `sportliche_leitung_elternteil`, `spieler`, `elternteil`, `medien`) SHALL der Server mit 403 antworten.
@@ -185,18 +173,6 @@ Nicht mehr in diesem Gate (frühere Fehlzuordnung der Spec): `GET /api/members/{
 
 #### Scenario: kassierer wird vom Vorstand-Gate geblockt
 - **WHEN** Persona `kassierer` `POST /api/members` aufruft
-- **THEN** antwortet der Server mit 403
-
-### Requirement: Admin-Only-Gate
-
-Die Route `POST /api/impersonate/{id}` SHALL ausschließlich für Persona `admin` mit 2xx antworten. Für alle anderen 10 Personas SHALL der Server mit 403 antworten.
-
-| a | v | ve | vb | ka | t | te | s | se | sp | e |
-|---|---|---|---|---|---|---|---|---|---|---|
-| ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-
-#### Scenario: vorstand kann nicht impersonaten
-- **WHEN** Persona `vorstand` `POST /api/impersonate/42` aufruft
 - **THEN** antwortet der Server mit 403
 
 ---
@@ -243,6 +219,8 @@ Die folgenden Frontend-Routen aus `web/src/App.tsx` SHALL pro Persona entweder i
 #### Scenario: admin wird vom eigenen Trainingstagebuch umgeleitet
 - **WHEN** Persona `admin` mit initialer URL `/profil/trainingstagebuch` rendert
 - **THEN** wird `<Navigate to="/" replace>` aktiv
+
+---
 
 ### Requirement: Sidebar-Navigations-Items
 
@@ -296,6 +274,8 @@ Wenn alle Items eines Moduls für eine Persona ausgeblendet sind, SHALL auch der
 - **WHEN** Persona `admin` ohne eigenen Mitglieds-Datensatz und ohne Kind rendert AppShell
 - **THEN** ist der Nav-Item „Mein Profil“ nicht im DOM (`policy.NavFor` zeigt ihn dem Admin nur mit Mitglied oder Kind)
 
+---
+
 ### Requirement: Inline-Gates auf Pages
 
 Page-interne Sichtbarkeit SHALL aus den Capabilities aus `GET /api/me` (`hasCapability`) oder aus per-Objekt-`can.*`-Flags abgeleitet werden, nicht aus `role` oder `clubFunctions`. Die folgenden Gates gelten pro Persona (✅ sichtbar, – ausgeblendet):
@@ -337,16 +317,6 @@ Drei Gates folgen bewusst dem Teilnehmer- statt dem Verwaltungsmodell und lesen 
 - **WHEN** Persona `kassierer` rendert AdminSettingsPage
 - **THEN** sind die Tabs „Verein“ und „Beiträge“ im DOM, „Saisons“ und „Heimspieltage“ nicht
 
-### Requirement: Drift-Schutz
-
-Wenn eine neue Backend-Route in `internal/app/router.go` registriert wird, SHALL der Test `TestPermissionMatrix_Backend` failen, solange kein Eintrag in der Matrix-Tabelle existiert.
-
-Wenn eine neue Frontend-Route in `web/src/App.tsx` registriert wird, SHALL der Vitest-Smoke-Test failen, solange keine Erwartung pro Persona definiert ist.
-
-#### Scenario: Neue Route ohne Matrix-Eintrag failt den Test
-- **WHEN** ein Entwickler eine Route `r.Get("/api/new-resource", ...)` hinzufügt und `make test` läuft
-- **THEN** failt `TestPermissionMatrix_Backend` mit einer klaren Fehlermeldung: „Route GET /api/new-resource ist nicht in der Permission-Matrix gepflegt"
-
 ---
 
 ### Requirement: Status quo — bekannte Designlöcher (§10)
@@ -370,258 +340,7 @@ Das System SHALL die folgenden Inkonsistenzen als bekannten Status quo führen. 
 - **WHEN** einer der Punkte 1–8 im Code behoben oder in der Domänen-Spec legitimiert wird
 - **THEN** wird der Eintrag aus dieser Liste entfernt und die betroffene Domänen-Spec nachgezogen
 
-### Requirement: Änderungsantrag-Routen erzwingen Mitglieds-Ownership
-
-Die Self-Service-Routen `GET /api/members/{id}/change-drafts` und `POST /api/members/{id}/change-request` SHALL nur dann Mitgliedsdaten lesen oder schreiben, wenn der Aufrufer eine Beziehung zum Ziel-Mitglied `{id}` hat: Eigentümer (`member.user_id == claims.UserID`), Elternteil des Mitglieds (`family_links`), `admin`, `vorstand` oder `kassierer`. Für alle anderen Aufrufer SHALL der Server mit HTTP 403 antworten, BEVOR Antrags- oder Mitgliedsdaten (insbesondere der `old_value`-Snapshot) gelesen, zurückgegeben oder verändert werden.
-
-| a | v | ve | vb | ka | t | te | s | se | sp | e |
-|---|---|---|---|---|---|---|---|---|---|---|
-| ✅ | ✅ (alle) | ✅ | ❌ (fremd) | ✅ (alle) | ❌ (fremd) | ❌ (fremd) | ❌ (fremd) | ❌ (fremd) | ❌ (fremd) | ✅ (eigenes Kind) |
-
-> „fremd" = Member-ID gehört nicht zum Aufrufer/Kind. Eigentümer und Eltern erreichen ausschließlich das eigene bzw. das Kind-Mitglied; `vorstand`/`kassierer`/`admin` erreichen alle Mitglieder.
-
-#### Scenario: Fremder Spieler liest Änderungsanträge eines anderen Mitglieds
-- **WHEN** Persona `spieler` `GET /api/members/{id}/change-drafts` mit einer Member-ID aufruft, die nicht zu ihrem eigenen Account gehört
-- **THEN** antwortet der Server mit 403 und liefert keine Antragsdaten und keinen `old_value`-Snapshot
-
-#### Scenario: Eigentümer liest eigene Änderungsanträge
-- **WHEN** der Eigentümer eines Mitglieds `GET /api/members/{id}/change-drafts` für die eigene Member-ID aufruft
-- **THEN** antwortet der Server mit 200 und den eigenen Anträgen
-
-#### Scenario: Elternteil liest Anträge des eigenen Kindes
-- **WHEN** Persona `elternteil` `GET /api/members/{id}/change-drafts` für die Member-ID des eigenen Kindes aufruft
-- **THEN** antwortet der Server NICHT mit 403
-
-#### Scenario: Vorstand liest fremde Anträge
-- **WHEN** Persona `vorstand` `GET /api/members/{id}/change-drafts` für ein beliebiges Mitglied aufruft
-- **THEN** antwortet der Server mit 200
-
-#### Scenario: Fremder Nutzer legt Änderungsantrag für anderes Mitglied an
-- **WHEN** Persona `spieler` `POST /api/members/{id}/change-request` mit einer fremden Member-ID aufruft
-- **THEN** antwortet der Server mit 403 und es wird kein Draft erzeugt, aktualisiert oder verdrängt
-
----
-
-### Requirement: Bankdaten-Anträge nur durch Eigentümer oder Elternteil
-
-Für `field_name='bankdaten'` SHALL `POST /api/members/{id}/change-request` ausschließlich Aufrufer akzeptieren, die Eigentümer oder Elternteil des Mitglieds sind (Selbstbedienungsmodell). Andere Aufrufer — auch `vorstand` und `kassierer`, deren Rolle die Genehmigung, nicht die Einreichung ist — SHALL mit HTTP 403 antworten. Dadurch kann kein fremder Aufrufer einen verschlüsselten Bankdaten-Envelope unter dem Namen eines anderen Mitglieds hinterlegen.
-
-#### Scenario: Fremder unterschiebt Bankdaten-Envelope
-- **WHEN** Persona `spieler` `POST /api/members/{id}/change-request` mit `field_name='bankdaten'` und einem Envelope `{bank_ciphertext, bank_dek_enc}` für eine fremde Member-ID sendet
-- **THEN** antwortet der Server mit 403 und es wird kein `bankdaten`-Draft angelegt oder überschrieben
-
-#### Scenario: Eigentümer reicht eigene Bankdaten ein
-- **WHEN** der Eigentümer eines Mitglieds `POST .../change-request` mit `field_name='bankdaten'` und gültigem Envelope für die eigene Member-ID sendet
-- **THEN** antwortet der Server mit 2xx und der `bankdaten`-Draft wird angelegt oder aktualisiert (UPSERT-Verhalten unverändert)
-
-#### Scenario: Kassierer kann keinen Bankdaten-Antrag für ein Mitglied einreichen
-- **WHEN** Persona `kassierer` `POST .../change-request` mit `field_name='bankdaten'` für ein fremdes Mitglied sendet
-- **THEN** antwortet der Server mit 403 (Korrektur erfolgt über `PUT /api/members/{id}/bank-details`, nicht über den Antragsweg)
-
-### Requirement: Upload-Auslieferung erfordert Authentifizierung
-
-Das System SHALL Dateien unter `/api/uploads/*` nur an authentifizierte Aufrufer ausliefern. Da `<img>`-Requests keinen Bearer-Header senden, erfolgt die Authentifizierung über das HttpOnly-Refresh-Cookie (`auth.CookieMiddleware`, analog zu den SSE-Routen). Ohne gültiges Cookie SHALL der Server mit HTTP 401 antworten und die Datei NICHT ausliefern. Die Auslieferung SHALL `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store` setzen, damit die (UUID-)URL nicht über Referrer oder Caches weiterleakt. Die UUID-Dateinamen bleiben als Defense-in-Depth erhalten.
-
-> Bewusste Grenze: Es gibt keinen Pro-Foto-Sichtbarkeitscheck — jeder authentifizierte Nutzer kann ein Foto über seine (nicht erratbare) UUID-URL laden. Der behobene Befund war der *unauthentifizierte* Zugriff; per-Foto-Granularität wäre angesichts der bereits breiten Foto-Sichtbarkeit in Mitgliederlisten unverhältnismäßig.
-
-#### Scenario: Authentifizierter Aufrufer erhält die Datei
-- **WHEN** ein Aufrufer mit gültigem Refresh-Cookie `GET /api/uploads/<datei>` aufruft
-- **THEN** wird die Datei mit 200 sowie `Referrer-Policy: no-referrer` und `Cache-Control: private, no-store` ausgeliefert
-
-#### Scenario: Unauthentifizierter Zugriff wird abgelehnt
-- **WHEN** `GET /api/uploads/<datei>` ohne gültiges Refresh-Cookie aufgerufen wird
-- **THEN** antwortet der Server mit HTTP 401 und liefert die Datei NICHT aus
-
----
-
-### Requirement: Trainingstagebuch-Schreibzugriff ist auf den Eigentümer beschränkt
-
-Die Routen `POST /api/training-diary`, `PUT /api/training-diary/{id}`,
-`DELETE /api/training-diary/{id}`, `POST /api/training-diary/{id}/proof` und
-`DELETE /api/training-diary/{id}/proof` SHALL ausschließlich durch das Mitglied ausgeführt werden
-können, dem der Eintrag gehört (`member.user_id == claims.UserID`). Keine Vereinsfunktion und
-keine System-Rolle — auch nicht `admin`, `sportliche_leitung` oder der Trainer des Kaders —
-verschafft Schreibzugriff auf ein fremdes Tagebuch.
-
-`GET /api/training-diary` und `POST /api/training-diary` setzen zusätzlich voraus, dass der
-Aufrufer überhaupt einen Mitglieds-Datensatz besitzt; Nutzer ohne verknüpftes Mitglied (etwa reine
-Elternkonten) erhalten HTTP 403.
-
-| a | v | ve | vb | ka | t | te | s | se | sp | e |
-|---|---|---|---|---|---|---|---|---|---|---|
-| ❌ (fremd) | ❌ | ❌ | ❌ | ❌ | ❌ (fremd) | ❌ | ❌ (fremd) | ❌ | ✅ (eigenes) | ❌ |
-
-> Schreiben ist ausschließlich an die Eigentümerschaft gebunden. Eltern dürfen das Tagebuch ihres
-> Kindes **lesen**, aber nicht befüllen — die Erfassung ist die Selbstauskunft des Spielers.
-
-#### Scenario: Trainer ändert den Eintrag eines Spielers
-- **WHEN** ein Trainer des Kaders `PUT /api/training-diary/{id}` auf den Eintrag eines seiner
-  Spieler aufruft
-- **THEN** antwortet der Server mit 403 und der Eintrag bleibt unverändert
-
-#### Scenario: Trainer lädt einen Nachweis für einen Spieler hoch
-- **WHEN** ein Trainer des Kaders `POST /api/training-diary/{id}/proof` auf einen fremden Eintrag
-  aufruft
-- **THEN** antwortet der Server mit 403 und es wird keine Datei geschrieben
-
-#### Scenario: Nutzer ohne Mitglieds-Datensatz erfasst eine Einheit
-- **WHEN** ein eingeloggter Nutzer ohne verknüpftes Mitglied `POST /api/training-diary` aufruft
-- **THEN** antwortet der Server mit 403 und es wird kein Eintrag angelegt
-
-#### Scenario: Unbekannte Eintrags-ID ist nicht per Statuscode enumerierbar
-- **WHEN** ein beliebiger eingeloggter Nutzer `PUT /api/training-diary/{id}` mit einer nicht
-  existierenden ID aufruft
-- **THEN** antwortet der Server mit 404 und nicht mit 403
-
----
-
-### Requirement: Trainingstagebuch-Lesezugriff folgt der Anwesenheitsstatistik
-
-Die Routen `GET /api/members/{id}/training-diary`, `GET /api/training-diary/{id}/proof` und
-`GET /api/teams/{id}/training-diary-stats` SHALL Lesezugriff ausschließlich gewähren an: das
-Mitglied selbst, ein Elternteil über `family_links`, einen Trainer, der über
-`trainer_memberships` × `kader` in der **aktiven Saison** eine Mannschaft betreut, in deren Stamm-
-oder erweitertem Kader das Mitglied steht, sowie `sportliche_leitung` und `admin`.
-
-`vorstand`, `vorstand_beisitzer` und `kassierer` SHALL **keinen** Zugriff erhalten — anders als bei
-den Mitglieder- und Änderungsantrags-Routen begründet Vereinsverwaltung hier kein Leserecht. Das
-Tagebuch ist persönlich.
-
-Existiert die angefragte Member-ID nicht, SHALL der Server mit HTTP 403 antworten (nicht mit 500
-und nicht mit 404) und dadurch nicht preisgeben, ob die ID vergeben ist.
-
-| a | v | ve | vb | ka | t | te | s | se | sp | e |
-|---|---|---|---|---|---|---|---|---|---|---|
-| ✅ | ❌ | ❌ | ❌ | ❌ | ✅ (eigener Kader) | ✅ (eigener Kader) | ✅ (alle) | ✅ (alle) | ✅ (eigenes) | ✅ (eigenes Kind) |
-
-#### Scenario: Mannschaftskamerad liest ein fremdes Tagebuch
-- **WHEN** Persona `spieler` `GET /api/members/{id}/training-diary` mit der Member-ID eines
-  Mitspielers aus demselben Kader aufruft
-- **THEN** antwortet der Server mit 403
-
-#### Scenario: Mannschaftskamerad ruft einen fremden Nachweis ab
-- **WHEN** Persona `spieler` `GET /api/training-diary/{id}/proof` für den Eintrag eines
-  Mitspielers aufruft
-- **THEN** antwortet der Server mit 403 und liefert keine Bytes
-
-#### Scenario: Vorstand liest ein fremdes Tagebuch
-- **WHEN** Persona `vorstand` `GET /api/members/{id}/training-diary` für ein beliebiges Mitglied
-  aufruft
-- **THEN** antwortet der Server mit 403
-
-#### Scenario: Trainer einer fremden Mannschaft
-- **WHEN** ein Trainer `GET /api/teams/{id}/training-diary-stats` für eine Mannschaft aufruft, die
-  er nicht betreut
-- **THEN** antwortet der Server mit 403
-
-#### Scenario: Kaderwechsel entzieht den Zugriff
-- **WHEN** ein Mitglied aus dem Kader eines Trainers entfernt wird
-- **THEN** antwortet der Server dem Trainer beim nächsten Abruf mit 403, ohne dass eine Nachpflege
-  nötig ist
-
-#### Scenario: Spieler ruft die Mannschaftsübersicht ab
-- **WHEN** Persona `spieler` `GET /api/teams/{id}/training-diary-stats` für die eigene Mannschaft
-  aufruft
-- **THEN** antwortet der Server mit 403
-
----
-
-### Requirement: Gelöschte Nachweise sind vom Fehlen unterscheidbar
-
-`GET /api/training-diary/{id}/proof` SHALL für einen Berechtigten mit **HTTP 410** antworten, wenn
-der Nachweis durch die Retention entfernt wurde (`proof_purged_at` gesetzt), und mit **HTTP 404**,
-wenn nie einer hinterlegt war. Die Unterscheidung SHALL erst **nach** der Zugriffsprüfung erfolgen,
-damit Unberechtigte daraus nichts über den Zustand des Eintrags ableiten können.
-
-#### Scenario: Berechtigter ruft einen bereinigten Nachweis ab
-- **WHEN** der Eigentümer den Nachweis eines Eintrags abruft, dessen `proof_purged_at` gesetzt ist
-- **THEN** antwortet der Server mit 410
-
-#### Scenario: Unberechtigter ruft einen bereinigten Nachweis ab
-- **WHEN** ein fremder Spieler denselben Endpoint aufruft
-- **THEN** antwortet der Server mit 403 und nicht mit 410
-
-### Requirement: Objekt-Gates auf Detail- und Mutationsrouten
-
-Routen, die ein einzelnes Objekt lesen oder verändern, MUST die Berechtigung am Objekt prüfen, nicht nur am Auth-Tier: `GET /api/training-sessions/{id}` folgt dem Kader-Zugriff; `POST /api/games/{id}/lineup` erlaubt nur Trainer eines beteiligten Teams (admin und sportliche Leitung vereinsweit); `POST /api/chat/conversations/{id}/read` und `DELETE /api/chat/conversations/{id}/members/me` verlangen aktive Mitgliedschaft; `POST /api/duty-assignments/{id}/fulfill` und `/cash-substitute` verlangen admin, trainer oder sportliche Leitung (das bestehende Recht, nun auch im Handler geprüft) und MUST mit 404 antworten, wenn die Zuweisung nicht existiert.
-
-#### Scenario: Trainer eines fremden Teams speichert keine Aufstellung
-- **WHEN** ein Trainer, dessen Kader an dem Spiel nicht beteiligt ist, `POST /api/games/{id}/lineup` aufruft
-- **THEN** antwortet der Server mit HTTP 403
-
-#### Scenario: Nicht-Mitglied kann keine Lesebestätigung setzen
-- **WHEN** ein Nutzer ohne aktive Mitgliedschaft `POST /api/chat/conversations/{id}/read` aufruft
-- **THEN** antwortet der Server mit HTTP 403 und schreibt keine `message_reads`-Zeile
-
-#### Scenario: Nicht-Mitglied hinterlässt keine System-Nachricht
-- **WHEN** ein Nutzer ohne aktive Mitgliedschaft `DELETE /api/chat/conversations/{id}/members/me` aufruft
-- **THEN** antwortet der Server mit HTTP 403 und es entsteht keine Nachricht
-
-#### Scenario: Spieler sieht fremde Trainingseinheit nicht
-- **WHEN** ein Spieler ohne Kader-Zugriff `GET /api/training-sessions/{id}` aufruft
-- **THEN** antwortet der Server mit HTTP 403
-
-#### Scenario: Dienst-Erfüllung nur durch Berechtigte und nur für existierende Zuweisungen
-- **WHEN** ein Spieler `POST /api/duty-assignments/{id}/fulfill` aufruft
-- **THEN** antwortet der Server mit HTTP 403
-- **WHEN** ein Trainer dieselbe Route für eine nicht existierende ID aufruft
-- **THEN** antwortet der Server mit HTTP 404
-
-### Requirement: Objektrechte werden mechanisch geprüft
-
-Für jede Route mit einem Objekt-Parameter (`{id}`) MUST ein Test existieren, der ein fremdes Objekt anlegt und als nicht berechtigter Nutzer 403 oder 404 erwartet. Routen ohne einen solchen Test MUST den Test fehlschlagen lassen, sofern sie nicht mit Begründung in einer Allowlist bewusst offener Routen stehen. Ein verwaister Allowlist-Eintrag MUST ebenfalls fehlschlagen.
-
-#### Scenario: Neue Objekt-Route ohne Fixture
-- **WHEN** eine Route `GET /api/foo/{id}` hinzukommt, ohne Fixture-Erzeuger und ohne Allowlist-Eintrag
-- **THEN** schlägt die Objekt-Matrix fehl und nennt die Route
-
-#### Scenario: Fremdes Objekt bleibt verborgen
-- **WHEN** Nutzer A ein Objekt von Nutzer B über eine `{id}`-Route anspricht
-- **THEN** antwortet der Server mit 403 oder 404
-
-### Requirement: Dienst-Rangliste im Authenticated-Tier mit Handler-Scope
-
-`GET /api/duty-fairness/rangliste` SHALL im Authenticated-Tier liegen: jede
-eingeloggte Persona erreicht die Route, ohne Token antwortet sie mit HTTP 401. Die
-Einschränkung auf eigene Teams (HTTP 403 für ein Team ohne eigene Kader- oder
-`family_links`-Verbindung) und die Namens-Maskierung SHALL der Handler selbst
-durchsetzen — für die System-Rolle `admin` und die Vereinsfunktion `vorstand`
-entfällt beides.
-
-Der Sidebar-Eintrag „Dienst-Rangliste" (`/dienste/rangliste`) SHALL für jede
-eingeloggte Persona sichtbar sein.
-
-#### Scenario: Eingeloggte Persona erreicht die Rangliste
-- **WHEN** eine beliebige Persona `GET /api/duty-fairness/rangliste` mit gültigem
-  Token aufruft
-- **THEN** antwortet das System nicht mit 401
-
-#### Scenario: Aufruf ohne Token
-- **WHEN** `GET /api/duty-fairness/rangliste` ohne Token aufgerufen wird
-- **THEN** antwortet das System mit HTTP 401
-
-#### Scenario: Sidebar zeigt die Rangliste für alle
-- **WHEN** eine beliebige eingeloggte Persona die Navigation lädt
-- **THEN** enthält sie den Eintrag „Dienst-Rangliste" mit Ziel `/dienste/rangliste`
-
-### Requirement: Übungsgruppen-Sichtbarkeit im Authenticated-Tier mit Handler-Scope
-
-`GET /api/practice-groups/my` SHALL im Authenticated-Tier liegen: jede eingeloggte
-Persona erreicht die Route, ohne Token antwortet sie mit HTTP 401. Die Einschränkung
-auf die eigenen Übungsgruppen (Trainer via `kader_trainers`, Spieler/Eltern via
-`kader_members`/`kader_extended_members`/`family_links`) SHALL der Handler selbst
-durchsetzen — für die System-Rolle `admin` und die Vereinsfunktionen `vorstand` und
-`sportliche_leitung` entfällt die Einschränkung, sie sehen alle Übungsgruppen der
-aktiven Saison.
-
-#### Scenario: Eingeloggte Persona erreicht die Route
-- **WHEN** eine beliebige Persona `GET /api/practice-groups/my` mit gültigem Token
-  aufruft
-- **THEN** antwortet das System nicht mit 401
-
-#### Scenario: Aufruf ohne Token
-- **WHEN** `GET /api/practice-groups/my` ohne Token aufgerufen wird
-- **THEN** antwortet das System mit HTTP 401
+## ADDED Requirements
 
 ### Requirement: Vorstand-Kassierer-Gate
 

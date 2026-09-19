@@ -2,7 +2,7 @@
  * ChatPage inline gates:
  *   canBroadcast = admin || vorstand || trainer || sportliche_leitung
  *   → "Mitteilung senden"-Button im Mitteilungen-Tab
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Inline-Gates auf Pages"
+ * Quelle: openspec/specs/permissions/spec.md §"Inline-Gates auf Pages"
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen, fireEvent } from '@testing-library/react'

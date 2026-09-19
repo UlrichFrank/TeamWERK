@@ -1,5 +1,5 @@
 // Package permissions_test enthält den tabellen-getriebenen Backend-Permission-Matrix-Test.
-// Für jeden registrierten Endpoint × jede der 11 Personas wird der erwartete HTTP-Status
+// Für jeden registrierten Endpoint × jede der 12 Personas wird der erwartete HTTP-Status
 // geprüft. Testet primär Middleware-Verhalten (RequireRole, RequireClubFunction, auth.Middleware)
 // sowie bekannte Handler-Level-Gates (Inline-RequireClubFunction-Checks).
 //
@@ -31,13 +31,14 @@ const (
 
 // ── Vordefinierte Expected-Maps pro Middleware-Gate ───────────────────────────
 
-// Alle 11 Personas kommen durch den Authenticated-Middleware-Layer.
+// Alle 12 Personas kommen durch den Authenticated-Middleware-Layer.
 var exAuth = map[string]int{
 	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
 	"vorstand_beisitzer": httpAllowed, "kassierer": httpAllowed,
 	"trainer": httpAllowed, "trainer_elternteil": httpAllowed,
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
 	"spieler": httpAllowed, "elternteil": httpAllowed,
+	"medien": httpAllowed,
 }
 
 // Öffentliche Routen — kein Auth-Gate, beliebiger Response-Code akzeptabel.
@@ -47,6 +48,7 @@ var exPublic = map[string]int{
 	"trainer": httpAnyOK, "trainer_elternteil": httpAnyOK,
 	"sportliche_leitung": httpAnyOK, "sportliche_leitung_elternteil": httpAnyOK,
 	"spieler": httpAnyOK, "elternteil": httpAnyOK,
+	"medien": httpAnyOK,
 }
 
 // RequireClubFunction("trainer","sportliche_leitung")
@@ -55,6 +57,7 @@ var exTrainer = map[string]int{
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
 	"vorstand": 403, "vorstand_elternteil": 403, "vorstand_beisitzer": 403,
 	"kassierer": 403, "spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // RequireClubFunction("vorstand","trainer","sportliche_leitung")
@@ -63,6 +66,7 @@ var exVorstandTrainer = map[string]int{
 	"trainer": httpAllowed, "trainer_elternteil": httpAllowed,
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
 	"vorstand_beisitzer": 403, "kassierer": 403, "spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // RequireClubFunction("vorstand","trainer","sportliche_leitung","kassierer")
@@ -73,6 +77,7 @@ var exSeasonsRead = map[string]int{
 	"trainer":   httpAllowed, "trainer_elternteil": httpAllowed,
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
 	"vorstand_beisitzer": 403, "spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // RequireClubFunction("vorstand")
@@ -82,6 +87,7 @@ var exVorstand = map[string]int{
 	"trainer": 403, "trainer_elternteil": 403,
 	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // RequireClubFunction("vorstand","kassierer","trainer","sportliche_leitung")
@@ -92,6 +98,7 @@ var exMembersList = map[string]int{
 	"trainer":   httpAllowed, "trainer_elternteil": httpAllowed,
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
 	"vorstand_beisitzer": 403, "spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // RequireClubFunction("vorstand","kassierer")
@@ -102,6 +109,7 @@ var exVorstandKassierer = map[string]int{
 	"trainer":            403, "trainer_elternteil": 403,
 	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // RequireRole("admin")
@@ -111,6 +119,7 @@ var exAdmin = map[string]int{
 	"kassierer": 403, "trainer": 403, "trainer_elternteil": 403,
 	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // Handler-Level-Gates der team-internen Aufgaben/Strafen-Routen (internal/teams).
@@ -134,6 +143,7 @@ var exBroadcastSend = map[string]int{
 	"sportliche_leitung": httpAllowed, "sportliche_leitung_elternteil": httpAllowed,
 	"trainer": 403, "trainer_elternteil": 403,
 	"vorstand_beisitzer": 403, "kassierer": 403, "spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // Handler-Level-Gate: games.SaveLineup — canRecordGameAttendance, also admin
@@ -149,6 +159,7 @@ var exLineup = map[string]int{
 	"trainer": 403, "trainer_elternteil": 403,
 	"vorstand": 403, "vorstand_elternteil": 403, "vorstand_beisitzer": 403,
 	"kassierer": 403, "spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // Handler-Level-Gate: upload.SepaDownloadToken / DeleteSepaMandat
@@ -161,6 +172,7 @@ var exSepaOwner = map[string]int{
 	"trainer": 403, "trainer_elternteil": 403,
 	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // Handler-Level-Gate: members.canAccessMember — admin || vorstand || kassierer || isOwn || isParent.
@@ -174,6 +186,7 @@ var exMemberDraftAccess = map[string]int{
 	"trainer":            403, "trainer_elternteil": 403,
 	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // Handler-Level-Gate: trainingdiary.resolveOwnMember — der Endpoint hängt am
@@ -191,6 +204,7 @@ var exDiaryOwnMember = map[string]int{
 	"trainer": 403, "trainer_elternteil": 403,
 	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // Handler-Level-Gate: trainingdiary.canReadMemberDiary / canSeeTeamDiary —
@@ -206,17 +220,19 @@ var exDiaryReadACL = map[string]int{
 	"vorstand_beisitzer": 403,
 	"kassierer":          403, "trainer": 403, "trainer_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
+	"medien": 403,
 }
 
 // RequireClubFunction("medien","vorstand") — Match-Report-Freigeber-Tier.
-// Es gibt keine medien-Persona; daher effektiv admin (Bypass) + vorstand.
-// Bei Ergänzung einer medien-Persona MUSS medien: httpAllowed hinzukommen.
+// Die einzige Map, in der die Persona medien durchkommt: sie beweist, dass das
+// Freigeber-Tier nicht nur über den Admin-Bypass erreichbar ist.
 var exMatchReportPublisher = map[string]int{
 	"admin": httpAllowed, "vorstand": httpAllowed, "vorstand_elternteil": httpAllowed,
 	"vorstand_beisitzer": 403, "kassierer": 403,
 	"trainer": 403, "trainer_elternteil": 403,
 	"sportliche_leitung": 403, "sportliche_leitung_elternteil": 403,
 	"spieler": 403, "elternteil": 403,
+	"medien": httpAllowed,
 }
 
 // Match-Report-Routen ohne eigenes Middleware-Gate: nur RequireAuth, die
@@ -229,6 +245,7 @@ var exMatchReportMixed = map[string]int{
 	"trainer": httpAnyOK, "trainer_elternteil": httpAnyOK,
 	"sportliche_leitung": httpAnyOK, "sportliche_leitung_elternteil": httpAnyOK,
 	"spieler": httpAnyOK, "elternteil": httpAnyOK,
+	"medien": httpAnyOK,
 }
 
 // endpointCase beschreibt einen einzelnen Endpoint in der Permission-Matrix.
@@ -239,7 +256,7 @@ type endpointCase struct {
 }
 
 // matrix enthält einen Eintrag pro registrierter HTTP-Route.
-// Quelle der Wahrheit: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md
+// Quelle der Wahrheit: openspec/specs/permissions/spec.md
 // Ausschlüsse:
 //   - SSE-Routen (/api/events, /api/chat/events): CookieMiddleware, kein Bearer-Token-Flow.
 //   - SPA-Fallback (GET /*): kein API-Endpoint.
@@ -803,7 +820,7 @@ func TestPermissionMatrix_Backend(t *testing.T) {
 			if !matrixKeys[key] {
 				driftErrors = append(driftErrors, fmt.Sprintf(
 					"Route %s ist nicht in der Permission-Matrix gepflegt — "+
-						"bitte openspec/changes/permissions-baseline-tests/specs/permissions/spec.md "+
+						"bitte openspec/specs/permissions/spec.md "+
 						"und internal/permissions/matrix_test.go ergänzen", key))
 			}
 			return nil

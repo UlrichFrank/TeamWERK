@@ -1,6 +1,6 @@
 /**
  * AppShell Sidebar-Navigations-Sichtbarkeit pro Persona.
- * Quelle: openspec/changes/permissions-baseline-tests/specs/permissions/spec.md §"Sidebar-Navigations-Items"
+ * Quelle: openspec/specs/permissions/spec.md §"Sidebar-Navigations-Items"
  *
  * Backend-Äquivalent: internal/permissions/matrix_test.go
  */
@@ -56,6 +56,21 @@ const ALWAYS_VISIBLE: { label: string; module: string }[] = [
   { label: 'Dienste', module: 'Verein' },
   { label: 'Mitfahrten', module: 'Verein' },
   { label: 'Nachrichten', module: 'Verein' },
+  { label: 'Videos', module: 'Spielbetrieb' },
+  { label: 'Dienst-Rangliste', module: 'Verein' },
+  { label: 'Spielberichte', module: 'Verein' },
+]
+
+const TRAINER_LIKE = ['admin', 'trainer', 'trainer_elternteil', 'sportliche_leitung', 'sportliche_leitung_elternteil']
+const VORSTAND_LIKE = ['admin', 'vorstand', 'vorstand_elternteil']
+
+// Rollen-gebundene Items außerhalb des Verwaltungs-Moduls (policy.NavFor).
+const MODULE_ITEMS: { label: string; module: string; allowedIds: string[] }[] = [
+  { label: 'Mein Trainingstagebuch', module: 'Nutzer', allowedIds: ['spieler'] },
+  { label: 'Anwesenheit', module: 'Spielbetrieb', allowedIds: TRAINER_LIKE },
+  { label: 'Trainingstagebuch', module: 'Spielbetrieb', allowedIds: [...TRAINER_LIKE, 'vorstand', 'vorstand_elternteil'] },
+  // NavFor liefert „Berichte prüfen“, AppShell beschriftet dasselbe Ziel als „Spielbericht prüfen“.
+  { label: 'Spielbericht prüfen', module: 'Verein', allowedIds: [...VORSTAND_LIKE, 'medien'] },
 ]
 
 // Verwaltungs-Items und ihre erlaubten Personas
@@ -70,6 +85,14 @@ const VERWALTUNG_ITEMS: { label: string; allowedIds: string[] }[] = [
   },
   {
     label: 'Kader',
+    allowedIds: [
+      'admin', 'vorstand', 'vorstand_elternteil',
+      'trainer', 'trainer_elternteil',
+      'sportliche_leitung', 'sportliche_leitung_elternteil',
+    ],
+  },
+  {
+    label: 'Übungsgruppen',
     allowedIds: [
       'admin', 'vorstand', 'vorstand_elternteil',
       'trainer', 'trainer_elternteil',
@@ -98,11 +121,20 @@ const VERWALTUNG_ITEMS: { label: string; allowedIds: string[] }[] = [
     label: 'Einstellungen',
     allowedIds: ['admin', 'vorstand', 'vorstand_elternteil', 'kassierer'],
   },
+  {
+    label: 'Tresor',
+    allowedIds: ['admin', 'vorstand', 'vorstand_elternteil', 'kassierer'],
+  },
+  {
+    label: 'Wartungsmodus',
+    allowedIds: ['admin'],
+  },
 ]
 
 // Personas für die KEIN Verwaltungs-Item sichtbar ist → kein Modul-Header.
 // Kassierer sieht Mitglieder/Beitragslauf/Einstellungen und ist daher NICHT mehr hier.
-const NO_VERWALTUNG_IDS = ['vorstand_beisitzer', 'spieler', 'elternteil']
+// medien hat nur „Spielbericht prüfen“ im Modul Verein.
+const NO_VERWALTUNG_IDS = ['vorstand_beisitzer', 'spieler', 'elternteil', 'medien']
 
 describe('AppShell — Sidebar-Items pro Persona', () => {
   test.each(PERSONAS)('Persona $id: immer sichtbare Items vorhanden', async (persona) => {
@@ -124,6 +156,19 @@ describe('AppShell — Sidebar-Items pro Persona', () => {
       expect(el).not.toBeNull()
     }
   })
+
+  for (const item of MODULE_ITEMS) {
+    test.each(PERSONAS)(`Persona $id: "${item.label}" (${item.module})`, async (persona) => {
+      renderAsPersona(<AppShell />, persona.id, { route: '/' })
+      await flushAsync()
+      const el = await queryItemInModule(item.module, item.label)
+      if (item.allowedIds.includes(persona.id)) {
+        expect(el, `"${item.label}" muss für ${persona.id} sichtbar sein`).not.toBeNull()
+      } else {
+        expect(el, `"${item.label}" darf für ${persona.id} NICHT sichtbar sein`).toBeNull()
+      }
+    })
+  }
 
   describe('Verwaltungs-Modul sichtbar/versteckt', () => {
     test.each(PERSONAS)('Persona $id: Modul-Header "Verwaltung"', async (persona) => {
