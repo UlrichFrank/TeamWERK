@@ -23,5 +23,5 @@ _3.1, 3.2, 4.1 und 4.2 in einem Commit: der neue Client-Vertrag, `pick` und die 
 
 ## 5. Doku und Abschluss
 
-- [ ] 5.1 `docs/agent/06-gotchas.md`, Absatz „Video-Upload-Berechtigung über den Dienst ‚Video'": Ergänzen, dass `upload-eligible-games` `teams`/`games` liefert und das Tool keine Sichtbarkeits-Endpunkte mehr nutzt; Hinweis auf die `team_id`-Härtung im Dienst-Pfad. Verifikation: Abschnitt aktualisiert, `CHANGELOG.md` (falls gepflegt) ergänzt.
+- [x] 5.1 `docs/agent/06-gotchas.md`, Absatz „Video-Upload-Berechtigung über den Dienst ‚Video'": Ergänzen, dass `upload-eligible-games` `teams`/`games` liefert und das Tool keine Sichtbarkeits-Endpunkte mehr nutzt; Hinweis auf die `team_id`-Härtung im Dienst-Pfad. Verifikation: Abschnitt aktualisiert, `CHANGELOG.md` (falls gepflegt) ergänzt.
 - [ ] 5.2 `openspec validate --all` grün; Change archivieren, Delta-Specs synchronisieren. Verifikation: `openspec validate --all`, Archiv-Verzeichnis vorhanden.
