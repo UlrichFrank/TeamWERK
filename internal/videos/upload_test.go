@@ -548,3 +548,69 @@ func TestCleanupStaleUploads_MissingDirIsNoError(t *testing.T) {
 		t.Errorf("removed = %d, want 0", n)
 	}
 }
+
+// Dienst-Pfad (video-upload-eligible-teams): das Ziel-Team muss eines der
+// Teams des Spiels sein, sonst 400 ohne DB-Zeile — ein Dienst-Upload darf nicht
+// bei einer unbeteiligten Mannschaft sichtbar werden.
+func TestCreateUpload_DutyBasedForeignTeamRejected(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := uploadHandler(t, db, 1024)
+	srv := newUploadServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	foreign := testutil.CreateTeam(t, db, "Team B")
+	game := testutil.CreateGame(t, db, season, team, "2026-03-15")
+
+	videoDutyType := createDutyTypeWithVideoFlag(t, db, "Video", true)
+	slot := testutil.CreateDutySlot(t, db, videoDutyType, season, team, game, "2026-03-15")
+
+	user := testutil.CreateUser(t, db, "standard")
+	addDutyAssignment(t, db, slot, user)
+
+	tok := testutil.Token(t, user, "standard", []string{"spieler"})
+	body := map[string]any{
+		"title":      "Falsches Team",
+		"team_id":    foreign,
+		"season_id":  season,
+		"game_id":    game,
+		"size_bytes": 1024,
+	}
+	res := testutil.Post(t, srv, "/api/videos", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", res.StatusCode)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM videos`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("videos rows = %d (err %v), want 0", n, err)
+	}
+}
+
+// Der Rollen-Pfad bleibt frei: Vorstand darf ein Spiel-Video bewusst einer
+// anderen Mannschaft zuordnen (Doppelspieltag, Sammelvideo).
+func TestCreateUpload_RolePathMayPickForeignTeamForGame(t *testing.T) {
+	db := testutil.NewDB(t)
+	h, _ := uploadHandler(t, db, 1024)
+	srv := newUploadServer(t, h)
+
+	season := testutil.CreateSeason(t, db, "2025/26")
+	team := testutil.CreateTeam(t, db, "Team A")
+	other := testutil.CreateTeam(t, db, "Team B")
+	game := testutil.CreateGame(t, db, season, team, "2026-03-15")
+
+	user := testutil.CreateUser(t, db, "standard")
+	tok := testutil.Token(t, user, "standard", []string{"vorstand"})
+	body := map[string]any{
+		"title":      "Sammelvideo",
+		"team_id":    other,
+		"season_id":  season,
+		"game_id":    game,
+		"size_bytes": 1024,
+	}
+	res := testutil.Post(t, srv, "/api/videos", tok, body)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d, want 201", res.StatusCode)
+	}
+}

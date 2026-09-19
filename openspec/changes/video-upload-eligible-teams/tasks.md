@@ -5,8 +5,8 @@
 
 ## 2. Backend — Härtung Dienst-Pfad
 
-- [ ] 2.1 `internal/videos/upload.go`: wenn die Berechtigung ausschließlich über `CanUploadForGameViaDuty` kommt, `team_id` gegen `game_teams` des Spiels prüfen und bei Fehltreffer HTTP 400 (`team_not_in_game`) antworten — nach der Berechtigungsprüfung, ohne DB-Eintrag. Verifikation: bestehende Upload-Tests grün.
-- [ ] 2.2 Tests in `internal/videos/`: Dienst-Nutzer mit passendem `team_id` → 201; mit fremdem `team_id` → 400 und keine `videos`-Zeile; Trainer/Vorstand mit fremdem `team_id` weiterhin wie bisher (Rollen-Pfad unberührt). Verifikation: `go test ./internal/videos/ -run TestCreateUpload`.
+- [x] 2.1 `internal/videos/upload.go`: wenn die Berechtigung ausschließlich über `CanUploadForGameViaDuty` kommt, `team_id` gegen `game_teams` des Spiels prüfen und bei Fehltreffer HTTP 400 (`team_not_in_game`) antworten — nach der Berechtigungsprüfung, ohne DB-Eintrag. Verifikation: bestehende Upload-Tests grün.
+- [x] 2.2 Tests in `internal/videos/`: Dienst-Nutzer mit passendem `team_id` → 201; mit fremdem `team_id` → 400 und keine `videos`-Zeile; Trainer/Vorstand mit fremdem `team_id` weiterhin wie bisher (Rollen-Pfad unberührt). Verifikation: `go test ./internal/videos/ -run TestCreateUpload`.
 - [ ] 2.3 `make test` und `make lint` für das Backend grün (inkl. Broadcast-Gate: Route bleibt Lese-Route in der Allowlist, Objektrechte-Matrix unverändert).
 
 ## 3. Desktop-Tool — Client und Auswahl-Logik
