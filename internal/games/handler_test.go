@@ -1046,6 +1046,15 @@ func TestListTeamsForUser_VorstandTrainerScopeStats(t *testing.T) {
 // board itself shows slots for both. teams.length > 1 on the frontend
 // (DutyPage.tsx) is what actually toggles the filter, so this must return
 // the union, not just the trainer's own team.
+//
+// Derselbe Nutzer meldete zwei Tage später denselben Fehler für /termine,
+// /kalender und /mitfahrgelegenheiten. Der Grund stand hier: der damalige Fix
+// hat nur scope=duties repariert und den scope-losen Fall als „unchanged
+// existing behavior" mit genau einem Team festgeschrieben — die Assertion hat
+// den Bug also konserviert statt ihn zu zeigen. Seit
+// `teamfilter-trainer-elternteil` liefern beide Aufrufe die Vereinigung; der
+// Unterschied zwischen ihnen ist nur noch Stammkader (duties) gegen alle
+// Zugehörigkeiten (scope-los).
 func TestListTeamsForUser_ScopeDutiesTrainerAlsoParent(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -1066,7 +1075,7 @@ func TestListTeamsForUser_ScopeDutiesTrainerAlsoParent(t *testing.T) {
 	srv := teamsServer(t, db)
 	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
 
-	// Without scope: unchanged existing behavior, only the trainer's own team.
+	// Ohne scope: Vereinigung aus Trainer-Team und Kind-Team.
 	res := testutil.Get(t, srv, "/api/teams", token)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", res.StatusCode)
@@ -1074,8 +1083,12 @@ func TestListTeamsForUser_ScopeDutiesTrainerAlsoParent(t *testing.T) {
 	var plainTeams []map[string]any
 	json.NewDecoder(res.Body).Decode(&plainTeams)
 	res.Body.Close()
-	if len(plainTeams) != 1 {
-		t.Fatalf("trainer without scope: expected 1 team, got %d", len(plainTeams))
+	plainIDs := map[int]bool{}
+	for _, tm := range plainTeams {
+		plainIDs[int(tm["id"].(float64))] = true
+	}
+	if !plainIDs[teamA] || !plainIDs[teamB] {
+		t.Fatalf("trainer+parent ohne scope: erwartet Team A (%d) und B (%d), bekommen %v", teamA, teamB, plainTeams)
 	}
 
 	// scope=duties: union of trainer's own team and the child's team.
@@ -2820,5 +2833,81 @@ func TestDeleteGame_IstNutztSlotDauer(t *testing.T) {
 	// stünde hier 2.0 — der Wert des Typs, den niemand mehr verwendet.
 	if ist != 0.5 {
 		t.Errorf("ist soll die Slot-Dauer des verbliebenen Dienstes sein (0.5), got %v", ist)
+	}
+}
+
+// TestListTeamsForUser_TrainerElternteilErweiterterKader bildet die gemeldete
+// Konstellation vollständig ab (Florian Steinle, 2026-09-19): Trainer genau
+// einer Mannschaft, Elternteil mehrerer Kinder — eines davon steht in einer
+// weiteren Mannschaft nur im ERWEITERTEN Kader.
+//
+// Die beiden Aufrufe unterscheiden sich genau an dieser Mannschaft:
+// scope-los gehört sie dazu (das Kind hat dort Termine, die Liste zeigt sie),
+// mit scope=duties nicht (der erweiterte Kader schuldet keine Dienststunden,
+// eine Filter-Option bliebe leer). Ein Test, der nur den Stammkader kennt,
+// kann diesen Unterschied nicht zeigen — er ist der Grund, warum die beiden
+// Zweige nicht zusammenfallen.
+func TestListTeamsForUser_TrainerElternteilErweiterterKader(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamTrainer := testutil.CreateTeam(t, db, "Trainer-Team")
+	teamStamm := testutil.CreateTeam(t, db, "Kind-Stammkader")
+	teamErw := testutil.CreateTeam(t, db, "Kind-erweiterter-Kader")
+	testutil.CreateTeam(t, db, "Fremde Mannschaft") // darf nie erscheinen
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	testutil.AddKaderTrainer(t, db, testutil.CreateKader(t, db, teamTrainer, seasonID), memberID)
+
+	childUserID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, childUserID)
+	testutil.AddKaderMember(t, db, testutil.CreateKader(t, db, teamStamm, seasonID), childMemberID)
+	testutil.AddExtendedKaderMember(t, db, testutil.CreateKader(t, db, teamErw, seasonID), childMemberID)
+	testutil.AddFamilyLink(t, db, userID, childMemberID)
+
+	srv := teamsServer(t, db)
+	token := testutil.Token(t, userID, "standard", []string{"trainer"})
+
+	ids := func(path string) map[int]bool {
+		t.Helper()
+		res := testutil.Get(t, srv, path, token)
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("%s: erwartet 200, bekommen %d", path, res.StatusCode)
+		}
+		var out []map[string]any
+		if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
+			t.Fatalf("%s: decode: %v", path, err)
+		}
+		got := map[int]bool{}
+		for _, tm := range out {
+			got[int(tm["id"].(float64))] = true
+		}
+		return got
+	}
+
+	plain := ids("/api/teams")
+	for _, want := range []struct {
+		id    int
+		label string
+	}{
+		{teamTrainer, "Trainer-Team"},
+		{teamStamm, "Stammkader des Kindes"},
+		{teamErw, "erweiterter Kader des Kindes"},
+	} {
+		if !plain[want.id] {
+			t.Errorf("/api/teams: %s (id=%d) fehlt — Filter bietet die Mannschaft nicht an, deren Termine die Liste zeigt", want.label, want.id)
+		}
+	}
+	if len(plain) != 3 {
+		t.Errorf("/api/teams: erwartet genau 3 Mannschaften, bekommen %d (%v)", len(plain), plain)
+	}
+
+	duties := ids("/api/teams?scope=duties")
+	if !duties[teamTrainer] || !duties[teamStamm] {
+		t.Errorf("/api/teams?scope=duties: Trainer-Team (%d) und Stammkader (%d) müssen dabei sein, bekommen %v", teamTrainer, teamStamm, duties)
+	}
+	if duties[teamErw] {
+		t.Errorf("/api/teams?scope=duties: erweiterter Kader (%d) hat keine Dienstpflicht und gehört nicht in den Filter", teamErw)
 	}
 }

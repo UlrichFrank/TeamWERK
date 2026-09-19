@@ -1717,55 +1717,42 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
 			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`)
-	} else if scope == "duties" && claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
-		// Dienstbörse: ein Trainer, der zugleich Elternteil ist, hat Dienstpflicht
-		// nicht nur über sein eigenes Trainer-Team, sondern auch über den
-		// Stammkader seiner Kinder — die reine Trainer-Team-Liste (unten, für
-		// scope-lose Aufrufer wie den Spiel-/Trainings-Teamselektor) ließe den
-		// Teamfilter auf /dienste sonst fälschlich verschwinden, sobald nur ein
-		// einziges Trainer-Team, aber mehrere Kinder-Teams zutreffen.
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
-			 FROM teams t
-			 JOIN kader k ON k.team_id = t.id
-			 WHERE k.season_id = `+activeSeasonSub+`
-			   AND (
-			     t.id IN (SELECT k2.team_id FROM kader_trainers kt
-			               JOIN kader k2 ON k2.id = kt.kader_id
-			               JOIN members m ON m.id = kt.member_id
-			               WHERE k2.season_id = `+activeSeasonSub+` AND m.user_id = ?)
-			     OR t.id IN (SELECT pm.team_id FROM player_memberships pm
-			               WHERE pm.season_id = `+activeSeasonSub+` AND pm.member_id IN (
-			                 SELECT id FROM members WHERE user_id = ?
-			                 UNION SELECT member_id FROM family_links WHERE parent_user_id = ?))
-			   )
-			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`,
-			claims.UserID, claims.UserID, claims.UserID)
-	} else if claims.IsTrainerLike() && !claims.HasFunction("sportliche_leitung") {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
-			 FROM teams t
-			 JOIN kader k ON k.team_id = t.id
-			 JOIN kader_trainers kt ON kt.kader_id = k.id
-			 JOIN members m ON m.id = kt.member_id
-			 WHERE k.season_id = `+activeSeasonSub+` AND m.user_id = ?
-			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`, claims.UserID)
-	} else if !claims.IsTrainerLike() {
-		// spieler / elternteil: only teams the user or their children belong to.
-		// user_accessible_teams covers regular AND extended squad (kader_extended_members)
-		// for both the player themselves and their parents (via family_links).
-		// ?scope=duties (Dienstbörse): nur Stammkader — der erweiterte Kader
-		// schuldet keine Dienste und sieht auf /dienste keine Slots seines
-		// Teams, eine Filter-Option dafür bliebe immer leer.
+	} else if !claims.HasFunction("sportliche_leitung") {
+		// Ein Nutzer kann über mehrere Wege an einer Mannschaft hängen: als
+		// Trainer, als Spieler, als Elternteil — jeweils im Stamm- oder im
+		// erweiterten Kader. Die Liste ist die VEREINIGUNG dieser Wege, und
+		// `user_accessible_teams` führt genau sie.
+		//
+		// Bis `teamfilter-trainer-elternteil` stand hier ein eigener
+		// Trainer-Zweig davor, der nur `kader_trainers` las. Er hat die
+		// Eltern-Wege nicht ergänzt, sondern verdeckt: wer Trainer UND
+		// Elternteil ist, bekam ausschließlich sein Trainer-Team. Der Filter
+		// auf /termine, /kalender und /mitfahrgelegenheiten bot die
+		// Mannschaften der eigenen Kinder deshalb gar nicht erst an, obwohl
+		// deren Termine in der Liste standen — und das Abwählen der einen
+		// vorhandenen Mannschaft ließ sie alle verschwinden, ohne dass es ein
+		// Kästchen gab, um sie zurückzuholen.
+		//
+		// ?scope=duties (Dienstbörse) ist die Ausnahme und bleibt es: dort
+		// zählt der Stammkader, weil der erweiterte Kader keine Dienste
+		// schuldet und eine Filter-Option dafür immer leer bliebe. Die
+		// Trainer-Teams kommen dazu; für einen Nutzer ohne Trainer-Eintrag ist
+		// diese Teilmenge leer, die Bedingung gilt deshalb unverändert für
+		// alle und braucht keinen eigenen Zweig.
 		teamSource := `SELECT team_id FROM user_accessible_teams
 			     WHERE user_id = ? AND season_id = ` + activeSeasonSub
 		teamArgs := []any{claims.UserID}
-		if r.URL.Query().Get("scope") == "duties" {
+		if scope == "duties" {
 			teamSource = `SELECT pm.team_id FROM player_memberships pm
 			     WHERE pm.season_id = ` + activeSeasonSub + ` AND pm.member_id IN (
 			       SELECT id FROM members WHERE user_id = ?
-			       UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)`
-			teamArgs = []any{claims.UserID, claims.UserID}
+			       UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)
+			   UNION
+			   SELECT k2.team_id FROM kader_trainers kt
+			     JOIN kader k2 ON k2.id = kt.kader_id
+			     JOIN members m ON m.id = kt.member_id
+			     WHERE k2.season_id = ` + activeSeasonSub + ` AND m.user_id = ?`
+			teamArgs = []any{claims.UserID, claims.UserID, claims.UserID}
 		}
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
