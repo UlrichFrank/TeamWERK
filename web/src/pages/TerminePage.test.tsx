@@ -223,7 +223,7 @@ describe('TerminePage — Karte anklicken setzt Focus Parameter', () => {
   })
 })
 
-describe('TerminePage — Ladefenster reicht bis zum Saisonende', () => {
+describe('TerminePage — Ladefenster deckt das Saisonende ab', () => {
   beforeEach(() => {
     mockGet.mockReset()
     authState.is_parent = false
@@ -236,13 +236,20 @@ describe('TerminePage — Ladefenster reicht bis zum Saisonende', () => {
     return { from: params.get('from'), to: params.get('to') }
   }
 
-  test('lädt bis end_date der aktiven Saison statt eines rollierenden Fensters', async () => {
+  test('lädt mindestens bis zum Saisonende — und darüber hinaus, wenn die Saison früher endet', async () => {
     seedRoutes([])
     renderPage()
 
     await waitFor(() => expect(mockGet.mock.calls.some(c => String(c[0]).startsWith('/games/my'))).toBe(true))
-    expect(requestedWindow('/games/my').to).toBe(SEASON.end_date)
-    expect(requestedWindow('/training-sessions').to).toBe(SEASON.end_date)
+    // Die obere Grenze ist das spätere von Saisonende und heute + 365 Tagen.
+    // Das Saisonende allein genügt nicht: eine Trainingsserie darf über das
+    // formale Saisonende hinauslaufen (Übungsgruppen tun das regelmäßig), ihre
+    // letzten Termine fielen sonst lautlos aus der Liste.
+    const rollingHorizon = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const expected = SEASON.end_date > rollingHorizon ? SEASON.end_date : rollingHorizon
+    expect(requestedWindow('/games/my').to).toBe(expected)
+    expect(requestedWindow('/training-sessions').to).toBe(expected)
+    expect(expected >= SEASON.end_date).toBe(true)
   })
 
   test('lädt keine Termine, bevor das Saisonfenster bekannt ist', async () => {

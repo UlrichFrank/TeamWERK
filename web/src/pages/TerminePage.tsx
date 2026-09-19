@@ -9,6 +9,7 @@ import EventNoteIndicator from '../components/EventNoteIndicator'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId, trainingFilterId } from '../lib/teamFilter'
+import { isoDaysFrom, terminLoadWindow, type SeasonWindow } from '../lib/terminWindow'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
@@ -166,13 +167,6 @@ function sortKey(t: Termin): string {
   return t.data.date + 'T' + t.data.time
 }
 
-// Fenster der laufenden Saison (GET /api/seasons/active), reine "YYYY-MM-DD".
-type SeasonWindow = { start_date: string; end_date: string }
-
-function isoDaysFromNow(days: number): string {
-  return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-}
-
 function fmtClockTime(iso?: string): string {
   if (!iso) return ''
   const d = new Date(iso)
@@ -302,16 +296,11 @@ export default function TerminePage() {
   const toggleTeam = (teamId: number) => updateFilter({ team: toggleTeamId(activeTeamIds, teamId) })
 
   const today = new Date().toISOString().slice(0, 10)
-  // Obere Fenstergrenze ist das Ende der laufenden Saison — vorher war es ein
-  // rollierendes 180-Tage-Fenster, das die letzten Spieltage einer langen Saison
-  // abgeschnitten hat. Nach unten bleibt es beim bisherigen Jahresrückblick, damit
-  // Deep-Links auf Termine der Vorsaison weiter auflösbar bleiben (der Saisonstart
-  // liegt bei einer frisch aktivierten Saison hinter diesen 365 Tagen).
-  const pastFloor = isoDaysFromNow(-365)
-  const from = showPast
-    ? (season && season.start_date < pastFloor ? season.start_date : pastFloor)
-    : today
-  const to = season?.end_date ?? ''
+  // Beide Fenstergrenzen liegen in terminLoadWindow (dort auch die Begründung,
+  // warum das Saisonende die obere Grenze nicht allein bestimmt).
+  const { from, to } = season
+    ? terminLoadWindow(season, showPast)
+    : { from: today, to: today }
 
   const load = () => {
     setLoading(true)
@@ -338,7 +327,7 @@ export default function TerminePage() {
   useEffect(() => {
     api.get('/seasons/active')
       .then(r => setSeason({ start_date: r.data.start_date, end_date: r.data.end_date }))
-      .catch(() => setSeason({ start_date: isoDaysFromNow(-365), end_date: isoDaysFromNow(365) }))
+      .catch(() => setSeason({ start_date: isoDaysFrom(new Date(), -365), end_date: isoDaysFrom(new Date(), 365) }))
     api.get('/teams').then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? []))).catch(() => {})
     api.get('/practice-groups/my').then(r => setPracticeGroups(Array.isArray(r.data) ? r.data : [])).catch(() => {})
   }, [])
