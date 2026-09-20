@@ -11,13 +11,13 @@
 
 ## 2. Foundation — internal/bwhv: HTTP-Client
 
-- [ ] 2.1 `go get github.com/ledongthuc/pdf`; `github.com/agnivade/levenshtein` von `// indirect` auf direkt ziehen; `go mod tidy`
-- [ ] 2.2 `internal/bwhv/client.go`: HTTP-Client mit Timeout, Projekt-`User-Agent`, HTTPS-Zwang, serielle Ausführung mit Pause zwischen PDF-Abrufen
-- [ ] 2.3 `internal/bwhv/client.go`: `FetchCatalog(orgID, subOrgID, periodID)` → `cmd=po`; Antwort auf `gClassID`/`gClassSname`/`gClassLname` reduzieren. **Bezirke über `o`, `og` bleibt die Verbands-Org** (design.md §1.2)
-- [ ] 2.4 `internal/bwhv/client.go`: `FetchSchedule(orgID, subOrgID, periodID, classID)` → `cmd=ps&ca=1`; Spiele + Tabelle + `head.repURL` liefern
-- [ ] 2.5 `internal/bwhv/client.go`: `FetchReport(repURL, sGID)` → PDF-Bytes; Content-Type und `%PDF`-Magic prüfen, sonst Fehler
-- [ ] 2.6 `internal/bwhv/testdata/`: Katalog-, Spielplan- und PDF-Fixture einchecken (aus den verifizierten Live-Antworten, siehe design.md §1)
-- [ ] 2.7 `internal/bwhv/client_test.go`: Parsing der Katalog-/Spielplan-Antworten gegen die Fixtures; `sGID: 0` wird als „kein Bericht" erkannt; **kein Live-Abruf im Test**
+- [x] 2.1 `go get github.com/ledongthuc/pdf`; `github.com/agnivade/levenshtein` von `// indirect` auf direkt ziehen; `go mod tidy`
+- [x] 2.2 `internal/bwhv/client.go`: HTTP-Client mit Timeout, Projekt-`User-Agent`, HTTPS-Zwang, serielle Ausführung mit Pause zwischen PDF-Abrufen
+- [x] 2.3 `internal/bwhv/client.go`: `FetchCatalog(orgID, subOrgID, periodID)` → `cmd=po`; Antwort auf `gClassID`/`gClassSname`/`gClassLname` reduzieren. **Bezirke über `o`, `og` bleibt die Verbands-Org** (design.md §1.2)
+- [x] 2.4 `internal/bwhv/client.go`: `FetchSchedule(orgID, subOrgID, periodID, classID)` → `cmd=ps&ca=1`; Spiele + Tabelle + `head.repURL` liefern
+- [x] 2.5 `internal/bwhv/client.go`: `FetchReport(repURL, sGID)` → PDF-Bytes; Content-Type und `%PDF`-Magic prüfen, sonst Fehler
+- [x] 2.6 `internal/bwhv/testdata/`: Katalog- (BW + SRM), Spielplan- und PDF-Fixture plus die `permission denied`-Antwort eingecheckt; `README.md` dokumentiert Herkunft und Kürzung. **Das PDF ist ein synthetischer Nachbau** mit identischer Geometrie (gleiche Textpositionen, Spaltenkoordinaten, Spielnummer, Halle, Endstand) und erfundenen Personen — verifiziert gegen das Original: 26 Kadereinträge, 18 Verlaufsschlüssel, 0 mehrdeutig, gleiche Trikotnummern-Kollisionen `[16, 46]`. Der echte Bericht trägt ~26 Klarnamen mit Jahrgang, überwiegend Minderjährige, und verstieße gegen `public-repo-hygiene` (`opensource-1-pii-cleanup`). Schiedsrichter-Namen in der Spielplan-Fixture ebenfalls ersetzt.
+- [x] 2.7 `internal/bwhv/client_test.go`: Parsing der Katalog-/Spielplan-Antworten gegen die Fixtures; `sGID: 0` wird als „kein Bericht" erkannt; **kein Live-Abruf im Test**
 
 ## 3. Foundation — internal/bwhv: PDF-Parser
 
