@@ -1,13 +1,13 @@
 ## 1. Migration — Schema
 
-- [ ] 1.1 `internal/db/migrations/068_bwhv_spielberichte.up.sql`: `ALTER TABLE kader ADD COLUMN staffel TEXT;` (nullable; die Beschränkung auf `kind='team'` erzwingt der Handler, nicht der CHECK — ein Tabellen-Rebuild nur dafür wäre unverhältnismäßig)
-- [ ] 1.2 Gleiche Migration: `bwhv_staffeln` (`season_id`, `code`, `name`, `org_id`, `sub_org_id`, `period_id`, `table_json`, `polled_at`, UNIQUE `(season_id, code)`)
-- [ ] 1.3 Gleiche Migration: `bwhv_games` (`staffel_id`, `game_no`, `sgid`, `game_id` → `games` ON DELETE SET NULL, Datum/Zeit, Teams, Tore + Halbzeit, `hall_number`, UNIQUE `(staffel_id, game_no)`, Index auf `(staffel_id, date)`)
-- [ ] 1.4 Gleiche Migration: `bwhv_reports` (`bwhv_game_id` UNIQUE, `sgid`, `state` CHECK `pending|parsed|parse_failed`, `pdf_path`, `spectators`, `referees`, `warnings_json`, `failure_reason`, `attempts`, `fetched_at`, `parsed_at`)
-- [ ] 1.5 Gleiche Migration: `bwhv_players` (`staffel_id`, `team_name`, `name`, `birth_year`, `member_id` → `members` ON DELETE SET NULL, `conflict`, UNIQUE `(staffel_id, team_name, name)`)
-- [ ] 1.6 Gleiche Migration: `bwhv_player_games` (PK `(report_id, player_id)`, `jersey_number`, Tore, 7m-Versuche/-Treffer, Zeitstrafen, Karten) und `bwhv_events` (`report_id`, `seq`, `clock_time`, `game_second`, Spielstand, `kind` CHECK, `side` CHECK, `player_id`, `jersey_number`, `raw_text`)
-- [ ] 1.7 `068_*.down.sql`: Tabellen in Abhängigkeitsreihenfolge droppen, `kader.staffel` entfernen
-- [ ] 1.8 `make migrate-up` lokal + `migrate-down`/`up`-Roundtrip grün
+- [x] 1.1 `internal/db/migrations/068_bwhv_spielberichte.up.sql`: `ALTER TABLE kader ADD COLUMN staffel TEXT;` (nullable; die Beschränkung auf `kind='team'` erzwingt der Handler, nicht der CHECK — ein Tabellen-Rebuild nur dafür wäre unverhältnismäßig)
+- [x] 1.2 Gleiche Migration: `bwhv_staffeln` (`season_id`, `code`, `name`, `org_id`, `sub_org_id`, `period_id`, `table_json`, `polled_at`, UNIQUE `(season_id, code)`)
+- [x] 1.3 Gleiche Migration: `bwhv_games` (`staffel_id`, `game_no`, `sgid`, `game_id` → `games` ON DELETE SET NULL, Datum/Zeit, Teams, Tore + Halbzeit, `hall_number`, UNIQUE `(staffel_id, game_no)`, Index auf `(staffel_id, date)`)
+- [x] 1.4 Gleiche Migration: `bwhv_reports` (`bwhv_game_id` UNIQUE, `sgid`, `state` CHECK `pending|parsed|parse_failed`, `pdf_path`, `spectators`, `referees`, `warnings_json`, `failure_reason`, `attempts`, `fetched_at`, `parsed_at`)
+- [x] 1.5 Gleiche Migration: `bwhv_players` (`staffel_id`, `team_name`, `name`, `birth_year`, `member_id` → `members` ON DELETE SET NULL, `conflict`, UNIQUE `(staffel_id, team_name, name)`)
+- [x] 1.6 Gleiche Migration: `bwhv_player_games` (PK `(report_id, player_id)`, `jersey_number`, Tore, 7m-Versuche/-Treffer, Zeitstrafen, Karten) und `bwhv_events` (`report_id`, `seq`, `clock_time`, `game_second`, Spielstand, `kind` CHECK, `side` CHECK, `player_id`, `jersey_number`, `raw_text`)
+- [x] 1.7 `068_*.down.sql`: Tabellen in Abhängigkeitsreihenfolge droppen, `kader.staffel` entfernen
+- [x] 1.8 Roundtrip gegen eine Wegwerf-DB grün: `migrate up` bis Version 68, dann `068_*.down.sql` und `068_*.up.sql` direkt via sqlite3 — down entfernt alle sechs Tabellen, die Indizes und `kader.staffel`, up stellt alles wieder her. **Nicht über `make migrate-down` geprüft:** `runMigrate` in `cmd/teamwerk/main.go` ignoriert das `up`/`down`-Argument und ruft immer `db.Migrate` (= up), das Target ist also wirkungslos. Bestandsbefund, eigener Folge-Change.
 
 ## 2. Foundation — internal/bwhv: HTTP-Client
 
