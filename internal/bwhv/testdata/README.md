@@ -36,6 +36,19 @@ Dass die Anwendung im Betrieb echte Berichte verarbeitet, ist davon unberührt �
 das ist eine Entscheidung über die Datenbank der Instanz, nicht über das Repo
 (`design.md` §2).
 
+## Mutierte Varianten für die Fehlerpfade
+
+Zwei Ableitungen des synthetischen Berichts, je eine Mutation gegenüber dem
+Original:
+
+| Datei | Mutation | Erwartung |
+|---|---|---|
+| `spielbericht_endstand_falsch.pdf` | Kopf-Endstand `29:25` → `30:25` | harter Fehlschlag, kein Report |
+| `spielbericht_liste_abweichend.pdf` | Torspalte Heim #42 auf `99` gesetzt | Bericht gültig, eine Warnung |
+
+Sie belegen beide Stufen der Kreuzprobe: der Kopf-Endstand ist bindend, eine
+abweichende Summenspalte der Mannschaftsliste ist es nicht.
+
 ## Erneuern
 
 Der Generator liegt nicht im Repo. Ein neues PDF-Fixture entsteht, indem man aus

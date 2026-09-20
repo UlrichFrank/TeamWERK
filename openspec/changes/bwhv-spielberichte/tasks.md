@@ -21,14 +21,14 @@
 
 ## 3. Foundation — internal/bwhv: PDF-Parser
 
-- [ ] 3.1 `internal/bwhv/pdf.go`: Textebene mit Koordinaten extrahieren, Zeilen über Y gruppieren, Gruppen über X sortieren
-- [ ] 3.2 `internal/bwhv/pdf.go`: Spaltenmodell **aus der Kopfzeile** ableiten (benachbarte Kopfpositionen spannen die Bereiche auf); unbekannte Kopfzeile → Fehler mit ihrem Wortlaut, kein Raten
-- [ ] 3.3 `internal/bwhv/parse_header.go`: Berichtskopf lesen — Spielklasse, Spielnummer, Datum/Zeit, Spielort + Hallennummer, Teams, Endstand + Halbzeit, Zuschauer, Schiedsrichter
-- [ ] 3.4 `internal/bwhv/parse_roster.go`: Mannschaftslisten beider Teams über das Spaltenmodell; Platzhalter-Zeilen (`N.N. N.N.`) überspringen
-- [ ] 3.5 `internal/bwhv/parse_timeline.go`: Spielverlauf — Tor, 7m-Tor, 7m ohne Tor, Verwarnung, 2-min-Strafe, Disqualifikation, Auszeit; unbekannte Form als `other` mit `raw_text`; Spielzeit `mm:ss` → Sekunden
-- [ ] 3.6 `internal/bwhv/crosscheck.go`: gestufte Kreuzprobe — Verlaufs-Summe ≠ Kopf-Endstand → harter Fehlschlag; Listen-Summen ≠ Verlauf → Warnungsliste (design.md §5.3)
-- [ ] 3.7 `internal/bwhv/parse_test.go`: Fixture ergibt erwartete Kopfdaten, Kader beider Teams, Ereigniszahl und Endstand
-- [ ] 3.8 `internal/bwhv/crosscheck_test.go`: manipulierte Fixture mit verlorenem Tor → Fehlschlag; manipulierte Summenspalte → Warnung, kein Fehlschlag
+- [x] 3.1 `internal/bwhv/pdf.go`: Textebene mit Koordinaten extrahieren, Zeilen über Y gruppieren, Gruppen über X sortieren
+- [x] 3.2 `internal/bwhv/pdf.go`: Spaltenmodell **aus der Kopfzeile** ableiten (benachbarte Kopfpositionen spannen die Bereiche auf); unbekannte Kopfzeile → Fehler mit ihrem Wortlaut, kein Raten
+- [x] 3.3 `internal/bwhv/parse_header.go`: Berichtskopf lesen — Spielklasse, Spielnummer, Datum/Zeit, Spielort + Hallennummer, Teams, Endstand + Halbzeit, Zuschauer, Schiedsrichter
+- [x] 3.4 `internal/bwhv/parse_roster.go`: Mannschaftslisten beider Teams über das Spaltenmodell; Platzhalter-Zeilen (`N.N. N.N.`) überspringen
+- [x] 3.5 `internal/bwhv/parse_timeline.go`: Spielverlauf — Tor, 7m-Tor, 7m ohne Tor, Verwarnung, 2-min-Strafe, Disqualifikation, Auszeit; unbekannte Form als `other` mit `raw_text`; Spielzeit `mm:ss` → Sekunden
+- [x] 3.6 `internal/bwhv/crosscheck.go`: gestufte Kreuzprobe — Verlaufs-Summe ≠ Kopf-Endstand → harter Fehlschlag; Listen-Summen ≠ Verlauf → Warnungsliste (design.md §5.3)
+- [x] 3.7 `internal/bwhv/parse_test.go`: Fixture ergibt erwartete Kopfdaten, Kader beider Teams, Ereigniszahl und Endstand
+- [x] 3.8 `internal/bwhv/crosscheck_test.go`: manipulierte Fixture mit verlorenem Tor → Fehlschlag; manipulierte Summenspalte → Warnung, kein Fehlschlag
 
 ## 4. Domain — internal/gamestats: Persistenz und Poll
 
