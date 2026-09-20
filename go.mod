@@ -6,6 +6,7 @@ toolchain go1.26.6
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
+	github.com/agnivade/levenshtein v1.2.2-0.20250519083737-420867539855
 	github.com/go-chi/chi/v5 v5.3.1
 	github.com/go-chi/httprate v0.16.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
@@ -23,7 +24,6 @@ require (
 )
 
 require (
-	github.com/agnivade/levenshtein v1.2.2-0.20250519083737-420867539855 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/boyter/gocodewalker v1.5.2-0.20260227212453-19676720409f // indirect
 	github.com/boyter/scc/v3 v3.7.0 // indirect

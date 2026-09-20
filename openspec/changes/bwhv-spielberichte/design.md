@@ -276,7 +276,10 @@ Zustände, verwertbar und nicht verwertbar, plus eine Anmerkung am verwertbaren.
 ### 6.1 Die Regel
 
 **Name primär mit Levenshtein-Toleranz, Trikotnummer bestätigend und
-gleichstandsbrechend.** Identitätsraum ist `(staffel, team_name)` innerhalb einer Saison.
+gleichstandsbrechend.** Identitätsraum ist `(staffel, team_name)` innerhalb einer Saison. Dass die Mannschaft
+dazugehört, ist keine Vorsichtsmaßnahme: im verifizierten Beispielbericht tragen **beide**
+Mannschaften eine 16 und eine 46. Trikotnummern kollidieren also schon innerhalb eines
+einzelnen Spiels, nicht erst über die Staffel hinweg.
 
 ```
   "Haßlöcher" vs "Hasslocher"     Levenshtein 2   →  dieselbe Person
@@ -286,6 +289,22 @@ gleichstandsbrechend.** Identitätsraum ist `(staffel, team_name)` innerhalb ein
   zwei "Bieler" im selben Team    Name identisch  →  Nummer entscheidet
                                                      zwei Zeilen
 ```
+
+**Präzisierung aus der Umsetzung.** „Name primär" heißt nicht „Name allein". Die Regel
+zerfällt in drei Fälle, und der dritte fiel erst beim Schreiben der Tests auf:
+
+```
+  exakter Name, andere Nummer     →  dieselbe Person   (Trikot vergessen)
+  ähnlicher Name, gleiche Nummer  →  dieselbe Person   (Schreibvariante, bestätigt)
+  ähnlicher Name, andere Nummer   →  ZWEI Personen     (nichts bestätigt die Identität)
+```
+
+Der dritte Fall wäre unter naivem „Name primär" eine Verschmelzung — und damit ein
+geratener Treffer ohne ein einziges bestätigendes Merkmal. Er entsteht stattdessen als
+neuer Spieler mit vermerktem Widerspruch, im Geist von `invalid_span`. Der vom
+Projektinhaber benannte Fall (vergessenes Trikot) bleibt davon unberührt, weil er den
+Namen *exakt* trägt. Unterschieden wird dabei „Nummer widerspricht" von „Nummer noch
+unbekannt" — sonst erzeugte der erste Bericht jeder Person einen Widerspruch.
 
 **Warum nicht die Nummer als Schlüssel**, obwohl sie tippfehlerfrei aus einer Zahlenspalte
 kommt: ein vergessenes Trikot führt zu einer geliehenen Nummer, und die Nummer wäre dann

@@ -32,22 +32,22 @@
 
 ## 4. Domain — internal/gamestats: Persistenz und Poll
 
-- [ ] 4.1 `internal/gamestats/store.go`: Staffel-Snapshot schreiben (Katalog-Auflösung Code → `gClassID`, Spielplan, Tabelle); unbekannter Code → `slog.Error` + Staffel überspringen
-- [ ] 4.2 `internal/gamestats/store.go`: Begegnungen upserten über `(staffel_id, game_no)`; `game_id` über `games.external_id` verknüpfen. **Niemals in `games` schreiben**
-- [ ] 4.3 `internal/gamestats/poll.go`: Fensterlogik — poll-fähig ab frühestem heutigen Anwurf + 2 h, solange ein heutiges `sgid` fehlt; Zustand rein abgeleitet, kein Zustandsfeld
-- [ ] 4.4 `internal/gamestats/poll.go`: PDF-Abruf je Begegnung mit `sgid` ohne Bericht; Ablage unter `BWHV_REPORT_DIR`, `attempts` hochzählen, Transportfehler bleibt `pending`
-- [ ] 4.5 `internal/gamestats/poll.go`: Parse-Ergebnis persistieren (`bwhv_player_games`, `bwhv_events`, `warnings_json`); bei hartem Fehlschlag `state='parse_failed'` **ohne** Detailzeilen, PDF bleibt liegen
-- [ ] 4.6 `internal/gamestats/store_test.go`: `TestPoll_ErzeugtKeineGamesZeilen` (90 Begegnungen, `games`-Zeilenzahl unverändert); `TestPoll_VerknuepftEigenesSpielUeberExternalId`
-- [ ] 4.7 `internal/gamestats/poll_test.go`: `TestPollFenster_VorAnwurfPlusZweiStundenKeinAbruf`, `TestPollFenster_AlleSGIDVorhandenBeendetDenTag`, `TestPoll_KeinSGIDKeinAbruf`
-- [ ] 4.8 `internal/gamestats/parse_persist_test.go`: `TestParse_EndstandAbweichungVerwirftBericht` (keine Zeile in `bwhv_player_games`/`bwhv_events`), `TestParse_DetailabweichungWirdGespeichertUndGewarnt`
+- [x] 4.1 `internal/gamestats/store.go`: Staffel-Snapshot schreiben (Katalog-Auflösung Code → `gClassID`, Spielplan, Tabelle); unbekannter Code → `slog.Error` + Staffel überspringen
+- [x] 4.2 `internal/gamestats/store.go`: Begegnungen upserten über `(staffel_id, game_no)`; `game_id` über `games.external_id` verknüpfen. **Niemals in `games` schreiben**
+- [x] 4.3 `internal/gamestats/poll.go`: Fensterlogik — poll-fähig ab frühestem heutigen Anwurf + 2 h, solange ein heutiges `sgid` fehlt; Zustand rein abgeleitet, kein Zustandsfeld
+- [x] 4.4 `internal/gamestats/poll.go`: PDF-Abruf je Begegnung mit `sgid` ohne Bericht; Ablage unter `BWHV_REPORT_DIR`, `attempts` hochzählen, Transportfehler bleibt `pending`
+- [x] 4.5 `internal/gamestats/poll.go`: Parse-Ergebnis persistieren (`bwhv_player_games`, `bwhv_events`, `warnings_json`); bei hartem Fehlschlag `state='parse_failed'` **ohne** Detailzeilen, PDF bleibt liegen
+- [x] 4.6 `internal/gamestats/store_test.go`: `TestPoll_ErzeugtKeineGamesZeilen` (90 Begegnungen, `games`-Zeilenzahl unverändert); `TestPoll_VerknuepftEigenesSpielUeberExternalId`
+- [x] 4.7 `internal/gamestats/poll_test.go`: `TestPollFenster_VorAnwurfPlusZweiStundenKeinAbruf`, `TestPollFenster_AlleSGIDVorhandenBeendetDenTag`, `TestPoll_KeinSGIDKeinAbruf`
+- [x] 4.8 `internal/gamestats/parse_persist_test.go`: `TestParse_EndstandAbweichungVerwirftBericht` (keine Zeile in `bwhv_player_games`/`bwhv_events`), `TestParse_DetailabweichungWirdGespeichertUndGewarnt`
 
 ## 5. Domain — internal/gamestats: Identitätsauflösung
 
-- [ ] 5.1 `internal/gamestats/matching.go`: Staffel-interne Auflösung — Name primär mit Levenshtein (Schwelle als benannte Konstante: ≤ 2 ab 5 Zeichen, sonst exakt), Nummer bestätigend und gleichstandsbrechend
-- [ ] 5.2 `internal/gamestats/matching.go`: Widerspruch Name/Nummer in `bwhv_players.conflict` festhalten statt auflösen
-- [ ] 5.3 `internal/gamestats/matching.go`: eigene Spieler auf `members` auflösen (Name, `date_of_birth` ↔ Jahrgang, `jersey_number`, Kader der Saison); mehrdeutig → offen lassen
-- [ ] 5.4 `internal/gamestats/matching_test.go`: `TestMatching_SchreibvarianteIstDieselbePerson`, `TestMatching_TrikotwechselZerreisstPersonNicht`, `TestMatching_ZweiGleicheNamenWerdenPerNummerGetrennt`, `TestMatching_PlatzhalterErzeugtKeinenSpieler`
-- [ ] 5.5 `internal/gamestats/matching_test.go`: `TestMatching_EindeutigesMitgliedWirdZugeordnet`, `TestMatching_MehrdeutigBleibtOffen`, `TestMatching_ManuelleZuordnungHaelt`
+- [x] 5.1 `internal/gamestats/matching.go`: Staffel-interne Auflösung — Name primär mit Levenshtein (Schwelle als benannte Konstante: ≤ 2 ab 5 Zeichen, sonst exakt), Nummer bestätigend und gleichstandsbrechend
+- [x] 5.2 `internal/gamestats/matching.go`: Widerspruch Name/Nummer in `bwhv_players.conflict` festhalten statt auflösen
+- [x] 5.3 `internal/gamestats/matching.go`: eigene Spieler auf `members` auflösen (Name, `date_of_birth` ↔ Jahrgang, `jersey_number`, Kader der Saison); mehrdeutig → offen lassen
+- [x] 5.4 `internal/gamestats/matching_test.go`: `TestMatching_SchreibvarianteIstDieselbePerson`, `TestMatching_TrikotwechselZerreisstPersonNicht`, `TestMatching_ZweiGleicheNamenWerdenPerNummerGetrennt`, `TestMatching_PlatzhalterErzeugtKeinenSpieler`
+- [x] 5.5 `internal/gamestats/matching_test.go`: `TestMatching_EindeutigesMitgliedWirdZugeordnet`, `TestMatching_MehrdeutigBleibtOffen`, `TestMatching_ManuelleZuordnungHaelt`
 
 ## 6. Domain — internal/gamestats: Routen
 

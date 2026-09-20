@@ -306,3 +306,20 @@ func mustQuery(t *testing.T, raw string) url.Values {
 	}
 	return u.Query()
 }
+
+func TestFetchOrgs_LiefertVerbandUndBezirke(t *testing.T) {
+	srv, _ := fixtureServer(t)
+	orgs, err := newTestClient(t, srv.URL).FetchOrgs(context.Background(), 216)
+	if err != nil {
+		t.Fatalf("FetchOrgs: %v", err)
+	}
+	if orgs["216"] == "" {
+		t.Errorf("Verbands-Org 216 fehlt: %v", orgs)
+	}
+	if orgs["251"] == "" {
+		t.Errorf("Bezirk 251 (Stuttgart-Rems-Murr) fehlt: %v", orgs)
+	}
+	if _, ok := orgs["-1"]; ok {
+		t.Error("Platzhalter -1 darf nicht in der Liste stehen")
+	}
+}

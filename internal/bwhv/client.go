@@ -128,6 +128,9 @@ func (c *Client) serviceURL(cmd string, orgID, subOrgID int, extra url.Values) s
 // liefert ein Array mit genau einem Element.
 type envelope struct {
 	Menu struct {
+		Org struct {
+			List map[string]string `json:"list"`
+		} `json:"org"`
 		Period struct {
 			List       map[string]string `json:"list"`
 			SelectedID any               `json:"selectedID"`
@@ -223,6 +226,32 @@ func (c *Client) FetchPeriods(ctx context.Context, orgID int) (periods []Period,
 	return periods, selected, nil
 }
 
+// FetchOrgs liefert die wählbaren Organisationen: den Verband selbst und
+// seine Bezirke. Daraus leitet der Aufrufer ab, wo er eine Staffel suchen muss,
+// statt das Suffix des Staffelcodes ("-SRM") fest zu verdrahten.
+//
+// Die eigene Organisation (orgID) ist in der Liste enthalten und wird vom
+// Aufrufer als Verbandsebene behandelt; alle übrigen sind Unter-Organisationen
+// und gehören in den o-Parameter, nicht in og.
+func (c *Client) FetchOrgs(ctx context.Context, orgID int) (map[string]string, error) {
+	b, _, err := c.get(ctx, c.serviceURL("po", orgID, 0, nil), maxJSONBytes)
+	if err != nil {
+		return nil, err
+	}
+	env, err := decodeEnvelope(b)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for id, name := range env.Menu.Org.List {
+		if id == "-1" || strings.TrimSpace(name) == "" {
+			continue
+		}
+		out[id] = name
+	}
+	return out, nil
+}
+
 // FetchSchedule liefert alle Begegnungen einer Staffel über die ganze Saison
 // samt Tabellenstand. ca=1 schaltet "alle Spiele" statt nur der kommenden frei.
 func (c *Client) FetchSchedule(ctx context.Context, orgID, subOrgID int, periodID, classID string) (*Schedule, error) {
@@ -278,4 +307,11 @@ func (c *Client) FetchReport(ctx context.Context, reportURL, sgid string) ([]byt
 		return nil, fmt.Errorf("Antwort trägt keine PDF-Signatur (%d Bytes)", len(b))
 	}
 	return b, nil
+}
+
+// ReportURLPrefix liefert das Präfix für Spielbericht-Downloads. Der Dienst
+// liefert es in jeder Antwort als head.repURL mit; der hier gebildete Wert ist
+// der Rückfall, wenn kein Spielplan zur Hand ist.
+func (c *Client) ReportURLPrefix() string {
+	return c.base + "/misc/sboPublicReports.php?sGID="
 }
