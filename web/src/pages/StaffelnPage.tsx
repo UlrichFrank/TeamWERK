@@ -16,6 +16,7 @@ import {
   goalRatio, pointsLabel, sevenMeterRate,
 } from '../lib/staffeln'
 import { isOwnTeam, isOwnPlayer } from '../lib/staffelHighlight'
+import MapsLink from '../components/MapsLink'
 import CrossTable from '../components/staffeln/CrossTable'
 import StandingsChart from '../components/staffeln/StandingsChart'
 import { GoalTablesView, FairPlayView, DistributionView } from '../components/staffeln/TeamStatsViews'
@@ -338,7 +339,11 @@ function ScheduleView({ games, ownTeams }: { games: ScheduleGame[]; ownTeams: st
               <div className="text-sm text-brand-text font-medium truncate">
                 {g.HomeTeam} <span className="text-brand-text-subtle">–</span> {g.GuestTeam}
               </div>
-              {g.HallNumber && (
+              {g.Venue ? (
+                <div className="mt-1">
+                  <MapsLink venue={g.Venue} className="text-xs" />
+                </div>
+              ) : g.HallNumber && (
                 <div className="text-xs text-brand-text-subtle mt-1 inline-flex items-center gap-1">
                   <MapPin className="w-3 h-3" /> Halle {g.HallNumber}
                 </div>

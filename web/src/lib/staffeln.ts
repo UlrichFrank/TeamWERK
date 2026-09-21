@@ -42,6 +42,8 @@ export interface ScheduleGame {
   HomeGoalsHT: number | null
   GuestGoalsHT: number | null
   HallNumber: string
+  /** Aufgelöste Halle aus /veranstaltungsorte; null, wenn keine die Nummer trägt. */
+  Venue: { name: string; street: string; city: string; postal_code: string } | null
   HasReport: boolean
 }
 

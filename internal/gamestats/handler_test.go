@@ -513,3 +513,44 @@ func TestGetAffiliation_SpielerSiehtMannschaft(t *testing.T) {
 		t.Errorf("TeamNames = %#v, erwartet [Team Stuttgart 2]", aff.TeamNames)
 	}
 }
+
+// Die Hallennummer der Begegnung wird über venues.hall_number zur Halle
+// aufgelöst; ohne passende Halle bleibt Venue leer und die Nummer stehen.
+func TestStaffelSpielplan_LoestHalleAuf(t *testing.T) {
+	srv, s, _, staffelID := newHandlerServer(t)
+	sch := sampleSchedule(2)
+	sch.Games[0].HallNumber = "21005"
+	sch.Games[1].HallNumber = "99999"
+	if _, err := s.SaveSchedule(context.Background(), staffelID, sch); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`INSERT INTO venues (name, street, city, postal_code, hall_number)
+		VALUES ('Sporthalle Nord', 'Hallenweg 1', 'Stuttgart', '70000', '21005')`); err != nil {
+		t.Fatal(err)
+	}
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/spielplan", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var games []ScheduleGame
+	if err := json.Unmarshal(body, &games); err != nil {
+		t.Fatal(err)
+	}
+	if len(games) != 2 {
+		t.Fatalf("Spiele = %d, erwartet 2", len(games))
+	}
+	var bekannt, unbekannt *ScheduleGame
+	for i := range games {
+		if games[i].HallNumber == "21005" {
+			bekannt = &games[i]
+		} else {
+			unbekannt = &games[i]
+		}
+	}
+	if bekannt == nil || bekannt.Venue == nil || bekannt.Venue.Name != "Sporthalle Nord" || bekannt.Venue.City != "Stuttgart" {
+		t.Errorf("bekannte Halle = %+v, erwartet aufgelöste Sporthalle Nord", bekannt)
+	}
+	if unbekannt == nil || unbekannt.Venue != nil {
+		t.Errorf("unbekannte Halle = %+v, erwartet Venue == nil", unbekannt)
+	}
+}

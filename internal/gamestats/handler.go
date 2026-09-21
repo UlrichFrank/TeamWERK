@@ -44,8 +44,8 @@ type staffelResponse struct {
 	// TeamShort ist der Kurzname der Mannschaft ("mB1") — dieselbe Schreibweise
 	// wie in Kalender und Terminen (db.TeamDisplayShort).
 	TeamShort string `json:"teamShort"`
-	KaderID  int    `json:"kaderId"`
-	Polled   bool   `json:"polled"`
+	KaderID   int    `json:"kaderId"`
+	Polled    bool   `json:"polled"`
 }
 
 // ListStaffeln liefert die Staffeln der aktiven Saison.

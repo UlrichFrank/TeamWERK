@@ -31,10 +31,11 @@ const table = [
 const games = [
   { ID: 5, GameNo: '905272', SGID: '3504061', GameID: 7, Date: '2026-09-20', Time: '16:00',
     HomeTeam: 'Verein A', GuestTeam: 'Verein B', HomeGoals: 29, GuestGoals: 25,
-    HomeGoalsHT: 14, GuestGoalsHT: 13, HallNumber: '21005', HasReport: true },
+    HomeGoalsHT: 14, GuestGoalsHT: 13, HallNumber: '21005', HasReport: true,
+    Venue: { name: 'Sporthalle Nord', street: 'Hallenweg 1', city: 'Stuttgart', postal_code: '70000' } },
   { ID: 6, GameNo: '905275', SGID: '', GameID: null, Date: '2026-09-26', Time: '15:45',
     HomeTeam: 'Verein C', GuestTeam: 'Verein D', HomeGoals: null, GuestGoals: null,
-    HomeGoalsHT: null, GuestGoalsHT: null, HallNumber: '5041', HasReport: false },
+    HomeGoalsHT: null, GuestGoalsHT: null, HallNumber: '5041', HasReport: false, Venue: null },
 ]
 
 const stats = [
@@ -167,6 +168,15 @@ describe('StaffelnPage', () => {
     await waitFor(() => expect(screen.getByText(/Verein C/)).toBeInTheDocument())
     expect(screen.getByText('29:25')).toBeInTheDocument()
     expect(screen.getByText(/eigenes Spiel/)).toBeInTheDocument()
+  })
+
+  // Bekannte Hallen erscheinen mit Namen und Karten-Link, unbekannte nur als Nummer.
+  test('Spielplan verlinkt die Halle und fällt ohne Halle auf die Nummer zurück', async () => {
+    mockAll()
+    setup('/staffeln?tab=spielplan')
+    const link = await screen.findByRole('link', { name: /Sporthalle Nord/ })
+    expect(link.getAttribute('href')).toContain('q=Hallenweg%201%2070000%20Stuttgart')
+    expect(screen.getByText(/Halle 5041/)).toBeInTheDocument()
   })
 
   test('Ranglisten sortieren nach Toren und weisen Spiele aus', async () => {

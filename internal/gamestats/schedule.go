@@ -127,12 +127,30 @@ type ScheduleGame struct {
 	HomeGoalsHT  *int
 	GuestGoalsHT *int
 	HallNumber   string
-	HasReport    bool
+	// Venue ist die zur Hallennummer gehörende Halle aus /veranstaltungsorte;
+	// nil, wenn keine Halle diese Nummer trägt (fremde Hallen, die der
+	// Hallenimport nie gesehen hat) — dann zeigt die Oberfläche nur die Nummer.
+	Venue     *ScheduleVenue
+	HasReport bool
 }
+
+// ScheduleVenue trägt die Felder, die ein Karten-Link braucht.
+type ScheduleVenue struct {
+	Name       string `json:"name"`
+	Street     string `json:"street"`
+	City       string `json:"city"`
+	PostalCode string `json:"postal_code"`
+}
+
+// scheduleFrom ist die gemeinsame FROM-Klausel. Die Hallennummer ist nur über
+// einen Partial-Unique-Index eindeutig (venues.hall_number, Migration 042) —
+// der LEFT JOIN kann deshalb nie eine Begegnung verdoppeln.
+const scheduleFrom = `bwhv_games g LEFT JOIN venues v ON v.hall_number = g.hall_number AND g.hall_number <> ''`
 
 const scheduleCols = `g.id, g.staffel_id, g.game_no, g.sgid, g.game_id, g.date, g.time,
 	g.home_team, g.guest_team, g.home_goals, g.guest_goals,
 	g.home_goals_ht, g.guest_goals_ht, g.hall_number,
+	v.name, v.street, v.city, v.postal_code,
 	EXISTS (SELECT 1 FROM bwhv_reports r WHERE r.bwhv_game_id = g.id AND r.state = 'parsed')`
 
 func scanScheduleGames(rows *sql.Rows) ([]ScheduleGame, error) {
@@ -141,10 +159,16 @@ func scanScheduleGames(rows *sql.Rows) ([]ScheduleGame, error) {
 	for rows.Next() {
 		var g ScheduleGame
 		var gameID sql.NullInt64
+		var vName, vStreet, vCity, vPostal sql.NullString
 		if err := rows.Scan(&g.ID, &g.StaffelID, &g.GameNo, &g.SGID, &gameID, &g.Date, &g.Time,
 			&g.HomeTeam, &g.GuestTeam, &g.HomeGoals, &g.GuestGoals,
-			&g.HomeGoalsHT, &g.GuestGoalsHT, &g.HallNumber, &g.HasReport); err != nil {
+			&g.HomeGoalsHT, &g.GuestGoalsHT, &g.HallNumber,
+			&vName, &vStreet, &vCity, &vPostal, &g.HasReport); err != nil {
 			return nil, err
+		}
+		if vName.Valid {
+			g.Venue = &ScheduleVenue{Name: vName.String, Street: vStreet.String,
+				City: vCity.String, PostalCode: vPostal.String}
 		}
 		if gameID.Valid {
 			id := int(gameID.Int64)
@@ -158,7 +182,7 @@ func scanScheduleGames(rows *sql.Rows) ([]ScheduleGame, error) {
 // StaffelGames liefert den kompletten Spielplan einer Staffel.
 func (s *Store) StaffelGames(ctx context.Context, staffelID int) ([]ScheduleGame, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT `+scheduleCols+` FROM bwhv_games g WHERE g.staffel_id = ? ORDER BY g.date, g.time, g.game_no`,
+		`SELECT `+scheduleCols+` FROM `+scheduleFrom+` WHERE g.staffel_id = ? ORDER BY g.date, g.time, g.game_no`,
 		staffelID)
 	if err != nil {
 		return nil, err
@@ -168,7 +192,7 @@ func (s *Store) StaffelGames(ctx context.Context, staffelID int) ([]ScheduleGame
 
 // GameByID liefert eine einzelne Begegnung.
 func (s *Store) GameByID(ctx context.Context, id int) (*ScheduleGame, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+scheduleCols+` FROM bwhv_games g WHERE g.id = ?`, id)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+scheduleCols+` FROM `+scheduleFrom+` WHERE g.id = ?`, id)
 	if err != nil {
 		return nil, err
 	}
