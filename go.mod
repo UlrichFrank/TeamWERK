@@ -7,20 +7,20 @@ toolchain go1.26.6
 require (
 	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/agnivade/levenshtein v1.2.2-0.20250519083737-420867539855
-	github.com/go-chi/chi/v5 v5.3.1
+	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/httprate v0.16.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/golang-migrate/migrate/v4 v4.19.1
+	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/ledongthuc/pdf v0.0.0-20260907135840-6c8c28e0e8a0
 	github.com/microcosm-cc/bluemonday v1.0.27
-	github.com/tus/tusd/v2 v2.10.0
-	github.com/yuin/goldmark v1.8.5
-	golang.org/x/crypto v0.54.0
-	golang.org/x/image v0.45.0
-	golang.org/x/text v0.41.0
-	modernc.org/sqlite v1.55.0
+	github.com/tus/tusd/v2 v2.10.1
+	github.com/yuin/goldmark v1.8.6
+	golang.org/x/crypto v0.55.0
+	golang.org/x/image v0.46.0
+	golang.org/x/text v0.42.0
+	modernc.org/sqlite v1.59.0
 )
 
 require (
@@ -34,7 +34,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/mattn/go-sqlite3 v1.14.22 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
@@ -45,13 +45,13 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
-	golang.org/x/net v0.56.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	modernc.org/libc v1.74.1 // indirect
+	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
+	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	modernc.org/libc v1.75.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
-	modernc.org/memory v1.11.0 // indirect
+	modernc.org/memory v1.12.1 // indirect
 )
 
 tool github.com/boyter/scc/v3
