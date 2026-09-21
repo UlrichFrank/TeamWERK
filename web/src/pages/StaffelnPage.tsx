@@ -16,6 +16,7 @@ import {
   goalRatio, pointsLabel, sevenMeterRate, matchesSearch, gameSearchFields,
 } from '../lib/staffeln'
 import { AUDIENCE_FILTER_FUNCTIONS } from '../lib/audience'
+import { sharedRanks } from '../lib/ranking'
 import { isOwnTeam, isOwnPlayer } from '../lib/staffelHighlight'
 import SpielberichtPanel from '../components/SpielberichtPanel'
 import MapsLink from '../components/MapsLink'
@@ -456,6 +457,7 @@ function RanglistenView({ stats, ownPlayers }: { stats: PlayerStat[]; ownPlayers
     <div className="space-y-6">
       <Ranking
         title="Torschützen" rows={scorer} ownPlayers={ownPlayers}
+        tieKey={(s) => s.goals}
         render={(s) => `${s.goals} Tore in ${s.games} ${s.games === 1 ? 'Spiel' : 'Spielen'}`}
       />
       <Ranking
@@ -463,6 +465,7 @@ function RanglistenView({ stats, ownPlayers }: { stats: PlayerStat[]; ownPlayers
         hint="Nur Spieler mit mindestens einem Versuch."
         rows={sevenM}
         ownPlayers={ownPlayers}
+        tieKey={(s) => `${s.sevenMGoals}|${s.sevenMMissed}`}
         render={(s) =>
           `${s.sevenMGoals}/${s.sevenMAttempts} · ${s.sevenMMissed} daneben · ` +
           `${sevenMeterRate(s)} % · ${s.games} ${s.games === 1 ? 'Spiel' : 'Spiele'}`
@@ -472,6 +475,7 @@ function RanglistenView({ stats, ownPlayers }: { stats: PlayerStat[]; ownPlayers
         title="Meiste Strafen"
         rows={fair}
         ownPlayers={ownPlayers}
+        tieKey={(s) => s.fairPlayScore}
         render={(s) =>
           [s.twoMin && `${s.twoMin}× 2 min`, s.warnings && `${s.warnings}× Verwarnung`, s.disq && `${s.disq}× Disq.`]
             .filter(Boolean)
@@ -483,15 +487,18 @@ function RanglistenView({ stats, ownPlayers }: { stats: PlayerStat[]; ownPlayers
 }
 
 function Ranking({
-  title, hint, rows, ownPlayers, render,
+  title, hint, rows, ownPlayers, render, tieKey,
 }: {
   title: string
   hint?: string
   rows: PlayerStat[]
   ownPlayers: number[]
+  /** Wert, über den Gleichstand entschieden wird (lib/ranking.ts). */
+  tieKey: (s: PlayerStat) => string | number
   render: (s: PlayerStat) => string
 }) {
   if (rows.length === 0) return null
+  const ranks = sharedRanks(rows, tieKey)
   return (
     <div className={CARD}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
@@ -512,7 +519,7 @@ function Ranking({
             }`}
           >
             <span className="flex items-center gap-3 min-w-0">
-              <span className="text-xs text-brand-text-subtle w-5 shrink-0">{i + 1}</span>
+              <span className="text-xs text-brand-text-subtle w-5 shrink-0">{ranks[i]}</span>
               <span className="min-w-0">
                 <span className="text-sm text-brand-text block truncate">{s.name}</span>
                 <span className="text-xs text-brand-text-muted block truncate">{s.teamName}</span>

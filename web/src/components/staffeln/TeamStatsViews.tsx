@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { TeamStat, TeamStats } from '../../lib/staffeln'
 import { isOwnTeam } from '../../lib/staffelHighlight'
+import { sharedRanks } from '../../lib/ranking'
 
 const TH = 'bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left'
 const TD = 'px-4 py-3 text-sm text-brand-text'
@@ -8,14 +9,17 @@ const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-ye
 
 /** Eine Mannschafts-Tabelle mit Titel, Erläuterung und eigenen Spalten. */
 function TeamTable({
-  title, hint, rows, ownTeams, columns,
+  title, hint, rows, ownTeams, columns, tieKey,
 }: {
   title: string
   hint: string
   rows: TeamStat[]
   ownTeams: string[]
+  /** Wert, über den Gleichstand entschieden wird — die angezeigte Größe (lib/ranking.ts). */
+  tieKey: (s: TeamStat) => string | number
   columns: { label: string; cell: (s: TeamStat) => ReactNode; strong?: boolean }[]
 }) {
+  const ranks = sharedRanks(rows, tieKey)
   return (
     <div className={CARD}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
@@ -42,7 +46,7 @@ function TeamTable({
                     ? 'bg-brand-table-select font-semibold'
                     : 'hover:bg-brand-table-select transition-colors'}
                 >
-                  <td className={TD}>{i + 1}</td>
+                  <td className={TD}>{ranks[i]}</td>
                   <td className={TD}>{s.team}</td>
                   {columns.map((c) => (
                     <td key={c.label} className={`${TD}${c.strong ? ' font-medium' : ''}`}>
@@ -79,6 +83,7 @@ export function GoalTablesView({ data, ownTeams }: { data: TeamStats; ownTeams: 
     <div className="space-y-6">
       <TeamTable
         title="Torverhältnis" ownTeams={ownTeams} rows={byDiff}
+        tieKey={(s) => `${s.goalDiff}|${s.goalsFor}`}
         hint="Aus den Ergebnissen aller Begegnungen — kein Spielbericht nötig."
         columns={[
           { label: 'Sp', cell: (s) => s.games },
@@ -88,6 +93,7 @@ export function GoalTablesView({ data, ownTeams }: { data: TeamStats; ownTeams: 
       />
       <TeamTable
         title="Bester Angriff" ownTeams={ownTeams} rows={byAttack}
+        tieKey={(s) => perGame(s.goalsFor, s.games)}
         hint="Geworfene Tore je Spiel."
         columns={[
           { label: 'Sp', cell: (s) => s.games },
@@ -97,6 +103,7 @@ export function GoalTablesView({ data, ownTeams }: { data: TeamStats; ownTeams: 
       />
       <TeamTable
         title="Beste Verteidigung" ownTeams={ownTeams} rows={byDefense}
+        tieKey={(s) => perGame(s.goalsAgainst, s.games)}
         hint="Erhaltene Tore je Spiel — weniger ist besser."
         columns={[
           { label: 'Sp', cell: (s) => s.games },
@@ -124,6 +131,7 @@ export function FairPlayView({ data, ownTeams }: { data: TeamStats; ownTeams: st
       {sorted.length > 0 && (
         <TeamTable
           title="Fair-Play" ownTeams={ownTeams} rows={sorted}
+          tieKey={(s) => s.fairPlayScore ?? 0}
           hint={`Gewichtung: Gelb ${w.yellow}, 2 min ${w.twoMin}, Rot ${w.red}, Blau ${w.blue}. ` +
             'Weniger ist besser. Grundlage sind die ausgewerteten Spielberichte, nicht alle Begegnungen.'}
           columns={[
@@ -161,6 +169,7 @@ export function DistributionView({ data, ownTeams }: { data: TeamStats; ownTeams
   return (
     <TeamTable
       title="Torverteilung" ownTeams={ownTeams} rows={sorted}
+      tieKey={(s) => (s.distribution?.gini ?? 0).toFixed(2)}
       hint={'Der Gini-Wert misst die Ungleichverteilung der Saisontore über die Spieler: ' +
         'nahe 0 heißt gleichmäßig verteilt, ein hoher Wert heißt Abhängigkeit von wenigen Werfern. ' +
         'Grundlage sind die ausgewerteten Spielberichte.'}

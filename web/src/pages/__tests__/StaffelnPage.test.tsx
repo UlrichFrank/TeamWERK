@@ -234,6 +234,20 @@ describe('StaffelnPage', () => {
     await screen.findByLabelText('Mannschaft wählen')
   })
 
+  // Gleichauf heißt gleicher Platz: 8, 8, 3 Tore ergeben 1, 1, 3 — nicht 1, 2, 3.
+  test('Torschützen-Rangliste teilt den Platz bei Gleichstand', async () => {
+    mockAll()
+    const p = (id: number, name: string, goals: number) => ({
+      playerId: id, memberId: null, name, teamName: 'Verein A', games: 2, goals,
+      sevenMAttempts: 0, sevenMGoals: 0, sevenMMissed: 0, twoMin: 0, warnings: 0, disq: 0, fairPlayScore: 0,
+    })
+    mock.onGet(/\/staffeln\/\d+\/ranglisten/).reply(200, [p(1, 'Anna', 8), p(2, 'Berta', 8), p(3, 'Cora', 3)])
+    setup('/staffeln?tab=ranglisten')
+    const card = (await screen.findByText('Torschützen')).closest('.overflow-hidden') as HTMLElement
+    const ranks = Array.from(card.querySelectorAll('li')).map((li) => li.querySelector('span span')?.textContent)
+    expect(ranks).toEqual(['1', '1', '3'])
+  })
+
   test('Freitextsuche filtert Spielplan nach Mannschaft, Halle und Datum', async () => {
     mockAll()
     setup('/staffeln?tab=spielplan')
