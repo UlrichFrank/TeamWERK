@@ -9,6 +9,8 @@ export interface Staffel {
   code: string
   name: string
   teamName: string
+  /** Kurzname der Mannschaft ("mB1"), wie in Kalender und Terminen. */
+  teamShort: string
   kaderId: number
   polled: boolean
 }

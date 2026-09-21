@@ -11,6 +11,8 @@ import (
 	"context"
 	"database/sql"
 	"strings"
+
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 )
 
 // Staffel ist eine gespeicherte Staffel-Zuordnung samt aufgelöster Herkunft.
@@ -150,7 +152,7 @@ func (s *Store) StaffelByID(ctx context.Context, id, seasonID int) (*Staffel, er
 func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID int) ([]staffelResponse, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT COALESCE(st.id, 0), k.staffel, COALESCE(st.name, ''),
-		       COALESCE(t.name, ''), k.id,
+		       COALESCE(t.name, ''), COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), k.id,
 		       CASE WHEN st.polled_at IS NULL THEN 0 ELSE 1 END
 		  FROM kader k
 		  LEFT JOIN teams t ON t.id = k.team_id
@@ -167,7 +169,7 @@ func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID int) ([]staff
 	var out []staffelResponse
 	for rows.Next() {
 		var r staffelResponse
-		if err := rows.Scan(&r.ID, &r.Code, &r.Name, &r.TeamName, &r.KaderID, &r.Polled); err != nil {
+		if err := rows.Scan(&r.ID, &r.Code, &r.Name, &r.TeamName, &r.TeamShort, &r.KaderID, &r.Polled); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

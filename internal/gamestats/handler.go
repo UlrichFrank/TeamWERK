@@ -41,6 +41,9 @@ type staffelResponse struct {
 	Code     string `json:"code"`
 	Name     string `json:"name"`
 	TeamName string `json:"teamName"`
+	// TeamShort ist der Kurzname der Mannschaft ("mB1") — dieselbe Schreibweise
+	// wie in Kalender und Terminen (db.TeamDisplayShort).
+	TeamShort string `json:"teamShort"`
 	KaderID  int    `json:"kaderId"`
 	Polled   bool   `json:"polled"`
 }

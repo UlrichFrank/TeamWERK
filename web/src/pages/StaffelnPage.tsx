@@ -176,7 +176,7 @@ export default function StaffelnPage() {
           >
             {staffeln.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.teamName || s.code}
+                {s.teamShort || s.teamName || s.code}
               </option>
             ))}
           </select>

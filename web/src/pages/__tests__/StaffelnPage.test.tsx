@@ -14,13 +14,13 @@ vi.mock('../../hooks/useLiveUpdates', () => ({
 let mock: MockAdapter
 
 const staffeln = [
-  { id: 1, code: 'mB-RL-BW', name: 'B-Jugend Regionalliga', teamName: 'B-Jugend männlich', kaderId: 10, polled: true },
-  { id: 2, code: 'wC-OL-2-BW', name: 'C-Jugend Oberliga', teamName: 'C-Jugend weiblich', kaderId: 11, polled: true },
+  { id: 1, code: 'mB-RL-BW', name: 'B-Jugend Regionalliga', teamName: 'B-Jugend männlich', teamShort: 'mB1', kaderId: 10, polled: true },
+  { id: 2, code: 'wC-OL-2-BW', name: 'C-Jugend Oberliga', teamName: 'C-Jugend weiblich', teamShort: 'wC', kaderId: 11, polled: true },
 ]
 
 // Zugeordnet, aber noch nie abgerufen: id 0, polled false.
 const staffelnOhneAbruf = [
-  { id: 0, code: 'mB-RL-BW', name: '', teamName: 'B-Jugend männlich', kaderId: 10, polled: false },
+  { id: 0, code: 'mB-RL-BW', name: '', teamName: 'B-Jugend männlich', teamShort: 'mB1', kaderId: 10, polled: false },
 ]
 
 const table = [
@@ -131,6 +131,15 @@ beforeEach(() => {
 afterEach(() => { mock.restore(); vi.clearAllMocks() })
 
 describe('StaffelnPage', () => {
+  test('die Staffelauswahl nennt die Mannschaften mit Kurznamen', async () => {
+    mockAll()
+    setup()
+    const select = await screen.findByLabelText('Mannschaft wählen')
+    expect(select).toHaveTextContent('mB1')
+    expect(select).toHaveTextContent('wC')
+    expect(select).not.toHaveTextContent('B-Jugend männlich')
+  })
+
   test('zeigt die Tabelle der ersten Staffel', async () => {
     mockAll()
     setup()

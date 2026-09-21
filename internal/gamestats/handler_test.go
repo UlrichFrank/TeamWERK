@@ -79,6 +79,30 @@ func TestListStaffeln_HappyPath(t *testing.T) {
 	}
 }
 
+// Der Kurzname folgt der Kader-Zuordnung (Geschlecht + Altersklasse + Nummer),
+// nicht dem Teamnamen, und fällt ohne Kader-Angaben auf den Namen zurück.
+func TestListStaffeln_LiefertKurznamen(t *testing.T) {
+	srv, s, seasonID, _ := newHandlerServer(t)
+	teamID := testutil.CreateTeam(t, s.db, "B-Jugend männlich")
+	kaderID := testutil.CreateKader(t, s.db, teamID, seasonID)
+	if _, err := s.db.Exec(
+		`UPDATE kader SET staffel = 'mB-RL-BW', age_class = 'B-Jugend', gender = 'm', team_number = 1 WHERE id = ?`,
+		kaderID); err != nil {
+		t.Fatal(err)
+	}
+	code, body := get(t, srv, "/api/staffeln", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var list []staffelResponse
+	if err := json.Unmarshal(body, &list); err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].TeamShort != "mB" {
+		t.Errorf("TeamShort = %+v, erwartet mB (einziges m-B-Team)", list)
+	}
+}
+
 func TestListStaffeln_Unauthenticated(t *testing.T) {
 	srv, _, _, _ := newHandlerServer(t)
 	if code, _ := get(t, srv, "/api/staffeln", ""); code != http.StatusUnauthorized {
