@@ -179,6 +179,26 @@ describe('StaffelnPage', () => {
     expect(screen.getByText(/Halle 5041/)).toBeInTheDocument()
   })
 
+  // Der Bericht ist über den Spielplan erreichbar: Klick klappt ihn auf und
+  // lädt ihn für genau diese Begegnung, ein zweiter Klick klappt ihn zu.
+  test('Spielplan: „Bericht“ klappt den Spielbericht der Begegnung auf und zu', async () => {
+    mockAll()
+    mock.onGet('/bwhv-games/5/report').reply(200, {
+      reportId: 1, state: 'parsed', homeTeam: 'Verein A', guestTeam: 'Verein B',
+      homeGoals: 29, guestGoals: 25, homeGoalsHt: 14, guestGoalsHt: 13, spectators: '120',
+      referees: '', refereeNames: [], refereesUncertain: false, warnings: [], hasPdf: false,
+      players: [], events: [],
+    })
+    setup('/staffeln?tab=spielplan')
+    const toggle = await screen.findByRole('button', { name: /Bericht/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(toggle)
+    await waitFor(() => expect(screen.getByText(/Zuschauer:/)).toBeInTheDocument())
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(toggle)
+    await waitFor(() => expect(screen.queryByText(/Zuschauer:/)).not.toBeInTheDocument())
+  })
+
   test('Ranglisten sortieren nach Toren und weisen Spiele aus', async () => {
     mockAll()
     setup('/staffeln?tab=ranglisten')

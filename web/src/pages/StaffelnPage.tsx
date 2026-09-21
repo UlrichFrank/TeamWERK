@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Trophy, CalendarDays, ListOrdered, FileText, Home, MapPin, RefreshCw,
-  Grid3x3, TrendingUp, Swords, Scale, PieChart, Users,
+  Grid3x3, TrendingUp, Swords, Scale, PieChart, Users, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
@@ -16,6 +16,7 @@ import {
   goalRatio, pointsLabel, sevenMeterRate,
 } from '../lib/staffeln'
 import { isOwnTeam, isOwnPlayer } from '../lib/staffelHighlight'
+import SpielberichtPanel from '../components/SpielberichtPanel'
 import MapsLink from '../components/MapsLink'
 import CrossTable from '../components/staffeln/CrossTable'
 import StandingsChart from '../components/staffeln/StandingsChart'
@@ -313,6 +314,9 @@ function TableView({ rows, ownTeams }: { rows: TableRow[]; ownTeams: string[] })
 }
 
 function ScheduleView({ games, ownTeams }: { games: ScheduleGame[]; ownTeams: string[] }) {
+  // Genau ein Bericht ist aufgeklappt: der Bericht ist lang (zwei Mannschafts-
+  // listen plus Spielverlauf), mehrere gleichzeitig machten die Liste unbenutzbar.
+  const [openReportId, setOpenReportId] = useState<number | null>(null)
   if (games.length === 0) return <Empty text="Noch kein Spielplan abgerufen." />
   return (
     <div className="space-y-2">
@@ -365,12 +369,25 @@ function ScheduleView({ games, ownTeams }: { games: ScheduleGame[]; ownTeams: st
                 <span className="text-sm text-brand-text-subtle">—</span>
               )}
               {g.HasReport && (
-                <div className="text-xs text-brand-text-muted mt-1 inline-flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setOpenReportId(openReportId === g.ID ? null : g.ID)}
+                  aria-expanded={openReportId === g.ID}
+                  className="text-xs text-brand-text-muted hover:text-brand-text transition-colors mt-1 inline-flex items-center gap-1"
+                >
                   <FileText className="w-3 h-3" /> Bericht
-                </div>
+                  {openReportId === g.ID
+                    ? <ChevronUp className="w-3 h-3" />
+                    : <ChevronDown className="w-3 h-3" />}
+                </button>
               )}
             </div>
           </div>
+          {g.HasReport && openReportId === g.ID && (
+            <div className="mt-3 pt-3 border-t border-brand-border-subtle font-normal">
+              <SpielberichtPanel bwhvGameId={g.ID} />
+            </div>
+          )}
         </div>
         )
       })}
