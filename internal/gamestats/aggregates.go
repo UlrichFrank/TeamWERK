@@ -308,3 +308,267 @@ func rankStandings(table map[string]*standing) []ProgressionEntry {
 	}
 	return out
 }
+
+// FairPlayWeights ist die Gewichtung der Strafarten in der Mannschafts-Wertung.
+//
+// Sie wird MITGELIEFERT und nicht nur angewendet: eine Fair-Play-Zahl ohne
+// ihre Gewichtung ist nicht nachvollziehbar, und die Ansicht soll sie
+// ausweisen können, ohne sie ein zweites Mal abzutippen.
+type FairPlayWeights struct {
+	Yellow float64 `json:"yellow"`
+	TwoMin float64 `json:"twoMin"`
+	Red    float64 `json:"red"`
+	Blue   float64 `json:"blue"`
+}
+
+// fairPlayWeights: Blau wiegt am schwersten (Bericht an den Verband), dann
+// Rot, dann die Zeitstrafe, dann die Verwarnung. Kleiner ist besser.
+//
+// Bewusst eine andere Skala als fairPlayScore in stats.go: die dortige wertet
+// eine Person über die Saison, diese eine Mannschaft über ihre Berichte. Sie
+// zusammenzulegen hieße, zwei verschiedene Fragen an dieselbe Zahl zu stellen.
+var fairPlayWeights = FairPlayWeights{Yellow: 1, TwoMin: 2, Red: 3, Blue: 4}
+
+func (w FairPlayWeights) score(yellow, twoMin, red, blue int) float64 {
+	return float64(yellow)*w.Yellow + float64(twoMin)*w.TwoMin +
+		float64(red)*w.Red + float64(blue)*w.Blue
+}
+
+// GoalDistribution beschreibt, wie sich die Tore einer Mannschaft über ihre
+// Spieler verteilen.
+type GoalDistribution struct {
+	Players int     `json:"players"`
+	Average float64 `json:"average"`
+	Median  float64 `json:"median"`
+	Gini    float64 `json:"gini"`
+}
+
+// TeamStat ist die Mannschafts-Bilanz einer Staffel.
+//
+// Games und ReportGames stehen nebeneinander, weil sie verschieden groß sind:
+// Games zählt die Begegnungen mit Ergebnis (Grundlage von Toren, Angriff,
+// Verteidigung), ReportGames die ausgewerteten Spielberichte (Grundlage von
+// Fair-Play und Torverteilung). Genau dieser Unterschied ist die Falle der
+// Ansicht — deshalb weist jede Zeile beide Zahlen aus.
+type TeamStat struct {
+	Team         string `json:"team"`
+	Games        int    `json:"games"`
+	GoalsFor     int    `json:"goalsFor"`
+	GoalsAgainst int    `json:"goalsAgainst"`
+	GoalDiff     int    `json:"goalDiff"`
+
+	ReportGames int `json:"reportGames"`
+	TwoMin      int `json:"twoMin"`
+	Yellow      int `json:"yellow"`
+	Red         int `json:"red"`
+	Blue        int `json:"blue"`
+	// FairPlay und Distribution sind nil, solange kein Bericht vorliegt: eine
+	// Mannschaft ohne Bericht ist nicht straffrei, sie ist unbekannt. Eine 0
+	// führte sie in der aufsteigend sortierten Wertung als vorbildlich —
+	// genau die stille Fehlinformation, die Entscheidung 1 vermeidet.
+	FairPlay     *float64          `json:"fairPlayScore"`
+	Distribution *GoalDistribution `json:"distribution"`
+}
+
+// TeamStats ist die Antwort der Mannschafts-Ranglisten: alle fünf Sichten
+// (Torverhältnis, Angriff, Verteidigung, Fair-Play, Verteilung) entstehen aus
+// derselben Aggregation über dieselben Zeilen.
+type TeamStats struct {
+	FairPlayWeights FairPlayWeights `json:"fairPlayWeights"`
+	Teams           []TeamStat      `json:"teams"`
+}
+
+// TeamStats liefert die Mannschafts-Ranglisten einer Staffel.
+func (s *Store) TeamStats(ctx context.Context, staffelID int) (*TeamStats, error) {
+	games, err := s.loadGames(ctx, staffelID)
+	if err != nil {
+		return nil, err
+	}
+	stats := map[string]*TeamStat{}
+	for _, t := range teamsOf(games) {
+		stats[t] = &TeamStat{Team: t}
+	}
+	for _, g := range games {
+		if !g.played() {
+			continue
+		}
+		hg, gg := *g.homeGoals, *g.guestGoals
+		addResult(stats[g.home], hg, gg)
+		addResult(stats[g.guest], gg, hg)
+	}
+	if err := s.addReportStats(ctx, staffelID, stats); err != nil {
+		return nil, err
+	}
+	if err := s.addDistribution(ctx, staffelID, stats); err != nil {
+		return nil, err
+	}
+
+	out := &TeamStats{FairPlayWeights: fairPlayWeights, Teams: make([]TeamStat, 0, len(stats))}
+	for _, st := range stats {
+		out.Teams = append(out.Teams, *st)
+	}
+	sort.Slice(out.Teams, func(i, j int) bool { return out.Teams[i].Team < out.Teams[j].Team })
+	return out, nil
+}
+
+func addResult(st *TeamStat, for_, against int) {
+	if st == nil {
+		return
+	}
+	st.Games++
+	st.GoalsFor += for_
+	st.GoalsAgainst += against
+	st.GoalDiff = st.GoalsFor - st.GoalsAgainst
+}
+
+// teamNameExpr bildet die Mannschaft einer Spielerzeile auf die Schreibweise
+// des SPIELPLANS ab, nicht auf die des Spielberichts.
+//
+// bwhv_players.team_name stammt aus der Mannschaftsliste des PDF,
+// bwhv_games.home_team/guest_team aus der JSON-Schnittstelle — dieselbe
+// Mannschaft, zwei mögliche Schreibweisen. Kreuztabelle, Verlauf, Tabelle und
+// die Zugehörigkeit sprechen alle die Schreibweise des Spielplans; eine
+// Mannschafts-Zeile, die sich über den Berichtsnamen bildet, hinge daneben und
+// erschiene als elfte Mannschaft einer Zehnerstaffel. Die Seite (pg.side) ist
+// die verlässliche Brücke.
+const teamNameExpr = `CASE pg.side WHEN 'home' THEN g.home_team ELSE g.guest_team END`
+
+// addReportStats ergänzt die aus den Spielberichten gebildeten Werte.
+func (s *Store) addReportStats(ctx context.Context, staffelID int, stats map[string]*TeamStat) error {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT `+teamNameExpr+` AS team,
+		       COUNT(DISTINCT pg.report_id),
+		       COALESCE(SUM(pg.two_min), 0), COALESCE(SUM(pg.yellow), 0),
+		       COALESCE(SUM(pg.red), 0), COALESCE(SUM(pg.blue), 0)
+		  FROM bwhv_player_games pg
+		  JOIN bwhv_reports r ON r.id = pg.report_id AND r.state = 'parsed'
+		  JOIN bwhv_games g ON g.id = r.bwhv_game_id
+		 WHERE g.staffel_id = ? AND pg.side IN ('home','guest')
+		 GROUP BY team`, staffelID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var team string
+		var reportGames, twoMin, yellow, red, blue int
+		if err := rows.Scan(&team, &reportGames, &twoMin, &yellow, &red, &blue); err != nil {
+			return err
+		}
+		st, ok := stats[team]
+		if !ok {
+			st = &TeamStat{Team: team}
+			stats[team] = st
+		}
+		st.ReportGames, st.TwoMin, st.Yellow, st.Red, st.Blue = reportGames, twoMin, yellow, red, blue
+		score := fairPlayWeights.score(yellow, twoMin, red, blue)
+		st.FairPlay = &score
+	}
+	return rows.Err()
+}
+
+// addDistribution ergänzt die Torverteilung je Mannschaft.
+//
+// Bezugsgröße ist die SAISONSUMME je Spieler, nicht die Zeile je Spiel: die
+// Frage lautet "hängt die Mannschaft an einzelnen Werfern", und das ist eine
+// Frage an die Saisonbilanz. Zählte man Spieler-Spiele, erschiene ein Spieler
+// mit vielen Einsätzen mehrfach und ein Ausfall zöge den Wert nach oben, ohne
+// dass sich an der Rollenverteilung etwas geändert hätte (design.md §6).
+func (s *Store) addDistribution(ctx context.Context, staffelID int, stats map[string]*TeamStat) error {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT `+teamNameExpr+` AS team, pg.player_id, COALESCE(SUM(pg.goals), 0)
+		  FROM bwhv_player_games pg
+		  JOIN bwhv_reports r ON r.id = pg.report_id AND r.state = 'parsed'
+		  JOIN bwhv_games g ON g.id = r.bwhv_game_id
+		 WHERE g.staffel_id = ? AND pg.side IN ('home','guest')
+		 GROUP BY team, pg.player_id`, staffelID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	perTeam := map[string][]float64{}
+	for rows.Next() {
+		var team string
+		var playerID, goals int
+		if err := rows.Scan(&team, &playerID, &goals); err != nil {
+			return err
+		}
+		perTeam[team] = append(perTeam[team], float64(goals))
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for team, values := range perTeam {
+		st, ok := stats[team]
+		if !ok {
+			st = &TeamStat{Team: team}
+			stats[team] = st
+		}
+		d := distributionOf(values)
+		st.Distribution = &d
+	}
+	return nil
+}
+
+// distributionOf bildet Durchschnitt, Median und Gini über die Saisonsummen.
+func distributionOf(values []float64) GoalDistribution {
+	d := GoalDistribution{Players: len(values)}
+	if len(values) == 0 {
+		return d
+	}
+	sorted := make([]float64, len(values))
+	copy(sorted, values)
+	sort.Float64s(sorted)
+
+	var sum float64
+	for _, v := range sorted {
+		sum += v
+	}
+	d.Average = sum / float64(len(sorted))
+	d.Median = medianOf(sorted)
+	d.Gini = gini(sorted)
+	return d
+}
+
+func medianOf(sorted []float64) float64 {
+	n := len(sorted)
+	if n == 0 {
+		return 0
+	}
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
+}
+
+// gini ist der Gini-Koeffizient über aufsteigend sortierte Werte:
+//
+//	G = 2·Σ(i·xᵢ)/(n²·μ) − (n+1)/n
+//
+// Ein Wert nahe 0 heißt gleichmäßige Verteilung, ein hoher Wert Abhängigkeit
+// von wenigen Werfern.
+//
+// Bei μ = 0 liefert die Funktion 0 statt einer Division durch null: eine
+// Mannschaft ohne Tor hat keine Verteilung, und "0" liest sich hier richtig
+// als "keine Ungleichheit feststellbar".
+func gini(sorted []float64) float64 {
+	n := len(sorted)
+	if n == 0 {
+		return 0
+	}
+	var sum, weighted float64
+	for i, v := range sorted {
+		sum += v
+		weighted += float64(i+1) * v
+	}
+	mean := sum / float64(n)
+	if mean == 0 {
+		return 0
+	}
+	g := 2*weighted/(float64(n)*float64(n)*mean) - float64(n+1)/float64(n)
+	if g < 0 {
+		// Rundungsrest bei exakter Gleichverteilung.
+		return 0
+	}
+	return g
+}

@@ -240,3 +240,215 @@ func TestStandingsProgression_ZweiPunkteWertung(t *testing.T) {
 		}
 	}
 }
+
+// rosterLine ist eine Spielerzeile, wie sie eine Mannschaftsliste liefert.
+type rosterLine struct {
+	name                          string
+	side                          string
+	goals, sevenMAtt, sevenMGoals int
+	twoMin, yellow, red           int
+}
+
+// seedParsedReport legt zu einer Begegnung einen Bericht im angegebenen Zustand an
+// und schreibt die Spielerzeilen. team ordnet die Seite der Mannschaft in der
+// Schreibweise der MANNSCHAFTSLISTE zu — bewusst abweichend von der des
+// Spielplans, damit die Brücke über pg.side geprüft wird.
+func seedParsedReport(t *testing.T, db *sql.DB, staffelID, bwhvGameID int, state string,
+	rosterTeam map[string]string, lines []rosterLine) int {
+	t.Helper()
+	res, err := db.Exec(`
+		INSERT INTO bwhv_reports (bwhv_game_id, sgid, state, parsed_at)
+		VALUES (?, '1', ?, '2026-09-20T18:00:00Z')`, bwhvGameID, state)
+	if err != nil {
+		t.Fatalf("Bericht anlegen: %v", err)
+	}
+	id, _ := res.LastInsertId()
+	reportID := int(id)
+	if state != "parsed" {
+		return reportID
+	}
+	for _, l := range lines {
+		var playerID int
+		err := db.QueryRow(`
+			INSERT INTO bwhv_players (staffel_id, team_name, name)
+			VALUES (?,?,?)
+			ON CONFLICT (staffel_id, team_name, name) DO UPDATE SET name = excluded.name
+			RETURNING id`, staffelID, rosterTeam[l.side], l.name).Scan(&playerID)
+		if err != nil {
+			t.Fatalf("Spieler anlegen: %v", err)
+		}
+		if _, err := db.Exec(`
+			INSERT INTO bwhv_player_games (report_id, player_id, side, goals,
+				seven_m_attempts, seven_m_goals, two_min, yellow, red, blue)
+			VALUES (?,?,?,?,?,?,?,?,?,0)`,
+			reportID, playerID, l.side, l.goals, l.sevenMAtt, l.sevenMGoals,
+			l.twoMin, l.yellow, l.red); err != nil {
+			t.Fatalf("Spielerzeile anlegen: %v", err)
+		}
+	}
+	return reportID
+}
+
+func teamStatOf(t *testing.T, ts *TeamStats, team string) TeamStat {
+	t.Helper()
+	for _, s := range ts.Teams {
+		if s.Team == team {
+			return s
+		}
+	}
+	t.Fatalf("Mannschaft %q fehlt in den Mannschafts-Ranglisten", team)
+	return TeamStat{}
+}
+
+// Torverhältnis, Angriff und Verteidigung stehen ohne ein einziges PDF; die
+// Fair-Play-Wertung bleibt dafür LEER statt null.
+func TestTeamStats_ToreOhneBerichtFairPlayLeer(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	seedResult(t, db, staffelID, "1", "2026-09-20", "A", "B", intp(30), intp(20))
+	seedResult(t, db, staffelID, "2", "2026-09-27", "B", "A", intp(25), intp(28))
+
+	ts, err := s.TeamStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("TeamStats: %v", err)
+	}
+	a := teamStatOf(t, ts, "A")
+	if a.Games != 2 || a.GoalsFor != 58 || a.GoalsAgainst != 45 || a.GoalDiff != 13 {
+		t.Errorf("A = %+v, erwartet 2 Spiele, 58:45, Differenz 13", a)
+	}
+	if a.FairPlay != nil {
+		t.Errorf("FairPlay von A = %v, erwartet leer — ohne Bericht ist die Mannschaft nicht straffrei, sondern unbekannt", *a.FairPlay)
+	}
+	if a.Distribution != nil {
+		t.Errorf("Distribution von A = %+v, erwartet leer", *a.Distribution)
+	}
+	if a.ReportGames != 0 {
+		t.Errorf("ReportGames von A = %d, erwartet 0", a.ReportGames)
+	}
+}
+
+// Die Fair-Play-Wertung und die Torverteilung kommen aus den Berichten — und
+// die Mannschaft wird über pg.side der Schreibweise des SPIELPLANS zugeordnet,
+// nicht der des Berichts.
+func TestTeamStats_FairPlayAusBerichten(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	gameID := seedResult(t, db, staffelID, "1", "2026-09-20", "Verein A", "Verein B", intp(10), intp(8))
+	seedParsedReport(t, db, staffelID, gameID, "parsed",
+		map[string]string{"home": "Verein A e.V.", "guest": "Verein B e.V."},
+		[]rosterLine{
+			{name: "Anna", side: "home", goals: 6, twoMin: 1, yellow: 2},
+			{name: "Bea", side: "home", goals: 4},
+			{name: "Cem", side: "guest", goals: 8, red: 1},
+		})
+
+	ts, err := s.TeamStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("TeamStats: %v", err)
+	}
+	a := teamStatOf(t, ts, "Verein A")
+	if a.ReportGames != 1 || a.TwoMin != 1 || a.Yellow != 2 {
+		t.Errorf("A = %+v, erwartet 1 Bericht, 1× 2 min, 2 Verwarnungen", a)
+	}
+	if a.FairPlay == nil || *a.FairPlay != 2*1+1*2 {
+		t.Errorf("FairPlay von A = %v, erwartet 4 (2 Gelb à 1 + 1× 2 min à 2)", a.FairPlay)
+	}
+	if a.Distribution == nil || a.Distribution.Players != 2 || a.Distribution.Average != 5 {
+		t.Errorf("Distribution von A = %+v, erwartet 2 Spieler mit Ø 5", a.Distribution)
+	}
+	if ts.FairPlayWeights.Blue != 4 || ts.FairPlayWeights.Yellow != 1 {
+		t.Errorf("Gewichtung = %+v, erwartet Blau 4 / Gelb 1 — sie muss mitgeliefert werden", ts.FairPlayWeights)
+	}
+	// Die Mannschaft darf nicht zusätzlich unter dem Berichtsnamen erscheinen.
+	for _, st := range ts.Teams {
+		if st.Team == "Verein A e.V." {
+			t.Error("Mannschaft unter der Schreibweise des Berichts geführt — erwartet die des Spielplans")
+		}
+	}
+}
+
+// Ein gescheiterter Bericht trägt keine Spielerzeilen und darf deshalb auch
+// keine Fair-Play-Wertung erzeugen.
+func TestTeamStats_ParseFailedZaehltNicht(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	gameID := seedResult(t, db, staffelID, "1", "2026-09-20", "A", "B", intp(10), intp(8))
+	seedParsedReport(t, db, staffelID, gameID, "parse_failed", nil, nil)
+
+	ts, err := s.TeamStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("TeamStats: %v", err)
+	}
+	if a := teamStatOf(t, ts, "A"); a.FairPlay != nil || a.ReportGames != 0 {
+		t.Errorf("A = %+v, erwartet keine Wertung aus einem parse_failed-Bericht", a)
+	}
+}
+
+// Fremde Mannschaften sind gleichberechtigt enthalten — die Staffel ist der
+// Bezugsraum, nicht der eigene Verein.
+func TestTeamStats_FremdeMannschaftenEnthalten(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	seedResult(t, db, staffelID, "1", "2026-09-20", "Fremdverein X", "Fremdverein Y", intp(10), intp(8))
+
+	ts, err := s.TeamStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("TeamStats: %v", err)
+	}
+	if len(ts.Teams) != 2 {
+		t.Fatalf("Mannschaften = %d, erwartet 2", len(ts.Teams))
+	}
+}
+
+// Der Gini über die Saisonsummen: gleichmäßig ≈ 0, ein Alleinwerfer nahe 1,
+// eine torlose Mannschaft genau 0.
+func TestGini_GleichverteilungMedianAlleinwerfer(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		values []float64
+		lo, hi float64
+	}{
+		{"gleichverteilt", []float64{5, 5, 5, 5}, 0, 0.001},
+		{"alleinwerfer", []float64{0, 0, 0, 0, 0, 0, 0, 0, 0, 40}, 0.85, 1},
+		{"torlos", []float64{0, 0, 0}, 0, 0},
+	} {
+		d := distributionOf(c.values)
+		if d.Gini < c.lo || d.Gini > c.hi {
+			t.Errorf("%s: Gini = %v, erwartet zwischen %v und %v", c.name, d.Gini, c.lo, c.hi)
+		}
+	}
+
+	d := distributionOf([]float64{1, 2, 6})
+	if d.Median != 2 {
+		t.Errorf("Median = %v, erwartet 2", d.Median)
+	}
+	if d.Average != 3 {
+		t.Errorf("Ø = %v, erwartet 3", d.Average)
+	}
+}
+
+// Gerechnet wird über die Saisonsumme je Spieler, nicht über die Zeile je
+// Spiel: zwei Spieler mit je zwei Einsätzen sind zwei Werte, nicht vier.
+func TestGini_UeberSaisonsummeNichtProSpiel(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	roster := map[string]string{"home": "A", "guest": "B"}
+	for i, no := range []string{"1", "2"} {
+		gameID := seedResult(t, db, staffelID, no, "2026-09-2"+no, "A", "B", intp(10), intp(8))
+		seedParsedReport(t, db, staffelID, gameID, "parsed", roster, []rosterLine{
+			{name: "Anna", side: "home", goals: 5 + i},
+			{name: "Bea", side: "home", goals: 5 - i},
+		})
+	}
+
+	ts, err := s.TeamStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("TeamStats: %v", err)
+	}
+	a := teamStatOf(t, ts, "A")
+	if a.Distribution == nil || a.Distribution.Players != 2 {
+		t.Fatalf("Distribution = %+v, erwartet 2 Spieler (Saisonsummen), nicht 4 Spieler-Spiele", a.Distribution)
+	}
+	// Anna 5+6 = 11, Bea 5+4 = 9 → Ø 10.
+	if a.Distribution.Average != 10 {
+		t.Errorf("Ø = %v, erwartet 10 (Saisonsummen 11 und 9)", a.Distribution.Average)
+	}
+	if a.ReportGames != 2 {
+		t.Errorf("ReportGames = %d, erwartet 2", a.ReportGames)
+	}
+}
