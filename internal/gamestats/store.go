@@ -150,9 +150,10 @@ func (s *Store) StaffelByID(ctx context.Context, id, seasonID int) (*Staffel, er
 // Polled=false heißt deshalb "zugeordnet, aber noch nichts abgerufen" und ist
 // ein anzeigbarer Zustand, kein Fehler.
 func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID, ownUserID int) ([]staffelResponse, error) {
-	// ownUserID > 0 schränkt auf die Mannschaften ein, zu denen der Nutzer selbst
-	// gehört (Spieler, Eltern, Trainer, erweiterter Kader) — die "Audience" wie
-	// auf /dienste. 0 heißt: alle Staffeln des Vereins.
+	// ownUserID > 0 schränkt auf dieselbe Teammenge ein wie der Teamfilter der
+	// Dienstbörse (GET /api/teams?scope=duties): Stammkader des Nutzers und
+	// seiner Kinder (player_memberships, kein erweiterter Kader) plus die
+	// Mannschaften, die er trainiert. 0 heißt: alle Staffeln des Vereins.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT COALESCE(st.id, 0), k.staffel, COALESCE(st.name, ''),
 		       COALESCE(t.name, ''), COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), k.id,
@@ -165,8 +166,16 @@ func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID, ownUserID in
 		   AND k.staffel IS NOT NULL
 		   AND TRIM(k.staffel) <> ''
 		   AND (? = 0 OR k.team_id IN (
-		         SELECT team_id FROM user_accessible_teams WHERE user_id = ? AND season_id = k.season_id))
-		 ORDER BY t.name, k.staffel`, seasonID, ownUserID, ownUserID)
+		         SELECT pm.team_id FROM player_memberships pm
+		          WHERE pm.season_id = k.season_id AND pm.member_id IN (
+		                SELECT id FROM members WHERE user_id = ?
+		                UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)
+		         UNION
+		         SELECT k2.team_id FROM kader_trainers kt
+		           JOIN kader k2 ON k2.id = kt.kader_id
+		           JOIN members m ON m.id = kt.member_id
+		          WHERE k2.season_id = k.season_id AND m.user_id = ?))
+		 ORDER BY t.name, k.staffel`, seasonID, ownUserID, ownUserID, ownUserID, ownUserID)
 	if err != nil {
 		return nil, err
 	}

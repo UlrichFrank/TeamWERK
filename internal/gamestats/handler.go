@@ -60,11 +60,13 @@ func (h *Handler) ListStaffeln(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
-	// audience=own: nur die Staffeln der eigenen Mannschaften (Filter "Nur
-	// Audience" der Oberfläche). Ohne den Parameter sieht jeder alle Staffeln.
+	// Dieselbe Sichtbarkeit wie der Teamfilter der Dienstbörse: Admin, Vorstand
+	// und sportliche Leitung sehen alle Staffeln, alle anderen (Spieler, Eltern,
+	// Trainer) nur die Staffeln ihrer Kader-Mannschaften.
+	claims := auth.ClaimsFromCtx(ctx)
 	ownUserID := 0
-	if r.URL.Query().Get("audience") == "own" {
-		ownUserID = auth.ClaimsFromCtx(ctx).UserID
+	if claims.Role != "admin" && !claims.HasFunction("vorstand") && !claims.HasFunction("sportliche_leitung") {
+		ownUserID = claims.UserID
 	}
 	list, err := h.store.ListStaffelnWithTeam(ctx, seasonID, ownUserID)
 	if err != nil {
