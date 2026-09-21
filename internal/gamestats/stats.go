@@ -7,18 +7,23 @@ import (
 
 // PlayerStat ist die Saisonbilanz eines Spielers.
 type PlayerStat struct {
-	PlayerID    int     `json:"playerId"`
-	MemberID    *int    `json:"memberId"`
-	Name        string  `json:"name"`
-	TeamName    string  `json:"teamName"`
-	Games       int     `json:"games"`
-	Goals       int     `json:"goals"`
-	SevenMAtt   int     `json:"sevenMAttempts"`
-	SevenMGoals int     `json:"sevenMGoals"`
-	TwoMin      int     `json:"twoMin"`
-	Warnings    int     `json:"warnings"`
-	Disq        int     `json:"disq"`
-	FairPlay    float64 `json:"fairPlayScore"`
+	PlayerID int    `json:"playerId"`
+	MemberID *int   `json:"memberId"`
+	Name     string `json:"name"`
+	TeamName string `json:"teamName"`
+	// Games ist die Zahl der ausgewerteten Berichte, in deren Mannschaftsliste
+	// der Spieler steht — die Bezugsgröße, ohne die Tore nicht einzuordnen sind.
+	Games       int `json:"games"`
+	Goals       int `json:"goals"`
+	SevenMAtt   int `json:"sevenMAttempts"`
+	SevenMGoals int `json:"sevenMGoals"`
+	// SevenMMissed wird serverseitig gebildet, damit die Subtraktion nicht an
+	// zwei Stellen lebt (design.md §4).
+	SevenMMissed int     `json:"sevenMMissed"`
+	TwoMin       int     `json:"twoMin"`
+	Warnings     int     `json:"warnings"`
+	Disq         int     `json:"disq"`
+	FairPlay     float64 `json:"fairPlayScore"`
 }
 
 // fairPlayScore gewichtet Disziplinarmaßnahmen: eine Disqualifikation wiegt
@@ -59,6 +64,7 @@ func scanStats(rows *sql.Rows) ([]PlayerStat, error) {
 			s.MemberID = &id
 		}
 		s.FairPlay = fairPlayScore(s.TwoMin, s.Warnings, s.Disq)
+		s.SevenMMissed = s.SevenMAtt - s.SevenMGoals
 		out = append(out, s)
 	}
 	return out, rows.Err()

@@ -14,7 +14,7 @@
 - [x] 2.4 Gini-Koeffizient über die Saisonsummen je Spieler (design.md §6), `0` bei Mittelwert `0`, dazu Median und Durchschnitt. Verifikation: Unit-Test mit gleichverteilten Werten (≈0), mit einem Alleinwerfer (nahe 1) und mit torloser Mannschaft (0).
 - [x] 2.5 `RefereeStats(ctx, staffelID)`: je Schiedsrichter Spiele und die Strafen **beider** Mannschaften der von ihm geleiteten Spiele, `uncertain` durchgereicht, Berichte ohne Namen fallen raus. Verifikation: Test mit zwei Spielen desselben Gespanns prüft Summe und Spielzahl; Test mit namenlosem Bericht prüft, dass keine Zeile entsteht.
 - [x] 2.6 `Affiliation(ctx, staffelID, userID)`: eigene BWHV-Mannschaftsnamen über `user_accessible_teams` → `game_teams` → `bwhv_games.game_id` → `games.is_home` (design.md §10), eigene `playerIds` über `bwhv_players.member_id` gegen eigene Mitglieder plus Kinder via `family_links`. Verifikation: Test belegt aufgelöste Mannschaft für Spieler, Trainer, erweiterten Kader und Elternteil; ein Test belegt die **leere** Menge ohne verknüpfte Begegnung trotz ähnlichen Namens.
-- [ ] 2.7 `StaffelStats` um `games` erweitern (Zahl der Berichte je Spieler) und die Siebenmeter-Fehlversuche ausweisen. Verifikation: Test belegt `games=3` für einen Spieler aus drei Berichten und `missed = attempts - goals`.
+- [x] 2.7 `StaffelStats` um `games` erweitern (Zahl der Berichte je Spieler) und die Siebenmeter-Fehlversuche ausweisen. Verifikation: Test belegt `games=3` für einen Spieler aus drei Berichten und `missed = attempts - goals`.
 
 ## 3. Routen und Handler
 

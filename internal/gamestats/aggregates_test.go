@@ -730,3 +730,44 @@ func TestAffiliation_OhneZugehoerigkeitLeer(t *testing.T) {
 		t.Errorf("Affiliation = %+v, erwartet beide Mengen leer", aff)
 	}
 }
+
+// "Spiele" ist die Zahl der Berichte, in deren Mannschaftsliste der Spieler
+// steht — nicht die Zahl der Begegnungen seiner Mannschaft. Die Fehlversuche
+// bildet der Server, damit die Subtraktion nicht an zwei Stellen lebt.
+func TestStaffelStats_SpieleUndSiebenmeterFehlversuche(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	roster := map[string]string{"home": "A", "guest": "B"}
+	for i, no := range []string{"1", "2", "3"} {
+		gameID := seedResult(t, db, staffelID, no, "2026-09-2"+no, "A", "B", intp(10), intp(8))
+		lines := []rosterLine{{name: "Anna", side: "home", goals: 3, sevenMAtt: 2, sevenMGoals: 1}}
+		if i == 0 {
+			// Bea steht nur in einem Bericht.
+			lines = append(lines, rosterLine{name: "Bea", side: "home", goals: 1})
+		}
+		seedParsedReport(t, db, staffelID, gameID, "parsed", roster, lines)
+	}
+
+	stats, err := s.StaffelStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("StaffelStats: %v", err)
+	}
+	for _, st := range stats {
+		switch st.Name {
+		case "Anna":
+			if st.Games != 3 {
+				t.Errorf("Anna: Spiele = %d, erwartet 3", st.Games)
+			}
+			if st.SevenMAtt != 6 || st.SevenMGoals != 3 || st.SevenMMissed != 3 {
+				t.Errorf("Anna: 7m = %d/%d, Fehlversuche %d — erwartet 3/6 und 3",
+					st.SevenMGoals, st.SevenMAtt, st.SevenMMissed)
+			}
+		case "Bea":
+			if st.Games != 1 {
+				t.Errorf("Bea: Spiele = %d, erwartet 1", st.Games)
+			}
+			if st.SevenMMissed != 0 {
+				t.Errorf("Bea: Fehlversuche = %d, erwartet 0", st.SevenMMissed)
+			}
+		}
+	}
+}
