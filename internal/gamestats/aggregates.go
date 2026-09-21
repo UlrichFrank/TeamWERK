@@ -160,3 +160,151 @@ func (s *Store) CrossTable(ctx context.Context, staffelID int) (*CrossTable, err
 	}
 	return ct, nil
 }
+
+// pointsWin/pointsDraw ist die Zwei-Punkte-Wertung: Sieg zwei Punkte,
+// Unentschieden ein Punkt, Niederlage keiner.
+//
+// Sie ist ANGENOMMEN, nicht abgeleitet — die Schnittstelle liefert keine
+// Wertungsregel. In einer Staffel mit Drei-Punkte-Wertung zeigt der Verlauf
+// deshalb plausible, aber falsche Ränge; erkennbar wäre das nur an einer
+// Abweichung des letzten Spieltags von der amtlichen Tabelle
+// (bwhv_staffeln.table_json). Die Annahme steht bewusst an EINER Stelle als
+// benannte Konstante: die Nachrüstung ist dann eine Kalibrierung hier plus die
+// Vergleichsprüfung, kein Suchlauf durch die Queries (design.md §2).
+const (
+	pointsWin  = 2
+	pointsDraw = 1
+)
+
+// ProgressionEntry ist die Platzierung einer Mannschaft nach einem Spieltag.
+type ProgressionEntry struct {
+	Team     string `json:"team"`
+	Rank     int    `json:"rank"`
+	Points   int    `json:"points"`
+	Games    int    `json:"games"`
+	GoalsFor int    `json:"goalsFor"`
+	GoalDiff int    `json:"goalDiff"`
+}
+
+// ProgressionDay ist ein Spieltag mit der Platzierung aller bis dahin
+// beteiligten Mannschaften.
+type ProgressionDay struct {
+	Date    string             `json:"date"`
+	Entries []ProgressionEntry `json:"entries"`
+}
+
+// standing ist der kumulierte Zwischenstand einer Mannschaft.
+type standing struct {
+	team     string
+	points   int
+	games    int
+	goalsFor int
+	goalsAg  int
+}
+
+func (s standing) diff() int { return s.goalsFor - s.goalsAg }
+
+// StandingsProgression liefert die Platzierung jeder Mannschaft nach jedem
+// Spieltag, an dem mindestens eine Begegnung gespielt wurde.
+//
+// Ein Spieltag IST ein Datum: eine Rundennummer liefert die Schnittstelle
+// nicht, und der Verband spielt Staffeln mit unterschiedlich vielen
+// Begegnungen je Termin — eine gezählte "Runde" wäre eine erfundene Ordnung
+// (design.md §3).
+//
+// Gerechnet wird in Go und nicht in SQL: es ist eine Schleife über Spieltage
+// mit kumulierendem Zustand und Neu-Sortierung nach jedem Schritt. Als Query
+// wäre das ein Window-Function-Konstrukt, das niemand mehr liest; die
+// Datenmenge (~810 Begegnungen je Staffel, eine Query) trägt die Schleife
+// mühelos.
+func (s *Store) StandingsProgression(ctx context.Context, staffelID int) ([]ProgressionDay, error) {
+	games, err := s.loadGames(ctx, staffelID)
+	if err != nil {
+		return nil, err
+	}
+	table := map[string]*standing{}
+	var out []ProgressionDay
+	var day string
+
+	flush := func() {
+		if day == "" {
+			return
+		}
+		out = append(out, ProgressionDay{Date: day, Entries: rankStandings(table)})
+	}
+
+	for _, g := range games {
+		if !g.played() {
+			// Begegnungen ohne Ergebnis bleiben draußen — auch ein künftiger
+			// Termin mitten in der sortierten Liste.
+			continue
+		}
+		if g.date != day {
+			flush()
+			day = g.date
+		}
+		applyResult(table, g)
+	}
+	flush()
+	return out, nil
+}
+
+// applyResult schreibt ein Ergebnis in den Zwischenstand beider Mannschaften.
+func applyResult(table map[string]*standing, g crossGame) {
+	home, guest := standingOf(table, g.home), standingOf(table, g.guest)
+	hg, gg := *g.homeGoals, *g.guestGoals
+	home.games++
+	guest.games++
+	home.goalsFor += hg
+	home.goalsAg += gg
+	guest.goalsFor += gg
+	guest.goalsAg += hg
+	switch {
+	case hg > gg:
+		home.points += pointsWin
+	case gg > hg:
+		guest.points += pointsWin
+	default:
+		home.points += pointsDraw
+		guest.points += pointsDraw
+	}
+}
+
+func standingOf(table map[string]*standing, team string) *standing {
+	if st, ok := table[team]; ok {
+		return st
+	}
+	st := &standing{team: team}
+	table[team] = st
+	return st
+}
+
+// rankStandings sortiert den Zwischenstand: Punkte, dann Tordifferenz, dann
+// geworfene Tore. Der Mannschaftsname bricht den Restgleichstand, damit
+// dieselbe Lage nicht bei jedem Aufruf eine andere Reihenfolge ergibt.
+func rankStandings(table map[string]*standing) []ProgressionEntry {
+	list := make([]*standing, 0, len(table))
+	for _, st := range table {
+		list = append(list, st)
+	}
+	sort.Slice(list, func(i, j int) bool {
+		a, b := list[i], list[j]
+		switch {
+		case a.points != b.points:
+			return a.points > b.points
+		case a.diff() != b.diff():
+			return a.diff() > b.diff()
+		case a.goalsFor != b.goalsFor:
+			return a.goalsFor > b.goalsFor
+		}
+		return a.team < b.team
+	})
+	out := make([]ProgressionEntry, len(list))
+	for i, st := range list {
+		out[i] = ProgressionEntry{
+			Team: st.team, Rank: i + 1, Points: st.points, Games: st.games,
+			GoalsFor: st.goalsFor, GoalDiff: st.diff(),
+		}
+	}
+	return out
+}
