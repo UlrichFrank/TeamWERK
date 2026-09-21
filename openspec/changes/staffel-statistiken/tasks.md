@@ -18,10 +18,10 @@
 
 ## 3. Routen und Handler
 
-- [ ] 3.1 Fünf Handler in `internal/gamestats/handler.go` (`GetCrossTable`, `GetProgression`, `GetTeamStats`, `GetRefereeStats`, `GetAffiliation` — letzterer liest `claims.UserID`), Fehler über `httpx.WriteError`. Verifikation: `go build ./...` und `golangci-lint` grün.
-- [ ] 3.2 Fünf Routen im Authenticated-Tier von `internal/app/router.go` neben `/tabelle`, `/spielplan`, `/ranglisten` eintragen (`/affiliation` englisch nach der Namenskonvention). Verifikation: Broadcast-Gate (`internal/arch/broadcast_test.go`) bleibt grün — es sind Lese-Routen, kein Allowlist-Eintrag nötig.
-- [ ] 3.3 Je Route Happy-Path und Fehlerfall testen (200 mit Daten, 401 ohne Token, 404 bei unbekannter Staffel-ID). Verifikation: neue Tests in `internal/gamestats` laufen grün.
-- [ ] 3.4 Die fünf neuen `{id}`-Routen in `openByDesign` der Objektrechte-Matrix eintragen, mit derselben Begründung wie `/tabelle` (öffentliche Verbandsdaten, vereinsweit sichtbar). Verifikation: `go test ./internal/permissions/` grün.
+- [x] 3.1 Fünf Handler in `internal/gamestats/handler.go` (`GetCrossTable`, `GetProgression`, `GetTeamStats`, `GetRefereeStats`, `GetAffiliation` — letzterer liest `claims.UserID`), Fehler über `httpx.WriteError`. Verifikation: `go build ./...` und `golangci-lint` grün.
+- [x] 3.2 Fünf Routen im Authenticated-Tier von `internal/app/router.go` neben `/tabelle`, `/spielplan`, `/ranglisten` eintragen (`/affiliation` englisch nach der Namenskonvention). Verifikation: Broadcast-Gate (`internal/arch/broadcast_test.go`) bleibt grün — es sind Lese-Routen, kein Allowlist-Eintrag nötig.
+- [x] 3.3 Je Route Happy-Path und Fehlerfall testen (200 mit Daten, 401 ohne Token, 404 bei unbekannter Staffel-ID). Verifikation: neue Tests in `internal/gamestats` laufen grün.
+- [x] 3.4 Die fünf neuen `{id}`-Routen in `openByDesign` der Objektrechte-Matrix eintragen, mit derselben Begründung wie `/tabelle` (öffentliche Verbandsdaten, vereinsweit sichtbar). Verifikation: `go test ./internal/permissions/` grün.
 
 ## 4. Frontend: Datenschicht
 

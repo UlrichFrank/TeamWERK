@@ -27,6 +27,11 @@ func newHandlerServer(t *testing.T) (*httptest.Server, *Store, int, int) {
 		r.Get("/api/staffeln/{id}/tabelle", h.GetTable)
 		r.Get("/api/staffeln/{id}/spielplan", h.GetSchedule)
 		r.Get("/api/staffeln/{id}/ranglisten", h.GetRanglisten)
+		r.Get("/api/staffeln/{id}/kreuztabelle", h.GetCrossTable)
+		r.Get("/api/staffeln/{id}/tabellenverlauf", h.GetProgression)
+		r.Get("/api/staffeln/{id}/teamstatistik", h.GetTeamStats)
+		r.Get("/api/staffeln/{id}/schiedsrichter", h.GetRefereeStats)
+		r.Get("/api/staffeln/{id}/affiliation", h.GetAffiliation)
 		r.Get("/api/bwhv-games/{id}/report", h.GetReport)
 		r.Get("/api/bwhv-reports/{id}/pdf", h.GetReportPDF)
 		r.Get("/api/members/{id}/saisonstatistik", h.GetMemberStats)
@@ -322,5 +327,165 @@ func TestSaisonstatistik_FehlgeschlagenerBerichtZaehltNicht(t *testing.T) {
 	}
 	if len(stats) != 0 {
 		t.Errorf("Zeilen = %d, erwartet 0 — parse_failed zählt nicht", len(stats))
+	}
+}
+
+// newStatsServer legt zusätzlich eine kleine Staffel mit Ergebnissen an,
+// damit die Statistik-Routen etwas zu antworten haben.
+func newStatsServer(t *testing.T) (*httptest.Server, *Store, int, int) {
+	t.Helper()
+	srv, s, seasonID, staffelID := newHandlerServer(t)
+	seedResult(t, s.db, staffelID, "1", "2026-09-20", "A", "B", intp(30), intp(20))
+	seedResult(t, s.db, staffelID, "2", "2026-09-27", "B", "A", intp(25), intp(28))
+	seedResult(t, s.db, staffelID, "3", "2026-10-04", "A", "B", nil, nil)
+	return srv, s, seasonID, staffelID
+}
+
+// Die vier Statistik-Routen und die Zugehörigkeit teilen denselben
+// Auth-Tier und dieselbe Staffel-Auflösung: ohne Token 401, bei unbekannter
+// Staffel-ID 404. Eine Tabelle statt fünf Kopien.
+func TestStatistikRouten_TierUndUnbekannteStaffel(t *testing.T) {
+	srv, _, _, staffelID := newStatsServer(t)
+	for _, suffix := range []string{"kreuztabelle", "tabellenverlauf", "teamstatistik", "schiedsrichter", "affiliation"} {
+		if code, _ := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/"+suffix, ""); code != http.StatusUnauthorized {
+			t.Errorf("%s ohne Token: Status = %d, erwartet 401", suffix, code)
+		}
+		if code, _ := get(t, srv, "/api/staffeln/9999/"+suffix, userToken(t)); code != http.StatusNotFound {
+			t.Errorf("%s mit unbekannter Staffel: Status = %d, erwartet 404", suffix, code)
+		}
+	}
+}
+
+func TestGetCrossTable_LiefertErgebnisUndDatum(t *testing.T) {
+	srv, _, _, staffelID := newStatsServer(t)
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/kreuztabelle", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var ct CrossTable
+	if err := json.Unmarshal(body, &ct); err != nil {
+		t.Fatalf("Antwort nicht lesbar: %v (%s)", err, body)
+	}
+	if len(ct.Teams) != 2 || len(ct.Rows) != 2 {
+		t.Fatalf("Kreuztabelle = %+v, erwartet 2×2", ct)
+	}
+	for i, row := range ct.Rows {
+		if row.Cells[i] != nil {
+			t.Errorf("Diagonale von %q gefüllt", row.Team)
+		}
+	}
+}
+
+func TestGetProgression_RangJeSpieltag(t *testing.T) {
+	srv, _, _, staffelID := newStatsServer(t)
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/tabellenverlauf", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var days []ProgressionDay
+	if err := json.Unmarshal(body, &days); err != nil {
+		t.Fatalf("Antwort nicht lesbar: %v (%s)", err, body)
+	}
+	if len(days) != 2 {
+		t.Fatalf("Spieltage = %d, erwartet 2 — die dritte Begegnung ist ungespielt", len(days))
+	}
+	if len(days[1].Entries) != 2 || days[1].Entries[0].Rank != 1 {
+		t.Errorf("Spieltag 2 = %+v, erwartet zwei Ränge beginnend bei 1", days[1])
+	}
+}
+
+// Eine Staffel ohne gespielte Begegnung liefert einen leeren Verlauf, keinen
+// Fehler — und ein leeres Array, kein null.
+func TestGetProgression_OhneErgebnisLeer(t *testing.T) {
+	srv, s, _, staffelID := newHandlerServer(t)
+	seedResult(t, s.db, staffelID, "1", "2026-10-04", "A", "B", nil, nil)
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/tabellenverlauf", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	if string(body) != "[]\n" && string(body) != "[]" {
+		t.Errorf("Antwort = %s, erwartet ein leeres Array", body)
+	}
+}
+
+func TestGetTeamStats_ToreOhneBericht(t *testing.T) {
+	srv, _, _, staffelID := newStatsServer(t)
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/teamstatistik", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var ts TeamStats
+	if err := json.Unmarshal(body, &ts); err != nil {
+		t.Fatalf("Antwort nicht lesbar: %v (%s)", err, body)
+	}
+	if len(ts.Teams) != 2 {
+		t.Fatalf("Mannschaften = %d, erwartet 2", len(ts.Teams))
+	}
+	for _, st := range ts.Teams {
+		if st.Games != 2 || st.GoalsFor == 0 {
+			t.Errorf("%s = %+v, erwartet zwei Spiele mit Toren ohne jeden Bericht", st.Team, st)
+		}
+		if st.FairPlay != nil {
+			t.Errorf("%s: Fair-Play = %v, erwartet leer ohne Bericht", st.Team, *st.FairPlay)
+		}
+	}
+	if ts.FairPlayWeights.TwoMin == 0 {
+		t.Error("Gewichtung fehlt in der Antwort — sie muss ausgewiesen werden")
+	}
+}
+
+func TestGetRefereeStats_LeerOhneBerichte(t *testing.T) {
+	srv, _, _, staffelID := newStatsServer(t)
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/schiedsrichter", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	if string(body) != "[]\n" && string(body) != "[]" {
+		t.Errorf("Antwort = %s, erwartet ein leeres Array", body)
+	}
+}
+
+// Ohne Zugehörigkeit stehen beide Mengen leer in der Antwort — als Arrays,
+// nicht als null, damit das Frontend nicht dagegen prüfen muss.
+func TestGetAffiliation_OhneZugehoerigkeitLeer(t *testing.T) {
+	srv, _, _, staffelID := newStatsServer(t)
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/affiliation", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var aff Affiliation
+	if err := json.Unmarshal(body, &aff); err != nil {
+		t.Fatalf("Antwort nicht lesbar: %v (%s)", err, body)
+	}
+	if aff.TeamNames == nil || aff.PlayerIDs == nil {
+		t.Errorf("Affiliation = %+v, erwartet leere Arrays statt null", aff)
+	}
+	if len(aff.TeamNames) != 0 || len(aff.PlayerIDs) != 0 {
+		t.Errorf("Affiliation = %+v, erwartet beide Mengen leer", aff)
+	}
+}
+
+// Der Nutzer des Tokens bekommt seine Mannschaft über die verknüpfte
+// Begegnung — der Weg vom Token bis zur Verbandsschreibweise in einem Stück.
+func TestGetAffiliation_SpielerSiehtMannschaft(t *testing.T) {
+	srv, s, seasonID, staffelID := newHandlerServer(t)
+	userID := testutil.CreateUser(t, s.db, "standard")
+	memberID := testutil.CreateMember(t, s.db, userID)
+	teamID := testutil.CreateTeam(t, s.db, "B-Jugend")
+	addToKader(t, s.db, testutil.CreateKader(t, s.db, teamID, seasonID), memberID)
+	bwhvGameID := seedResult(t, s.db, staffelID, "1", "2026-09-20", "Team Stuttgart 2", "Fremd", intp(10), intp(8))
+	linkOwnGame(t, s.db, bwhvGameID, seasonID, teamID, true)
+
+	token := testutil.Token(t, userID, "standard", []string{"spieler"})
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/affiliation", token)
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var aff Affiliation
+	if err := json.Unmarshal(body, &aff); err != nil {
+		t.Fatal(err)
+	}
+	if len(aff.TeamNames) != 1 || aff.TeamNames[0] != "Team Stuttgart 2" {
+		t.Errorf("TeamNames = %#v, erwartet [Team Stuttgart 2]", aff.TeamNames)
 	}
 }

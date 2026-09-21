@@ -146,6 +146,87 @@ func (h *Handler) GetRanglisten(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, stats)
 }
 
+// GetCrossTable liefert die Kreuztabelle einer Staffel.
+func (h *Handler) GetCrossTable(w http.ResponseWriter, r *http.Request) {
+	st, ok := h.staffelOfRequest(w, r)
+	if !ok {
+		return
+	}
+	ct, err := h.store.CrossTable(r.Context(), st.ID)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, ct)
+}
+
+// GetProgression liefert den Platzierungsverlauf einer Staffel.
+func (h *Handler) GetProgression(w http.ResponseWriter, r *http.Request) {
+	st, ok := h.staffelOfRequest(w, r)
+	if !ok {
+		return
+	}
+	days, err := h.store.StandingsProgression(r.Context(), st.ID)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	if days == nil {
+		days = []ProgressionDay{}
+	}
+	httpx.WriteJSON(w, http.StatusOK, days)
+}
+
+// GetTeamStats liefert die Mannschafts-Ranglisten einer Staffel — alle fünf
+// Sichten in einer Antwort, weil sie aus derselben Aggregation entstehen.
+func (h *Handler) GetTeamStats(w http.ResponseWriter, r *http.Request) {
+	st, ok := h.staffelOfRequest(w, r)
+	if !ok {
+		return
+	}
+	stats, err := h.store.TeamStats(r.Context(), st.ID)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, stats)
+}
+
+// GetRefereeStats liefert die Schiedsrichter-Rangliste einer Staffel.
+func (h *Handler) GetRefereeStats(w http.ResponseWriter, r *http.Request) {
+	st, ok := h.staffelOfRequest(w, r)
+	if !ok {
+		return
+	}
+	stats, err := h.store.RefereeStats(r.Context(), st.ID)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	if stats == nil {
+		stats = []RefereeStat{}
+	}
+	httpx.WriteJSON(w, http.StatusOK, stats)
+}
+
+// GetAffiliation liefert die eigene Zugehörigkeit zu einer Staffel.
+//
+// Die einzige nutzerabhängige der Statistik-Routen: die vier anderen bleiben
+// für alle Nutzer gleich und hängen deshalb nicht am Token (design.md §10).
+func (h *Handler) GetAffiliation(w http.ResponseWriter, r *http.Request) {
+	st, ok := h.staffelOfRequest(w, r)
+	if !ok {
+		return
+	}
+	claims := auth.ClaimsFromCtx(r.Context())
+	aff, err := h.store.Affiliation(r.Context(), st.ID, claims.UserID)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, aff)
+}
+
 // GetReport liefert den ausgewerteten Bericht einer Begegnung.
 func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.PathID(r, "id")

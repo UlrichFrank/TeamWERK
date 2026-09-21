@@ -551,6 +551,13 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Get("/api/staffeln/{id}/tabelle", h.GameStats.GetTable)
 			r.Get("/api/staffeln/{id}/spielplan", h.GameStats.GetSchedule)
 			r.Get("/api/staffeln/{id}/ranglisten", h.GameStats.GetRanglisten)
+			r.Get("/api/staffeln/{id}/kreuztabelle", h.GameStats.GetCrossTable)
+			r.Get("/api/staffeln/{id}/tabellenverlauf", h.GameStats.GetProgression)
+			r.Get("/api/staffeln/{id}/teamstatistik", h.GameStats.GetTeamStats)
+			r.Get("/api/staffeln/{id}/schiedsrichter", h.GameStats.GetRefereeStats)
+			// Englisch nach der Namenskonvention für API-Routen, auch wenn die
+			// Ansicht unter einem deutschen Pfad liegt.
+			r.Get("/api/staffeln/{id}/affiliation", h.GameStats.GetAffiliation)
 			r.Get("/api/bwhv-games/{id}/report", h.GameStats.GetReport)
 			r.Get("/api/games/{id}/bwhv-report", h.GameStats.GetReportForOwnGame)
 			r.Get("/api/bwhv-reports/{id}/pdf", h.GameStats.GetReportPDF)
