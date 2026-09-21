@@ -302,8 +302,14 @@ export default function TerminePage() {
     ? terminLoadWindow(season, showPast)
     : { from: today, to: today }
 
-  const load = () => {
-    setLoading(true)
+  // `silent`: Reload ohne Loading-Placeholder. Nötig für den SSE-Echo der
+  // eigenen Zu-/Absage — `setLoading(true)` ersetzt die ganze Liste durch eine
+  // Textzeile, der <main>-Scrollcontainer kollabiert dabei und der Browser
+  // klemmt scrollTop auf 0. Nach dem Reload steht man oben statt beim Termin,
+  // den man gerade beantwortet hat. Der nicht-stille Pfad bleibt für Mount und
+  // „Vergangene"-Toggle, wo das Fenster (from/to) sich wirklich ändert.
+  const load = (silent = false) => {
+    if (!silent) setLoading(true)
     Promise.all([
       api.get(`/training-sessions?from=${from}&to=${to}&limit=500`),
       api.get(`/games/my?from=${from}&to=${to}`),
@@ -338,7 +344,7 @@ export default function TerminePage() {
     // load kapselt from/to (aus showPast + season), soll nur bei deren Wechsel neu laufen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showPast, season])
-  useLiveUpdates((event) => { if (event === 'trainings' || event === 'games' || event === 'event-note') load() })
+  useLiveUpdates((event) => { if (event === 'trainings' || event === 'games' || event === 'event-note') load(true) })
 
   const visibleTermine = termine.filter(t => {
     if (focus && t.kind === focus.kind && t.data.id === focus.id) return true

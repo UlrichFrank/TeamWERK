@@ -741,10 +741,14 @@ export default function MitfahrgelegenheitenPage() {
   }, [])
   useLiveUpdates((event) => { if (event === 'mitfahrgelegenheiten') load(true) })
 
+  // Alle vier Mutationen laden still nach: `load()` ohne Flag setzt `loading`
+  // und ersetzt die Liste durch das Skeleton — der Scrollcontainer kollabiert,
+  // scrollTop wird auf 0 geklemmt und man landet nach jedem Klick wieder oben.
+  // Der Server broadcastet ohnehin, der Echo läuft schon still.
   const handleDelete = async (id: number) => {
     try {
       await api.delete(`/mitfahrgelegenheiten/${id}`)
-      load()
+      load(true)
     } catch {
       alert('Fehler beim Löschen.')
     }
@@ -753,7 +757,7 @@ export default function MitfahrgelegenheitenPage() {
   const handleRequest = async (bieteId: number, sucheId: number) => {
     try {
       await api.post('/mitfahrt-paarungen', { bieteId, sucheId })
-      load()
+      load(true)
     } catch (err: unknown) {
       const status = (err as { response?: { status: number } })?.response?.status
       if (status === 409) {
@@ -767,7 +771,7 @@ export default function MitfahrgelegenheitenPage() {
   const handleConfirm = async (paarungId: number) => {
     try {
       await api.post(`/mitfahrt-paarungen/${paarungId}/confirm`)
-      load()
+      load(true)
     } catch {
       alert('Fehler beim Bestätigen.')
     }
@@ -776,7 +780,7 @@ export default function MitfahrgelegenheitenPage() {
   const handleReject = async (paarungId: number) => {
     try {
       await api.post(`/mitfahrt-paarungen/${paarungId}/reject`)
-      load()
+      load(true)
     } catch {
       alert('Fehler beim Ablehnen.')
     }
