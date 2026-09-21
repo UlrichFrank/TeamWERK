@@ -4,6 +4,7 @@ import { Home, Plane, Calendar, UserCheck, History, Users } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
+import { AUDIENCE_FILTER_FUNCTIONS } from '../lib/audience'
 import TeamFilter from '../components/TeamFilter'
 import EventSearchInput from '../components/EventSearchInput'
 import FilterEmptyState from '../components/FilterEmptyState'
@@ -67,7 +68,6 @@ function formatDate(iso: string): string {
 }
 
 const ALL_TYPES = new Set(['heim', 'auswärts', 'generisch'])
-const AUDIENCE_FILTER_FUNCTIONS = ['vorstand', 'vorstand_beisitzer', 'trainer', 'sportliche_leitung']
 
 function parseFilters(sp: URLSearchParams) {
   // Kommaseparierte ID-Liste (`team=3,7`); ein einzelnes `team=3` bleibt gültig.

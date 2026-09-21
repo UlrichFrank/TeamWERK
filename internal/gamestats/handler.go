@@ -60,7 +60,13 @@ func (h *Handler) ListStaffeln(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
-	list, err := h.store.ListStaffelnWithTeam(ctx, seasonID)
+	// audience=own: nur die Staffeln der eigenen Mannschaften (Filter "Nur
+	// Audience" der Oberfläche). Ohne den Parameter sieht jeder alle Staffeln.
+	ownUserID := 0
+	if r.URL.Query().Get("audience") == "own" {
+		ownUserID = auth.ClaimsFromCtx(ctx).UserID
+	}
+	list, err := h.store.ListStaffelnWithTeam(ctx, seasonID, ownUserID)
 	if err != nil {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return

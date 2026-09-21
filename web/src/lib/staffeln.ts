@@ -222,7 +222,9 @@ export interface ReportDetail {
   events: EventLine[]
 }
 
-export const fetchStaffeln = () => api.get<Staffel[]>('/staffeln').then((r) => r.data)
+/** audienceOwn: nur die Staffeln der eigenen Mannschaften ("Nur Audience"). */
+export const fetchStaffeln = (audienceOwn = false) =>
+  api.get<Staffel[]>('/staffeln', { params: audienceOwn ? { audience: 'own' } : undefined }).then((r) => r.data)
 
 /** Löst alle Staffelcodes der Saison auf und ruft die Spielpläne ab. */
 export const syncStaffeln = () => api.post('/staffeln/sync').then((r) => r.data)

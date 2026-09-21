@@ -149,7 +149,10 @@ func (s *Store) StaffelByID(ctx context.Context, id, seasonID int) (*Staffel, er
 //
 // Polled=false heißt deshalb "zugeordnet, aber noch nichts abgerufen" und ist
 // ein anzeigbarer Zustand, kein Fehler.
-func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID int) ([]staffelResponse, error) {
+func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID, ownUserID int) ([]staffelResponse, error) {
+	// ownUserID > 0 schränkt auf die Mannschaften ein, zu denen der Nutzer selbst
+	// gehört (Spieler, Eltern, Trainer, erweiterter Kader) — die "Audience" wie
+	// auf /dienste. 0 heißt: alle Staffeln des Vereins.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT COALESCE(st.id, 0), k.staffel, COALESCE(st.name, ''),
 		       COALESCE(t.name, ''), COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), k.id,
@@ -161,7 +164,9 @@ func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID int) ([]staff
 		   AND k.kind = 'team'
 		   AND k.staffel IS NOT NULL
 		   AND TRIM(k.staffel) <> ''
-		 ORDER BY t.name, k.staffel`, seasonID)
+		   AND (? = 0 OR k.team_id IN (
+		         SELECT team_id FROM user_accessible_teams WHERE user_id = ? AND season_id = k.season_id))
+		 ORDER BY t.name, k.staffel`, seasonID, ownUserID, ownUserID)
 	if err != nil {
 		return nil, err
 	}

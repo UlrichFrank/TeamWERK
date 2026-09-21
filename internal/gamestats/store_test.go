@@ -147,7 +147,7 @@ func TestListStaffelnWithTeam_ZeigtZuordnungOhneAbruf(t *testing.T) {
 	}
 	// Bewusst KEINE bwhv_staffeln-Zeile: es lief noch kein Abruf.
 
-	list, err := NewStore(db).ListStaffelnWithTeam(context.Background(), seasonID)
+	list, err := NewStore(db).ListStaffelnWithTeam(context.Background(), seasonID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestListStaffelnWithTeam_PolledNachAbruf(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list, err := s.ListStaffelnWithTeam(context.Background(), seasonID)
+	list, err := s.ListStaffelnWithTeam(context.Background(), seasonID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestListStaffelnWithTeam_OhneZuordnungLeer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	list, err := NewStore(db).ListStaffelnWithTeam(context.Background(), seasonID)
+	list, err := NewStore(db).ListStaffelnWithTeam(context.Background(), seasonID, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
