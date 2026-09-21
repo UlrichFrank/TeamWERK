@@ -26,26 +26,26 @@
 ## 4. Frontend: Datenschicht
 
 - [x] 4.1 Typen und Fetch-Funktionen in `web/src/lib/staffeln.ts` für die fünf neuen Routen; `PlayerStat` um `games`/`sevenMMissed` erweitern. Verifikation: `pnpm -C web build` grün (Typprüfung).
-- [ ] 4.2 Reiter-Definitionen in `StaffelnPage.tsx` auf neun erweitern, Reiterleiste horizontal scrollbar, gewählter Reiter weiter in der Adresse; Nachladen bei `bwhv-updated` deckt die neuen Daten mit ab. Verifikation: Vitest-Test prüft, dass ein `?tab=`-Parameter den zugehörigen Reiter rendert.
+- [x] 4.2 Reiter-Definitionen in `StaffelnPage.tsx` auf neun erweitern, Reiterleiste horizontal scrollbar, gewählter Reiter weiter in der Adresse; Nachladen bei `bwhv-updated` deckt die neuen Daten mit ab. Verifikation: Vitest-Test prüft, dass ein `?tab=`-Parameter den zugehörigen Reiter rendert.
 
 ## 5. Frontend: Kreuztabelle und Fieberkurve
 
-- [ ] 5.1 Komponente `CrossTable`: Heim in der Zeile, Gast in der Spalte, gedrehte Spaltenköpfe, erste Spalte fixiert, `overflow-x-auto`, Diagonale leer, nur `brand-*`-Tokens. Verifikation: Vitest-Test prüft Endstand-Zelle, Datums-Zelle und leere Diagonale.
-- [ ] 5.2 Komponente `StandingsChart` als Inline-SVG: `<polyline>` je Mannschaft, Y-Achse invertiert (Rang 1 oben), Spieltage auf der X-Achse, Legende darunter mit Hervorhebung bei Hover, auf Mobile scrollbar. Verifikation: Vitest-Test prüft eine Polyline je Mannschaft und die Invertierung (Rang 1 hat das kleinere Y).
-- [ ] 5.3 Beide Komponenten in die Reiter einhängen, Leerzustand („noch nichts abgerufen") je Reiter. Verifikation: Vitest-Test prüft den Hinweis bei `polled=false` statt einer leeren Tabelle.
+- [x] 5.1 Komponente `CrossTable`: Heim in der Zeile, Gast in der Spalte, gedrehte Spaltenköpfe, erste Spalte fixiert, `overflow-x-auto`, Diagonale leer, nur `brand-*`-Tokens. Verifikation: Vitest-Test prüft Endstand-Zelle, Datums-Zelle und leere Diagonale.
+- [x] 5.2 Komponente `StandingsChart` als Inline-SVG: `<polyline>` je Mannschaft, Y-Achse invertiert (Rang 1 oben), Spieltage auf der X-Achse, Legende darunter mit Hervorhebung bei Hover, auf Mobile scrollbar. Verifikation: Vitest-Test prüft eine Polyline je Mannschaft und die Invertierung (Rang 1 hat das kleinere Y).
+- [x] 5.3 Beide Komponenten in die Reiter einhängen, Leerzustand („noch nichts abgerufen") je Reiter. Verifikation: Vitest-Test prüft den Hinweis bei `polled=false` statt einer leeren Tabelle.
 
-- [ ] 5.4 Hervorhebung in Kreuztabelle (Zeile **und** Spalte der eigenen Mannschaft) und Verlauf (doppelte Strichstärke der eigenen Linie), jeweils `font-semibold` + `brand-table-select` + `aria-current` (design.md §11). Verifikation: Vitest-Test prüft die Markierung beider Achsen und die stärkere Linie.
+- [x] 5.4 Hervorhebung in Kreuztabelle (Zeile **und** Spalte der eigenen Mannschaft) und Verlauf (doppelte Strichstärke der eigenen Linie), jeweils `font-semibold` + `brand-table-select` + `aria-current` (design.md §11). Verifikation: Vitest-Test prüft die Markierung beider Achsen und die stärkere Linie.
 
 ## 6. Frontend: Statistik-Reiter
 
-- [ ] 6.1 Reiter Torverhältnis, Angriff, Verteidigung aus `teamstatistik`, jeweils mit Spielzahl und Sortierung wie im Vorbild. Verifikation: Vitest-Test prüft Sortierung nach Differenz bzw. Ø je Spiel.
-- [ ] 6.2 Reiter Fair-Play mit Punktwertung (Blau 4, Rot 3, 2-Min 2, Gelb 1), ausgewiesener Gewichtung und aufsteigender Sortierung; leere Wertung für Mannschaften ohne Bericht. Verifikation: Vitest-Test prüft die aufsteigende Sortierung und die leere Zelle.
-- [ ] 6.3 Reiter Verteilung mit Gini, Median, Ø und kurzer Erläuterung der Spalte. Verifikation: Vitest-Test prüft die Darstellung eines Gini-Werts und der Erläuterung.
-- [ ] 6.4 Reiter Torschützen um „Spiele" erweitern, Reiter 7m-Schützen mit Treffern, Versuchen, Fehlversuchen, Quote und Spielen (nur Spieler mit Versuch). Verifikation: Vitest-Test prüft, dass ein Spieler ohne Versuch in der 7m-Liste fehlt.
-- [ ] 6.5 Reiter Schiedsrichter mit Spielen und Strafen, Kennzeichnung unsicherer Trennung und dem Hinweis, dass die Strafen die des Spiels sind. Verifikation: Vitest-Test prüft die Kennzeichnung bei `uncertain=true`.
+- [x] 6.1 Reiter Torverhältnis, Angriff, Verteidigung aus `teamstatistik`, jeweils mit Spielzahl und Sortierung wie im Vorbild. Verifikation: Vitest-Test prüft Sortierung nach Differenz bzw. Ø je Spiel.
+- [x] 6.2 Reiter Fair-Play mit Punktwertung (Blau 4, Rot 3, 2-Min 2, Gelb 1), ausgewiesener Gewichtung und aufsteigender Sortierung; leere Wertung für Mannschaften ohne Bericht. Verifikation: Vitest-Test prüft die aufsteigende Sortierung und die leere Zelle.
+- [x] 6.3 Reiter Verteilung mit Gini, Median, Ø und kurzer Erläuterung der Spalte. Verifikation: Vitest-Test prüft die Darstellung eines Gini-Werts und der Erläuterung.
+- [x] 6.4 Reiter Torschützen um „Spiele" erweitern, Reiter 7m-Schützen mit Treffern, Versuchen, Fehlversuchen, Quote und Spielen (nur Spieler mit Versuch). Verifikation: Vitest-Test prüft, dass ein Spieler ohne Versuch in der 7m-Liste fehlt.
+- [x] 6.5 Reiter Schiedsrichter mit Spielen und Strafen, Kennzeichnung unsicherer Trennung und dem Hinweis, dass die Strafen die des Spiels sind. Verifikation: Vitest-Test prüft die Kennzeichnung bei `uncertain=true`.
 
-- [ ] 6.6 Gemeinsamer Helfer für die Hervorhebung (`font-semibold` + `brand-table-select` + `aria-current="true"`) und Einsatz in **allen** Reitern inklusive Tabellenstand und Spielplan. Verifikation: Vitest-Test je Reiter prüft, dass genau die eigene Zeile markiert ist; ein Test prüft, dass ohne Zugehörigkeit keine Zeile markiert ist.
-- [ ] 6.7 Prüfen, dass die Hervorhebung von einer bereits fett gesetzten Wertspalte unterscheidbar bleibt (Torschützen, Angriff, Fair-Play). Verifikation: Vitest-Test belegt, dass die markierte Zeile zusätzlich zur Schriftstärke die Zeilenmarkierung trägt.
+- [x] 6.6 Gemeinsamer Helfer für die Hervorhebung (`font-semibold` + `brand-table-select` + `aria-current="true"`) und Einsatz in **allen** Reitern inklusive Tabellenstand und Spielplan. Verifikation: Vitest-Test je Reiter prüft, dass genau die eigene Zeile markiert ist; ein Test prüft, dass ohne Zugehörigkeit keine Zeile markiert ist.
+- [x] 6.7 Prüfen, dass die Hervorhebung von einer bereits fett gesetzten Wertspalte unterscheidbar bleibt (Torschützen, Angriff, Fair-Play). Verifikation: Vitest-Test belegt, dass die markierte Zeile zusätzlich zur Schriftstärke die Zeilenmarkierung trägt.
 
 ## 7. Abschluss
 

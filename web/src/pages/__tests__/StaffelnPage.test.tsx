@@ -39,16 +39,70 @@ const games = [
 
 const stats = [
   { playerId: 1, memberId: 3, name: 'Alpha Spieler', teamName: 'Verein A', games: 2, goals: 12,
-    sevenMAttempts: 4, sevenMGoals: 3, twoMin: 1, warnings: 0, disq: 0, fairPlayScore: 1 },
+    sevenMAttempts: 4, sevenMGoals: 3, sevenMMissed: 1, twoMin: 1, warnings: 0, disq: 0, fairPlayScore: 1 },
   { playerId: 2, memberId: null, name: 'Beta Spieler', teamName: 'Verein B', games: 2, goals: 5,
-    sevenMAttempts: 0, sevenMGoals: 0, twoMin: 0, warnings: 2, disq: 0, fairPlayScore: 1 },
+    sevenMAttempts: 0, sevenMGoals: 0, sevenMMissed: 0, twoMin: 0, warnings: 2, disq: 0, fairPlayScore: 1 },
 ]
 
-function mockAll() {
+const cross = {
+  teams: ['Verein A', 'Verein B'],
+  rows: [
+    {
+      team: 'Verein A',
+      cells: [null, { bwhvGameId: 5, played: true, homeGoals: 29, guestGoals: 25, date: '' }],
+    },
+    {
+      team: 'Verein B',
+      cells: [{ bwhvGameId: 6, played: false, homeGoals: null, guestGoals: null, date: '2026-10-04' }, null],
+    },
+  ],
+}
+
+const progression = [
+  {
+    date: '2026-09-20',
+    entries: [
+      { team: 'Verein A', rank: 1, points: 2, games: 1, goalsFor: 29, goalDiff: 4 },
+      { team: 'Verein B', rank: 2, points: 0, games: 1, goalsFor: 25, goalDiff: -4 },
+    ],
+  },
+]
+
+const teamStats = {
+  fairPlayWeights: { yellow: 1, twoMin: 2, red: 3, blue: 4 },
+  teams: [
+    { team: 'Verein A', games: 2, goalsFor: 58, goalsAgainst: 44, goalDiff: 14,
+      reportGames: 1, twoMin: 1, yellow: 2, red: 0, blue: 0, fairPlayScore: 4,
+      distribution: { players: 5, average: 5.8, median: 4, gini: 0.31 } },
+    { team: 'Verein B', games: 2, goalsFor: 44, goalsAgainst: 58, goalDiff: -14,
+      reportGames: 0, twoMin: 0, yellow: 0, red: 0, blue: 0, fairPlayScore: null,
+      distribution: null },
+  ],
+}
+
+const referees = [
+  { name: 'Max Mustermann', games: 2, twoMin: 6, yellow: 2, red: 0, blue: 0, uncertain: false },
+  { name: 'Peter Müller', games: 1, twoMin: 3, yellow: 1, red: 0, blue: 0, uncertain: true },
+]
+
+// Der Nutzer gehört zu Verein A und ist dort selbst Spieler 1.
+const affiliation = { teamNames: ['Verein A'], playerIds: [1] }
+
+function mockStats(aff = affiliation) {
+  mock.onGet(/\/staffeln\/\d+\/kreuztabelle/).reply(200, cross)
+  mock.onGet(/\/staffeln\/\d+\/tabellenverlauf/).reply(200, progression)
+  mock.onGet(/\/staffeln\/\d+\/teamstatistik/).reply(200, teamStats)
+  mock.onGet(/\/staffeln\/\d+\/schiedsrichter/).reply(200, referees)
+  mock.onGet(/\/staffeln\/\d+\/affiliation/).reply(200, aff)
+}
+
+function mockAll(aff = affiliation) {
   mock.onGet('/staffeln').reply(200, staffeln)
-  mock.onGet(/\/staffeln\/\d+\/tabelle/).reply(200, table)
+  mock.onGet(/\/staffeln\/\d+\/tabelle$/).reply(200, table)
+  mock.onGet(/\/staffeln\/\d+\/tabellenverlauf/).reply(200, progression)
   mock.onGet(/\/staffeln\/\d+\/spielplan/).reply(200, games)
   mock.onGet(/\/staffeln\/\d+\/ranglisten/).reply(200, stats)
+  mockStats(aff)
 }
 
 const ctx = (caps: string[]): AuthCtx => ({
@@ -106,12 +160,182 @@ describe('StaffelnPage', () => {
     expect(screen.getByText(/eigenes Spiel/)).toBeInTheDocument()
   })
 
-  test('Ranglisten sortieren nach Toren und zeigen die Siebenmeter-Quote', async () => {
+  test('Ranglisten sortieren nach Toren und weisen Spiele aus', async () => {
     mockAll()
     setup('/staffeln?tab=ranglisten')
     await waitFor(() => expect(screen.getByText('Torschützen')).toBeInTheDocument())
-    expect(screen.getByText('12 Tore')).toBeInTheDocument()
-    expect(screen.getByText('75 % (3/4)')).toBeInTheDocument()
+    expect(screen.getByText('12 Tore in 2 Spielen')).toBeInTheDocument()
+  })
+
+  // Die Siebenmeter-Rangliste ist eigenständig: nach Treffern sortiert, mit
+  // Fehlversuchen, und ohne Spieler, die nie geworfen haben.
+  test('Siebenmeter-Rangliste zeigt Fehlversuche und lässt Spieler ohne Versuch weg', async () => {
+    mockAll()
+    setup('/staffeln?tab=ranglisten')
+    await waitFor(() => expect(screen.getByText('Siebenmeter')).toBeInTheDocument())
+    expect(screen.getByText(/3\/4 · 1 daneben · 75 %/)).toBeInTheDocument()
+    // Beta Spieler hat keinen Versuch und steht deshalb nur in der
+    // Torschützenliste, nicht in der Siebenmeter-Liste.
+    expect(screen.getAllByText('Beta Spieler')).toHaveLength(2)
+  })
+
+  // Der gewählte Reiter steht in der Adresse: derselbe Aufruf zeigt dieselbe
+  // Darstellung.
+  test.each([
+    ['kreuztabelle', /Zeile = Heimmannschaft/],
+    ['verlauf', 'Verein A'],
+    ['tore', /Torverhältnis/],
+    ['fairplay', /Fair-Play/],
+    ['verteilung', /Torverteilung/],
+    ['schiedsrichter', /Strafen des Spiels/],
+  ])('der Reiter %s wird aus der Adresse gewählt', async (tab, marker) => {
+    mockAll()
+    setup(`/staffeln?tab=${tab}`)
+    await waitFor(() => expect(screen.getAllByText(marker).length).toBeGreaterThan(0))
+  })
+
+  // Der Verlauf ist eine Grafik: er wird über sein Label gefunden, nicht über
+  // Text.
+  test('der Reiter verlauf zeigt die Grafik', async () => {
+    mockAll()
+    setup('/staffeln?tab=verlauf')
+    await waitFor(() => expect(screen.getByRole('img', { name: /Platzierungsverlauf/ })).toBeInTheDocument())
+  })
+
+  describe('Kreuztabelle', () => {
+    test('zeigt Endstand, Datum und eine leere Diagonale', async () => {
+      mockAll()
+      setup('/staffeln?tab=kreuztabelle')
+      await waitFor(() => expect(screen.getByText('29:25')).toBeInTheDocument())
+      // Noch nicht gespielt: die Zelle trägt das angesetzte Datum.
+      expect(screen.getByText('04.10.')).toBeInTheDocument()
+      // Die Diagonale ist leer und für Hilfsmittel ausgeblendet.
+      const hidden = document.querySelectorAll('td[aria-hidden="true"]')
+      expect(hidden).toHaveLength(2)
+    })
+
+    // In einer Matrix ist die eigene Mannschaft auf beiden Achsen vertreten;
+    // nur eine zu markieren versteckte ihre Auswärtsspiele.
+    test('markiert Zeile und Spalte der eigenen Mannschaft', async () => {
+      mockAll()
+      setup('/staffeln?tab=kreuztabelle')
+      await waitFor(() => expect(screen.getByText('29:25')).toBeInTheDocument())
+      const marked = document.querySelectorAll('[aria-current="true"]')
+      // Ein Spaltenkopf, eine Zeile — beide Achsen sind ausgezeichnet.
+      expect(marked.length).toBeGreaterThanOrEqual(2)
+    })
+  })
+
+  describe('Tabellenverlauf', () => {
+    test('zeichnet eine Linie je Mannschaft mit Rang 1 oben', async () => {
+      mockAll()
+      setup('/staffeln?tab=verlauf')
+      // Auf data-team eingegrenzt: die Reiter-Icons von lucide bringen eigene
+      // <polyline>-Elemente mit.
+      await waitFor(() => expect(document.querySelectorAll('polyline[data-team]')).toHaveLength(2))
+      const lines = Array.from(document.querySelectorAll('polyline[data-team]'))
+      const yOf = (el: Element) => Number(el.getAttribute('points')!.split(',')[1].split(' ')[0])
+      const rang1 = lines.find((l) => l.getAttribute('data-team') === 'Verein A')!
+      const rang2 = lines.find((l) => l.getAttribute('data-team') === 'Verein B')!
+      expect(yOf(rang1)).toBeLessThan(yOf(rang2))
+    })
+
+    test('die eigene Linie ist doppelt so stark', async () => {
+      mockAll()
+      setup('/staffeln?tab=verlauf')
+      await waitFor(() => expect(document.querySelectorAll('polyline[data-team]')).toHaveLength(2))
+      const own = document.querySelector('polyline[data-team][data-own]')!
+      const other = document.querySelector('polyline[data-team]:not([data-own])')!
+      expect(Number(own.getAttribute('stroke-width'))).toBeGreaterThan(
+        Number(other.getAttribute('stroke-width')),
+      )
+    })
+  })
+
+  describe('Mannschafts-Statistiken', () => {
+    test('Tore sortieren nach Differenz und weisen die Spielzahl aus', async () => {
+      mockAll()
+      setup('/staffeln?tab=tore')
+      await waitFor(() => expect(screen.getByText('Torverhältnis')).toBeInTheDocument())
+      expect(screen.getByText('+14')).toBeInTheDocument()
+      expect(screen.getByText('Bester Angriff')).toBeInTheDocument()
+      expect(screen.getByText('Beste Verteidigung')).toBeInTheDocument()
+    })
+
+    // Eine Mannschaft ohne Bericht ist nicht straffrei, sondern unbekannt —
+    // sie darf nicht mit 0 an die Spitze der aufsteigenden Wertung.
+    test('Fair-Play weist die Gewichtung aus und lässt Mannschaften ohne Bericht leer', async () => {
+      mockAll()
+      setup('/staffeln?tab=fairplay')
+      await waitFor(() => expect(screen.getByText(/Gewichtung: Gelb 1, 2 min 2, Rot 3, Blau 4/)).toBeInTheDocument())
+      expect(screen.getByText(/Ohne Wertung.*Verein B/)).toBeInTheDocument()
+    })
+
+    test('Verteilung zeigt Gini mit Erläuterung', async () => {
+      mockAll()
+      setup('/staffeln?tab=verteilung')
+      await waitFor(() => expect(screen.getByText('Torverteilung')).toBeInTheDocument())
+      expect(screen.getByText(/Gini-Wert misst die Ungleichverteilung/)).toBeInTheDocument()
+      expect(screen.getByText('0,31')).toBeInTheDocument()
+    })
+  })
+
+  describe('Schiedsrichter', () => {
+    test('kennzeichnet eine unsichere Trennung und nennt den Bezug der Strafen', async () => {
+      mockAll()
+      setup('/staffeln?tab=schiedsrichter')
+      await waitFor(() => expect(screen.getByText('Max Mustermann')).toBeInTheDocument())
+      expect(screen.getByText(/keine Bewertung der Person/)).toBeInTheDocument()
+      expect(screen.getAllByText('Trennung unsicher')).toHaveLength(1)
+    })
+  })
+
+  describe('Hervorhebung der eigenen Zugehörigkeit', () => {
+    test.each(['tabelle', 'spielplan', 'tore', 'fairplay', 'verteilung', 'ranglisten'])(
+      'markiert im Reiter %s genau die eigene Zeile', async (tab) => {
+        mockAll()
+        setup(`/staffeln?tab=${tab}`)
+        await waitFor(() =>
+          expect(
+            Array.from(document.querySelectorAll('[aria-current="true"]'))
+              .filter((el) => el.tagName !== 'BUTTON').length,
+          ).toBeGreaterThan(0))
+        // Der gewählte Reiter trägt selbst aria-current; alles darüber hinaus
+        // ist die Hervorhebung der eigenen Zeile.
+        const marked = Array.from(document.querySelectorAll('[aria-current="true"]'))
+          .filter((el) => el.tagName !== 'BUTTON')
+        expect(marked.length).toBeGreaterThan(0)
+        marked.forEach((el) => expect(el.className).toContain('bg-brand-table-select'))
+      },
+    )
+
+    // Die Auszeichnung muss von einer ohnehin fett gesetzten Wertspalte
+    // unterscheidbar bleiben — deshalb trägt die Zeile zusätzlich die
+    // Zeilenmarkierung, nicht nur den Schriftschnitt.
+    test('die markierte Zeile trägt Schriftschnitt UND Zeilenmarkierung', async () => {
+      mockAll()
+      setup('/staffeln?tab=ranglisten')
+      await waitFor(() =>
+        expect(
+          Array.from(document.querySelectorAll('[aria-current="true"]'))
+            .filter((el) => el.tagName !== 'BUTTON').length,
+        ).toBeGreaterThan(0))
+      const marked = Array.from(document.querySelectorAll('[aria-current="true"]'))
+        .filter((el) => el.tagName !== 'BUTTON')
+      marked.forEach((el) => {
+        expect(el.className).toContain('font-semibold')
+        expect(el.className).toContain('bg-brand-table-select')
+      })
+    })
+
+    test('ohne Zugehörigkeit ist keine Zeile markiert', async () => {
+      mockAll({ teamNames: [], playerIds: [] })
+      setup('/staffeln?tab=tabelle')
+      await waitFor(() => expect(screen.getByText('Verein A')).toBeInTheDocument())
+      const marked = Array.from(document.querySelectorAll('[aria-current="true"]'))
+        .filter((el) => el.tagName !== 'BUTTON')
+      expect(marked).toHaveLength(0)
+    })
   })
 
   test('ohne zugeordnete Staffel erscheint ein Hinweis statt einer leeren Seite', async () => {
@@ -198,9 +422,10 @@ describe('StaffelnPage', () => {
   test('Live-Update lädt auch die Zuordnungsliste nach', async () => {
     mock.onGet('/staffeln').replyOnce(200, staffelnOhneAbruf)
     mock.onGet('/staffeln').reply(200, staffeln)
-    mock.onGet(/\/staffeln\/\d+\/tabelle/).reply(200, table)
+    mock.onGet(/\/staffeln\/\d+\/tabelle$/).reply(200, table)
     mock.onGet(/\/staffeln\/\d+\/spielplan/).reply(200, games)
     mock.onGet(/\/staffeln\/\d+\/ranglisten/).reply(200, stats)
+    mockStats()
 
     setup()
     await waitFor(() => expect(screen.getByText(/noch nichts beim Verband abgerufen/)).toBeInTheDocument())
