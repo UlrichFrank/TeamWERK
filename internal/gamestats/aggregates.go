@@ -655,3 +655,94 @@ func (s *Store) RefereeStats(ctx context.Context, staffelID int) ([]RefereeStat,
 	})
 	return out, nil
 }
+
+// Affiliation ist die Zugehörigkeit eines Nutzers zu einer Staffel: welche
+// Mannschaften der Staffel seine sind und welche Spielerzeilen ihm gehören.
+//
+// Eigene Route und eigener Typ, nicht in jede Statistik-Antwort gemischt: die
+// vier Statistik-Routen bleiben damit nutzerunabhängig. Sonst hinge jede
+// Antwort am Token, wäre pro Nutzer verschieden und jeder Statistik-Test
+// müsste die Zugehörigkeit mit auswerten (design.md §10).
+type Affiliation struct {
+	TeamNames []string `json:"teamNames"`
+	PlayerIDs []int    `json:"playerIds"`
+}
+
+// Affiliation löst die eigene Zugehörigkeit zu einer Staffel auf.
+//
+// Die Mannschaft wird ABGELEITET, nicht über einen Namensvergleich geraten:
+// bwhv_games.home_team trägt die Schreibweise des Verbands ("Team Stuttgart
+// 2"), teams.name die des Vereins. Ein Namensabgleich müsste Vereinsnamen,
+// Mannschaftsnummer und Suffixe aufeinander abbilden — internal/h4aimport tut
+// das für den Spielimport und braucht dafür eigene Regeln. Die Maschinerie
+// hier zu wiederholen hieße, dieselbe Ratearbeit an zweiter Stelle zu pflegen,
+// und ein Fehlschluss wäre unsichtbar: hervorgehoben wäre die falsche Zeile,
+// und nichts würde widersprechen.
+//
+// Stattdessen liefert die Verknüpfung die Antwort umsonst: eine Begegnung mit
+// bwhv_games.game_id IST ein eigenes Spiel, games.is_home sagt die Seite,
+// game_teams die Mannschaft.
+//
+// PREIS: ohne eine einzige verknüpfte Begegnung gibt es keine Hervorhebung
+// (Saisonbeginn, bevor ein eigener Termin importiert ist). Das ist gewollt —
+// eine fehlende Markierung fällt auf, eine falsche nicht.
+func (s *Store) Affiliation(ctx context.Context, staffelID, userID int) (*Affiliation, error) {
+	out := &Affiliation{TeamNames: []string{}, PlayerIDs: []int{}}
+
+	// user_accessible_teams fasst Stammkader, erweiterten Kader, Trainer und
+	// Eltern schon zusammen — genau die Menge, die die Anforderung nennt. Die
+	// Saison kommt aus der Staffel, nicht aus der aktiven: beide sind hier
+	// dieselbe (staffelOfRequest lässt nur Staffeln der aktiven Saison durch),
+	// und der Bezug auf die Staffel macht das unabhängig davon richtig.
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT CASE WHEN own.is_home = 1 THEN bg.home_team ELSE bg.guest_team END
+		  FROM bwhv_games bg
+		  JOIN bwhv_staffeln st ON st.id = bg.staffel_id
+		  JOIN games own ON own.id = bg.game_id
+		  JOIN game_teams gt ON gt.game_id = own.id
+		  JOIN user_accessible_teams uat
+		    ON uat.team_id = gt.team_id AND uat.season_id = st.season_id
+		 WHERE bg.staffel_id = ? AND uat.user_id = ?`, staffelID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		if name != "" {
+			out.TeamNames = append(out.TeamNames, name)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	sort.Strings(out.TeamNames)
+
+	// Die eigenen Spielerzeilen sind der einfache Teil: bwhv_players.member_id
+	// ist für eigene Spieler schon gesetzt. Abgeglichen wird gegen die
+	// Mitglieder des Accounts plus die Kinder über family_links — dieselbe
+	// Menge, die dutyfairness und attendance.canSeeMemberStats heranziehen.
+	prows, err := s.db.QueryContext(ctx, `
+		SELECT p.id
+		  FROM bwhv_players p
+		 WHERE p.staffel_id = ?
+		   AND p.member_id IS NOT NULL
+		   AND (p.member_id IN (SELECT id FROM members WHERE user_id = ?)
+		     OR p.member_id IN (SELECT member_id FROM family_links WHERE parent_user_id = ?))
+		 ORDER BY p.id`, staffelID, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer prows.Close()
+	for prows.Next() {
+		var id int
+		if err := prows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out.PlayerIDs = append(out.PlayerIDs, id)
+	}
+	return out, prows.Err()
+}

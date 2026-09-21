@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+
+	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
 // seedGame legt eine Begegnung an. Ein nil-Ergebnis heißt "noch nicht
@@ -541,5 +543,190 @@ func TestRefereeStats_UnsichereTrennungGekennzeichnet(t *testing.T) {
 		if !st.Uncertain {
 			t.Errorf("%s: nicht als unsicher gekennzeichnet", st.Name)
 		}
+	}
+}
+
+// linkOwnGame verknüpft eine BWHV-Begegnung mit einem eigenen Spieltermin —
+// genau die Verknüpfung, aus der die Zugehörigkeit abgeleitet wird.
+func linkOwnGame(t *testing.T, db *sql.DB, bwhvGameID, seasonID, teamID int, isHome bool) {
+	t.Helper()
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2026-09-20")
+	home := 0
+	if isHome {
+		home = 1
+	}
+	if _, err := db.Exec(`UPDATE games SET is_home = ? WHERE id = ?`, home, gameID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE bwhv_games SET game_id = ? WHERE id = ?`, gameID, bwhvGameID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// addToKader hängt ein Mitglied als Spieler an den Kader.
+func addToKader(t *testing.T, db *sql.DB, kaderID, memberID int) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?,?)`,
+		kaderID, memberID); err != nil {
+		t.Fatalf("kader_members: %v", err)
+	}
+}
+
+// Ein Spieler sieht seine Mannschaft und sich selbst. Die Mannschaft kommt aus
+// der Verknüpfung, nicht aus einem Namensvergleich: der Vereinsname
+// ("B-Jugend") und der Verbandsname ("Team Stuttgart 2") haben nichts
+// gemeinsam.
+func TestAffiliation_SpielerSiehtMannschaftUndSichSelbst(t *testing.T) {
+	db, s, seasonID, staffelID := newStaffel(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	teamID := testutil.CreateTeam(t, db, "B-Jugend")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	addToKader(t, db, kaderID, memberID)
+
+	bwhvGameID := seedResult(t, db, staffelID, "1", "2026-09-20", "Team Stuttgart 2", "Fremd", intp(10), intp(8))
+	linkOwnGame(t, db, bwhvGameID, seasonID, teamID, true)
+
+	var playerID int
+	if err := db.QueryRow(`INSERT INTO bwhv_players (staffel_id, team_name, name, member_id)
+		VALUES (?,?,?,?) RETURNING id`, staffelID, "Team Stuttgart 2", "Anna", memberID).Scan(&playerID); err != nil {
+		t.Fatal(err)
+	}
+
+	aff, err := s.Affiliation(context.Background(), staffelID, userID)
+	if err != nil {
+		t.Fatalf("Affiliation: %v", err)
+	}
+	if len(aff.TeamNames) != 1 || aff.TeamNames[0] != "Team Stuttgart 2" {
+		t.Errorf("TeamNames = %#v, erwartet [Team Stuttgart 2]", aff.TeamNames)
+	}
+	if len(aff.PlayerIDs) != 1 || aff.PlayerIDs[0] != playerID {
+		t.Errorf("PlayerIDs = %#v, erwartet [%d]", aff.PlayerIDs, playerID)
+	}
+}
+
+// Auswärts steht die eigene Mannschaft auf der Gastseite — games.is_home sagt,
+// welche.
+func TestAffiliation_AuswaertsspielLiefertGastseite(t *testing.T) {
+	db, s, seasonID, staffelID := newStaffel(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	teamID := testutil.CreateTeam(t, db, "B-Jugend")
+	addToKader(t, db, testutil.CreateKader(t, db, teamID, seasonID), memberID)
+
+	bwhvGameID := seedResult(t, db, staffelID, "1", "2026-09-20", "Fremd", "Team Stuttgart 2", intp(10), intp(8))
+	linkOwnGame(t, db, bwhvGameID, seasonID, teamID, false)
+
+	aff, err := s.Affiliation(context.Background(), staffelID, userID)
+	if err != nil {
+		t.Fatalf("Affiliation: %v", err)
+	}
+	if len(aff.TeamNames) != 1 || aff.TeamNames[0] != "Team Stuttgart 2" {
+		t.Errorf("TeamNames = %#v, erwartet [Team Stuttgart 2]", aff.TeamNames)
+	}
+}
+
+// Eltern bekommen Mannschaft UND Spielerzeilen ihres Kindes.
+func TestAffiliation_ElternteilSiehtKind(t *testing.T) {
+	db, s, seasonID, staffelID := newStaffel(t)
+	parentID := testutil.CreateUser(t, db, "standard")
+	childMemberID := testutil.CreateMember(t, db, 0)
+	if _, err := db.Exec(`INSERT INTO family_links (parent_user_id, member_id) VALUES (?,?)`,
+		parentID, childMemberID); err != nil {
+		t.Fatal(err)
+	}
+	teamID := testutil.CreateTeam(t, db, "B-Jugend")
+	addToKader(t, db, testutil.CreateKader(t, db, teamID, seasonID), childMemberID)
+
+	bwhvGameID := seedResult(t, db, staffelID, "1", "2026-09-20", "Team Stuttgart 2", "Fremd", intp(10), intp(8))
+	linkOwnGame(t, db, bwhvGameID, seasonID, teamID, true)
+	var playerID int
+	if err := db.QueryRow(`INSERT INTO bwhv_players (staffel_id, team_name, name, member_id)
+		VALUES (?,?,?,?) RETURNING id`, staffelID, "Team Stuttgart 2", "Kind", childMemberID).Scan(&playerID); err != nil {
+		t.Fatal(err)
+	}
+
+	aff, err := s.Affiliation(context.Background(), staffelID, parentID)
+	if err != nil {
+		t.Fatalf("Affiliation: %v", err)
+	}
+	if len(aff.TeamNames) != 1 {
+		t.Errorf("TeamNames = %#v, erwartet die Mannschaft des Kindes", aff.TeamNames)
+	}
+	if len(aff.PlayerIDs) != 1 || aff.PlayerIDs[0] != playerID {
+		t.Errorf("PlayerIDs = %#v, erwartet die Zeile des Kindes", aff.PlayerIDs)
+	}
+}
+
+// Trainer und erweiterter Kader sind über user_accessible_teams mit abgedeckt.
+func TestAffiliation_TrainerUndErweiterterKader(t *testing.T) {
+	db, s, seasonID, staffelID := newStaffel(t)
+	teamID := testutil.CreateTeam(t, db, "B-Jugend")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+
+	trainerUser := testutil.CreateUser(t, db, "standard")
+	trainerMember := testutil.CreateMember(t, db, trainerUser)
+	if _, err := db.Exec(`INSERT INTO kader_trainers (kader_id, member_id) VALUES (?,?)`,
+		kaderID, trainerMember); err != nil {
+		t.Fatal(err)
+	}
+	extUser := testutil.CreateUser(t, db, "standard")
+	extMember := testutil.CreateMember(t, db, extUser)
+	if _, err := db.Exec(`INSERT INTO kader_extended_members (kader_id, member_id) VALUES (?,?)`,
+		kaderID, extMember); err != nil {
+		t.Fatal(err)
+	}
+
+	bwhvGameID := seedResult(t, db, staffelID, "1", "2026-09-20", "Team Stuttgart 2", "Fremd", intp(10), intp(8))
+	linkOwnGame(t, db, bwhvGameID, seasonID, teamID, true)
+
+	for name, userID := range map[string]int{"Trainer": trainerUser, "erweiterter Kader": extUser} {
+		aff, err := s.Affiliation(context.Background(), staffelID, userID)
+		if err != nil {
+			t.Fatalf("Affiliation (%s): %v", name, err)
+		}
+		if len(aff.TeamNames) != 1 || aff.TeamNames[0] != "Team Stuttgart 2" {
+			t.Errorf("%s: TeamNames = %#v, erwartet [Team Stuttgart 2]", name, aff.TeamNames)
+		}
+	}
+}
+
+// Ohne verknüpfte Begegnung bleibt die Menge LEER — auch wenn der
+// Mannschaftsname dem eigenen Verein zum Verwechseln ähnlich sieht. Geraten
+// wird nicht.
+func TestAffiliation_KeinNamensvergleich(t *testing.T) {
+	db, s, seasonID, staffelID := newStaffel(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	teamID := testutil.CreateTeam(t, db, "Team Stuttgart 2")
+	addToKader(t, db, testutil.CreateKader(t, db, teamID, seasonID), memberID)
+
+	// Gleicher Name, aber keine Verknüpfung über bwhv_games.game_id.
+	seedResult(t, db, staffelID, "1", "2026-09-20", "Team Stuttgart 2", "Fremd", intp(10), intp(8))
+
+	aff, err := s.Affiliation(context.Background(), staffelID, userID)
+	if err != nil {
+		t.Fatalf("Affiliation: %v", err)
+	}
+	if len(aff.TeamNames) != 0 {
+		t.Errorf("TeamNames = %#v, erwartet leer — ohne Verknüpfung wird nichts geraten", aff.TeamNames)
+	}
+}
+
+// Ein Nutzer ohne Kaderzugehörigkeit bekommt leere Mengen, keinen Fehler.
+func TestAffiliation_OhneZugehoerigkeitLeer(t *testing.T) {
+	db, s, seasonID, staffelID := newStaffel(t)
+	userID := testutil.CreateUser(t, db, "standard")
+	teamID := testutil.CreateTeam(t, db, "B-Jugend")
+	testutil.CreateKader(t, db, teamID, seasonID)
+	bwhvGameID := seedResult(t, db, staffelID, "1", "2026-09-20", "Team Stuttgart 2", "Fremd", intp(10), intp(8))
+	linkOwnGame(t, db, bwhvGameID, seasonID, teamID, true)
+
+	aff, err := s.Affiliation(context.Background(), staffelID, userID)
+	if err != nil {
+		t.Fatalf("Affiliation: %v", err)
+	}
+	if len(aff.TeamNames) != 0 || len(aff.PlayerIDs) != 0 {
+		t.Errorf("Affiliation = %+v, erwartet beide Mengen leer", aff)
 	}
 }
