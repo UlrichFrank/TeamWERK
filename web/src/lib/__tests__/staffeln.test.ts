@@ -11,7 +11,7 @@ const row = (over: Partial<TableRow> = {}): TableRow => ({
 
 const stat = (over: Partial<PlayerStat> = {}): PlayerStat => ({
   playerId: 1, memberId: null, name: 'P', teamName: 'A', games: 1, goals: 0,
-  sevenMAttempts: 0, sevenMGoals: 0, twoMin: 0, warnings: 0, disq: 0,
+  sevenMAttempts: 0, sevenMGoals: 0, sevenMMissed: 0, twoMin: 0, warnings: 0, disq: 0,
   fairPlayScore: 0, ...over,
 })
 

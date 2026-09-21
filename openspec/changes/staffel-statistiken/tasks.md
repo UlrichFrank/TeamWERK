@@ -25,7 +25,7 @@
 
 ## 4. Frontend: Datenschicht
 
-- [ ] 4.1 Typen und Fetch-Funktionen in `web/src/lib/staffeln.ts` für die fünf neuen Routen; `PlayerStat` um `games`/`sevenMMissed` erweitern. Verifikation: `pnpm -C web build` grün (Typprüfung).
+- [x] 4.1 Typen und Fetch-Funktionen in `web/src/lib/staffeln.ts` für die fünf neuen Routen; `PlayerStat` um `games`/`sevenMMissed` erweitern. Verifikation: `pnpm -C web build` grün (Typprüfung).
 - [ ] 4.2 Reiter-Definitionen in `StaffelnPage.tsx` auf neun erweitern, Reiterleiste horizontal scrollbar, gewählter Reiter weiter in der Adresse; Nachladen bei `bwhv-updated` deckt die neuen Daten mit ab. Verifikation: Vitest-Test prüft, dass ein `?tab=`-Parameter den zugehörigen Reiter rendert.
 
 ## 5. Frontend: Kreuztabelle und Fieberkurve
