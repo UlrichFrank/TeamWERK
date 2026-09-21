@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest'
 import {
-  goalRatio, pointsLabel, sevenMeterRate, gameClock,
+  goalRatio, pointsLabel, sevenMeterRate, gameClock, matchesSearch, gameSearchFields,
   type TableRow, type PlayerStat,
 } from '../staffeln'
 
@@ -45,5 +45,29 @@ describe('Spielzeit', () => {
   })
   test('über eine Stunde Spielzeit bleibt minutenbasiert', () => {
     expect(gameClock(3661)).toBe('61:01')
+  })
+})
+
+describe('matchesSearch', () => {
+  test('leere Eingabe trifft alles', () => {
+    expect(matchesSearch(['Verein A'], '   ')).toBe(true)
+  })
+  test('ignoriert Groß-/Kleinschreibung und Umlaute', () => {
+    expect(matchesSearch(['Spvgg Mössing'], 'MOSSING')).toBe(true)
+  })
+  test('alle Wörter müssen vorkommen, in beliebiger Reihenfolge', () => {
+    expect(matchesSearch(['HSG Riet-Weil', 'Sporthalle Nord'], 'nord riet')).toBe(true)
+    expect(matchesSearch(['HSG Riet-Weil'], 'riet nord')).toBe(false)
+  })
+})
+
+describe('gameSearchFields', () => {
+  test('enthält Datum deutsch und die aufgelöste Halle', () => {
+    const f = gameSearchFields({
+      Date: '2026-09-20T00:00:00Z', HomeTeam: 'A', GuestTeam: 'B', HallNumber: '21005', GameNo: '9',
+      Venue: { name: 'Sporthalle Nord', street: 'Weg 1', city: 'Stuttgart', postal_code: '70000' },
+    } as never)
+    expect(f).toContain('20.09.2026')
+    expect(f).toContain('Stuttgart')
   })
 })

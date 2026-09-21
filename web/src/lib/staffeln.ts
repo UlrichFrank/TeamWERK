@@ -268,3 +268,33 @@ export function gameClock(seconds: number): string {
   const s = seconds % 60
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
+
+// --- Freitextsuche --------------------------------------------------------
+
+// Kleinschreibung und ohne Akzente/Umlautpunkte: "Mössing" soll auch über
+// "mossing" gefunden werden, und wer auf dem Handy tippt, setzt selten Umlaute.
+const normalize = (v: string) =>
+  v.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+/**
+ * Freitext: jedes durch Leerraum getrennte Wort der Eingabe muss irgendwo in
+ * den Feldern vorkommen (UND-Verknüpfung, Reihenfolge egal). Eine leere
+ * Eingabe trifft alles.
+ */
+export function matchesSearch(fields: (string | null | undefined)[], query: string): boolean {
+  const words = normalize(query).split(/\s+/).filter(Boolean)
+  if (words.length === 0) return true
+  const haystack = normalize(fields.filter(Boolean).join(' '))
+  return words.every((w) => haystack.includes(w))
+}
+
+/** Durchsuchbare Felder einer Begegnung: Mannschaften, Halle, Datum (ISO und deutsch). */
+export function gameSearchFields(g: ScheduleGame): string[] {
+  const day = g.Date.slice(0, 10)
+  const [y, m, d] = day.split('-')
+  return [
+    g.HomeTeam, g.GuestTeam, g.HallNumber,
+    g.Venue?.name, g.Venue?.street, g.Venue?.city,
+    day, `${d}.${m}.${y}`, g.GameNo,
+  ].filter((f): f is string => !!f)
+}

@@ -199,6 +199,31 @@ describe('StaffelnPage', () => {
     await waitFor(() => expect(screen.queryByText(/Zuschauer:/)).not.toBeInTheDocument())
   })
 
+  test('Freitextsuche filtert Spielplan nach Mannschaft, Halle und Datum', async () => {
+    mockAll()
+    setup('/staffeln?tab=spielplan')
+    const box = await screen.findByLabelText('Suche in Tabelle und Spielplan')
+    await screen.findByText(/Verein C/)
+    fireEvent.change(box, { target: { value: 'verein c' } })
+    expect(screen.queryByText('29:25')).not.toBeInTheDocument()
+    expect(screen.getByText(/Verein C/)).toBeInTheDocument()
+    fireEvent.change(box, { target: { value: 'sporthalle 20.09.2026' } })
+    expect(screen.getByText('29:25')).toBeInTheDocument()
+    expect(screen.queryByText(/Verein C/)).not.toBeInTheDocument()
+    fireEvent.change(box, { target: { value: 'gibtesnicht' } })
+    expect(screen.getByText('Keine Begegnung passt zur Suche.')).toBeInTheDocument()
+  })
+
+  test('Freitextsuche filtert die Tabelle nach Mannschaft', async () => {
+    mockAll()
+    setup()
+    const box = await screen.findByLabelText('Suche in Tabelle und Spielplan')
+    await screen.findByText('Verein A')
+    fireEvent.change(box, { target: { value: 'verein b' } })
+    expect(screen.queryByText('Verein A')).not.toBeInTheDocument()
+    expect(screen.getByText('Verein B')).toBeInTheDocument()
+  })
+
   test('Ranglisten sortieren nach Toren und weisen Spiele aus', async () => {
     mockAll()
     setup('/staffeln?tab=ranglisten')

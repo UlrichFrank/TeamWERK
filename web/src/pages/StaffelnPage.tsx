@@ -13,7 +13,7 @@ import {
   CrossTable as CrossTableData, ProgressionDay, TeamStats, RefereeStat, Affiliation,
   fetchStaffeln, fetchTable, fetchSchedule, fetchRanglisten, syncStaffeln,
   fetchCrossTable, fetchProgression, fetchTeamStats, fetchRefereeStats, fetchAffiliation,
-  goalRatio, pointsLabel, sevenMeterRate,
+  goalRatio, pointsLabel, sevenMeterRate, matchesSearch, gameSearchFields,
 } from '../lib/staffeln'
 import { isOwnTeam, isOwnPlayer } from '../lib/staffelHighlight'
 import SpielberichtPanel from '../components/SpielberichtPanel'
@@ -69,6 +69,7 @@ export default function StaffelnPage() {
   const [error, setError] = useState('')
   const [polling, setPolling] = useState(false)
   const [pollHinweis, setPollHinweis] = useState('')
+  const [search, setSearch] = useState('')
   const { hasCapability } = useAuth()
 
   const selectedId = Number(params.get('staffel')) || 0
@@ -182,6 +183,16 @@ export default function StaffelnPage() {
               </option>
             ))}
           </select>
+          {(tab === 'tabelle' || tab === 'spielplan') && (
+            <input
+              type="search"
+              className={`${HEADER_FIELD} w-40 sm:w-48`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Suchen…"
+              aria-label="Suche in Tabelle und Spielplan"
+            />
+          )}
           {hasCapability('poll_bwhv') && (
             <button
               onClick={pollJetzt}
@@ -243,8 +254,8 @@ export default function StaffelnPage() {
         />
       ) : (
         <>
-          {tab === 'tabelle' && <TableView rows={table} ownTeams={affiliation.teamNames} />}
-          {tab === 'spielplan' && <ScheduleView games={games} ownTeams={affiliation.teamNames} />}
+          {tab === 'tabelle' && <TableView rows={table.filter((r) => matchesSearch([r.TeamName], search))} searching={search.trim() !== ''} ownTeams={affiliation.teamNames} />}
+          {tab === 'spielplan' && <ScheduleView games={games.filter((g) => matchesSearch(gameSearchFields(g), search))} searching={search.trim() !== ''} ownTeams={affiliation.teamNames} />}
           {tab === 'kreuztabelle' && (
             cross ? <CrossTable data={cross} ownTeams={affiliation.teamNames} /> : <Empty text={NOCH_NICHTS} />
           )}
@@ -266,8 +277,8 @@ export default function StaffelnPage() {
   )
 }
 
-function TableView({ rows, ownTeams }: { rows: TableRow[]; ownTeams: string[] }) {
-  if (rows.length === 0) return <Empty text="Noch kein Tabellenstand abgerufen." />
+function TableView({ rows, ownTeams, searching }: { rows: TableRow[]; ownTeams: string[]; searching: boolean }) {
+  if (rows.length === 0) return <Empty text={searching ? 'Keine Mannschaft passt zur Suche.' : 'Noch kein Tabellenstand abgerufen.'} />
   return (
     <div className={CARD}>
       <div className="overflow-x-auto">
@@ -313,11 +324,11 @@ function TableView({ rows, ownTeams }: { rows: TableRow[]; ownTeams: string[] })
   )
 }
 
-function ScheduleView({ games, ownTeams }: { games: ScheduleGame[]; ownTeams: string[] }) {
+function ScheduleView({ games, ownTeams, searching }: { games: ScheduleGame[]; ownTeams: string[]; searching: boolean }) {
   // Genau ein Bericht ist aufgeklappt: der Bericht ist lang (zwei Mannschafts-
   // listen plus Spielverlauf), mehrere gleichzeitig machten die Liste unbenutzbar.
   const [openReportId, setOpenReportId] = useState<number | null>(null)
-  if (games.length === 0) return <Empty text="Noch kein Spielplan abgerufen." />
+  if (games.length === 0) return <Empty text={searching ? 'Keine Begegnung passt zur Suche.' : 'Noch kein Spielplan abgerufen.'} />
   return (
     <div className="space-y-2">
       {games.map((g) => {
