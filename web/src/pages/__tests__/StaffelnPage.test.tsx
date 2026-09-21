@@ -248,6 +248,25 @@ describe('StaffelnPage', () => {
     expect(ranks).toEqual(['1', '1', '3'])
   })
 
+  // Gleicher Angriffsschnitt: das bessere Torverhältnis steht vorn, und die
+  // Plätze werden nicht geteilt, weil sich die Mannschaften unterscheiden.
+  test('Bester Angriff: Torverhältnis entscheidet bei gleichem Schnitt', async () => {
+    const t = (team: string, goalsAgainst: number) => ({
+      team, games: 2, goalsFor: 50, goalsAgainst, goalDiff: 50 - goalsAgainst,
+      reportGames: 0, twoMin: 0, yellow: 0, red: 0, blue: 0, fairPlayScore: null, distribution: null,
+    })
+    mockAll()
+    // Gleiche URL wie in mockAll: der später registrierte Handler ersetzt den früheren.
+    mock.onGet(/\/staffeln\/\d+\/teamstatistik/).reply(200, {
+      ...teamStats, teams: [t('Verein A', 60), t('Verein B', 40)],
+    })
+    setup('/staffeln?tab=tore')
+    const card = (await screen.findByText('Bester Angriff')).closest('.overflow-hidden') as HTMLElement
+    const rows = Array.from(card.querySelectorAll('tbody tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('td')).slice(0, 2).map((td) => td.textContent))
+    expect(rows).toEqual([['1', 'Verein B'], ['2', 'Verein A']])
+  })
+
   test('Freitextsuche filtert Spielplan nach Mannschaft, Halle und Datum', async () => {
     mockAll()
     setup('/staffeln?tab=spielplan')

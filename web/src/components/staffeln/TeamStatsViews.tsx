@@ -76,8 +76,15 @@ export function GoalTablesView({ data, ownTeams }: { data: TeamStats; ownTeams: 
   if (played.length === 0) return <Empty />
 
   const byDiff = [...played].sort((a, b) => b.goalDiff - a.goalDiff || b.goalsFor - a.goalsFor)
-  const byAttack = [...played].sort((a, b) => b.goalsFor / b.games - a.goalsFor / a.games)
-  const byDefense = [...played].sort((a, b) => a.goalsAgainst / a.games - b.goalsAgainst / b.games)
+  // Bei gleichem Schnitt entscheidet das Torverhältnis (Tordifferenz): wer bei
+  // gleicher Wurfquote weniger kassiert, steht vorn. Verglichen wird der
+  // angezeigte, auf eine Nachkommastelle gerundete Schnitt — sonst stünde eine
+  // Mannschaft wegen einer unsichtbaren Stelle vor einer anderen mit "gleichem" Wert.
+  const tenths = (value: number, games: number) => Math.round((value / games) * 10)
+  const byAttack = [...played].sort((a, b) =>
+    tenths(b.goalsFor, b.games) - tenths(a.goalsFor, a.games) || b.goalDiff - a.goalDiff)
+  const byDefense = [...played].sort((a, b) =>
+    tenths(a.goalsAgainst, a.games) - tenths(b.goalsAgainst, b.games) || b.goalDiff - a.goalDiff)
 
   return (
     <div className="space-y-6">
@@ -93,8 +100,8 @@ export function GoalTablesView({ data, ownTeams }: { data: TeamStats; ownTeams: 
       />
       <TeamTable
         title="Bester Angriff" ownTeams={ownTeams} rows={byAttack}
-        tieKey={(s) => perGame(s.goalsFor, s.games)}
-        hint="Geworfene Tore je Spiel."
+        tieKey={(s) => `${perGame(s.goalsFor, s.games)}|${s.goalDiff}`}
+        hint="Geworfene Tore je Spiel; bei Gleichstand entscheidet das Torverhältnis."
         columns={[
           { label: 'Sp', cell: (s) => s.games },
           { label: 'Tore', cell: (s) => s.goalsFor },
@@ -103,8 +110,8 @@ export function GoalTablesView({ data, ownTeams }: { data: TeamStats; ownTeams: 
       />
       <TeamTable
         title="Beste Verteidigung" ownTeams={ownTeams} rows={byDefense}
-        tieKey={(s) => perGame(s.goalsAgainst, s.games)}
-        hint="Erhaltene Tore je Spiel — weniger ist besser."
+        tieKey={(s) => `${perGame(s.goalsAgainst, s.games)}|${s.goalDiff}`}
+        hint="Erhaltene Tore je Spiel — weniger ist besser; bei Gleichstand entscheidet das Torverhältnis."
         columns={[
           { label: 'Sp', cell: (s) => s.games },
           { label: 'Gegentore', cell: (s) => s.goalsAgainst },
