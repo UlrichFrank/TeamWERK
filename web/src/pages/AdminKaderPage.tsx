@@ -9,6 +9,7 @@ import PositionStatus from '../components/PositionStatus'
 import CopyKaderModal from '../components/CopyKaderModal'
 import AutoAssignModal from '../components/AutoAssignModal'
 import ActionMenu from '../components/ActionMenu'
+import StaffelPicker from '../components/StaffelPicker'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
 import { compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
@@ -40,6 +41,7 @@ interface Kader {
   team_id: number
   dedicated_birth_year: number | null
   games_per_season: number
+  staffel: string
   birth_years: number[]
   bracket_years: number[]
   members: Member[]
@@ -259,6 +261,14 @@ export default function AdminKaderPage() {
     } catch {
       showToast('Fehler beim Speichern')
     }
+  }
+
+  // Fehler werden bewusst weitergereicht statt als Toast geschluckt: die
+  // Validierung liefert sprechende Meldungen (unpassendes Geschlecht, falsche
+  // Altersklasse, Übungsgruppe), und die gehören an das Eingabefeld.
+  const handleSetStaffel = async (k: Kader, code: string) => {
+    await api.put(`/kader/${k.id}`, { staffel: code })
+    if (selectedSeason) await loadKader(selectedSeason.id)
   }
 
   const handleSetMixed = async (k: Kader) => {
@@ -528,8 +538,13 @@ export default function AdminKaderPage() {
                     </div>
                   </div>
 
+                  {/* Staffel-Zuordnung (BWHV) */}
+                  <div className="px-5 pt-3 pb-1 flex items-center gap-3 flex-wrap">
+                    <StaffelPicker value={k.staffel} onSave={code => handleSetStaffel(k, code)} />
+                  </div>
+
                   {/* Mode toggle */}
-                  <div className="px-5 pt-3 pb-2 flex items-center gap-3 flex-wrap">
+                  <div className="px-5 pt-2 pb-2 flex items-center gap-3 flex-wrap">
                     <span className="text-xs text-brand-text-muted font-medium">Jahrgänge:</span>
                     <div className="flex rounded-md border border-brand-border-subtle overflow-hidden text-xs">
                       <button

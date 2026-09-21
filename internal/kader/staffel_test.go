@@ -2,7 +2,9 @@ package kader
 
 import (
 	"database/sql"
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -153,4 +155,50 @@ func itoa(n int) string {
 		n /= 10
 	}
 	return string(b)
+}
+
+// Die Pflegemaske liest den gespeicherten Code aus der Kaderliste zurück.
+// Ohne diese Zuleitung stünde das Feld nach jedem Neuladen wieder leer —
+// genau die Lücke, die beim ersten Durchgang unbemerkt blieb.
+func TestKaderStaffel_WirdInDerListeZurueckgeliefert(t *testing.T) {
+	db, token, kaderID := staffelFixture(t, "m", "B-Jugend")
+	r := putStaffel(t, db, token, kaderID, "mB-RL-BW")
+	r.Body.Close()
+
+	h := NewHandler(db, hub.NewHub())
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/kader", h.ListKader)
+	})
+	resp := testutil.Do(t, srv, http.MethodGet, "/api/kader", token, nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Status = %d, erwartet 200", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), `"staffel":"mB-RL-BW"`) {
+		t.Errorf("Antwort enthält den Staffelcode nicht: %s", truncate(string(body), 400))
+	}
+}
+
+// Ein Kader ohne Zuordnung liefert einen leeren String, nicht null — die
+// Maske muss nicht zwei Fälle unterscheiden.
+func TestKaderStaffel_OhneZuordnungLeererString(t *testing.T) {
+	db, token, _ := staffelFixture(t, "m", "B-Jugend")
+	h := NewHandler(db, hub.NewHub())
+	srv := testutil.NewServer(t, func(r chi.Router) {
+		r.Get("/api/kader", h.ListKader)
+	})
+	resp := testutil.Do(t, srv, http.MethodGet, "/api/kader", token, nil)
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), `"staffel":""`) {
+		t.Errorf("erwartet leerer Staffelcode, bekam: %s", truncate(string(body), 400))
+	}
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }

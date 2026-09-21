@@ -136,6 +136,10 @@ type kaderRow struct {
 	TeamID             int64  `json:"team_id"`
 	DedicatedBirthYear *int   `json:"dedicated_birth_year"`
 	GamesPerSeason     int    `json:"games_per_season"`
+	// Staffel ist der BWHV-Staffelcode dieses Kaders in seiner Saison
+	// (leer = keine Zuordnung). Die Maske pflegt ihn, der Abruf in
+	// internal/gamestats liest ihn.
+	Staffel string `json:"staffel"`
 }
 
 type memberRow struct {
@@ -216,7 +220,7 @@ func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
 	var k kaderRow
 	var seasonStartYear int
 	var dedicatedBirthYear sql.NullInt64
-	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &k.GamesPerSeason, &seasonStartYear)
+	err := row.Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &k.GamesPerSeason, &k.Staffel, &seasonStartYear)
 	if err != nil {
 		return k, 0, err
 	}
@@ -229,6 +233,7 @@ func scanKaderRow(row interface{ Scan(...any) error }) (kaderRow, int, error) {
 
 const kaderSelectSQL = `
 	SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year, k.games_per_season,
+	       COALESCE(k.staffel, ''),
 	       CAST(strftime('%Y', s.start_date) AS INTEGER)
 	FROM kader k JOIN seasons s ON s.id = k.season_id`
 
@@ -521,10 +526,11 @@ func (h *Handler) MemberSuggestions(w http.ResponseWriter, r *http.Request) {
 	var dedicatedBirthYear sql.NullInt64
 	err := h.db.QueryRowContext(r.Context(),
 		`SELECT k.id, k.season_id, k.age_class, k.gender, k.team_number, k.team_id, k.dedicated_birth_year,
+		        COALESCE(k.staffel, ''),
 		        CAST(strftime('%Y', s.start_date) AS INTEGER)
 		 FROM kader k JOIN seasons s ON s.id=k.season_id
 		 WHERE k.id=? AND k.kind='team'`, id).
-		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &seasonStartYear)
+		Scan(&k.ID, &k.SeasonID, &k.AgeClass, &k.Gender, &k.TeamNumber, &k.TeamID, &dedicatedBirthYear, &k.Staffel, &seasonStartYear)
 	if err == sql.ErrNoRows {
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return
