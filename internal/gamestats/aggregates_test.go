@@ -452,3 +452,94 @@ func TestGini_UeberSaisonsummeNichtProSpiel(t *testing.T) {
 		t.Errorf("ReportGames = %d, erwartet 2", a.ReportGames)
 	}
 }
+
+// setReferees schreibt die getrennten Namen an einen Bericht.
+func setReferees(t *testing.T, db *sql.DB, reportID int, uncertain bool, names ...string) {
+	t.Helper()
+	u := 0
+	if uncertain {
+		u = 1
+	}
+	if _, err := db.Exec(`UPDATE bwhv_reports SET referees_json = ?, referees_uncertain = ?
+		WHERE id = ?`, encodeStrings(names), u, reportID); err != nil {
+		t.Fatalf("Schiedsrichter setzen: %v", err)
+	}
+}
+
+// Dasselbe Gespann in zwei Spielen: zwei Spiele und die Summe der Strafen
+// BEIDER Mannschaften.
+func TestRefereeStats_SpieleUndStrafen(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	roster := map[string]string{"home": "A", "guest": "B"}
+	for _, no := range []string{"1", "2"} {
+		gameID := seedResult(t, db, staffelID, no, "2026-09-2"+no, "A", "B", intp(10), intp(8))
+		reportID := seedParsedReport(t, db, staffelID, gameID, "parsed", roster, []rosterLine{
+			{name: "Anna" + no, side: "home", twoMin: 1},
+			{name: "Cem" + no, side: "guest", twoMin: 2, yellow: 1},
+		})
+		setReferees(t, db, reportID, false, "Max Mustermann", "Peter Müller")
+	}
+
+	list, err := s.RefereeStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("RefereeStats: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("Schiedsrichter = %d, erwartet 2", len(list))
+	}
+	for _, st := range list {
+		if st.Games != 2 {
+			t.Errorf("%s: Spiele = %d, erwartet 2", st.Name, st.Games)
+		}
+		if st.TwoMin != 6 {
+			t.Errorf("%s: Zeitstrafen = %d, erwartet 6 — die Strafen BEIDER Mannschaften zählen", st.Name, st.TwoMin)
+		}
+		if st.Yellow != 2 {
+			t.Errorf("%s: Verwarnungen = %d, erwartet 2", st.Name, st.Yellow)
+		}
+		if st.Uncertain {
+			t.Errorf("%s: als unsicher gekennzeichnet, erwartet gesichert", st.Name)
+		}
+	}
+}
+
+// Ein Bericht ohne benannte Schiedsrichter erzeugt keine Zeile — das gilt auch
+// für den Bestand vor Migration 069.
+func TestRefereeStats_OhneNamenKeineZeile(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	gameID := seedResult(t, db, staffelID, "1", "2026-09-20", "A", "B", intp(10), intp(8))
+	seedParsedReport(t, db, staffelID, gameID, "parsed",
+		map[string]string{"home": "A", "guest": "B"},
+		[]rosterLine{{name: "Anna", side: "home", twoMin: 1}})
+
+	list, err := s.RefereeStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("RefereeStats: %v", err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("Schiedsrichter = %#v, erwartet keine Zeile", list)
+	}
+}
+
+// Ein geratener Schnitt wird durchgereicht, statt als gesichert zu erscheinen.
+func TestRefereeStats_UnsichereTrennungGekennzeichnet(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	gameID := seedResult(t, db, staffelID, "1", "2026-09-20", "A", "B", intp(10), intp(8))
+	reportID := seedParsedReport(t, db, staffelID, gameID, "parsed",
+		map[string]string{"home": "A", "guest": "B"},
+		[]rosterLine{{name: "Anna", side: "home"}})
+	setReferees(t, db, reportID, true, "Max Mustermann", "Peter Müller")
+
+	list, err := s.RefereeStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("RefereeStats: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("Schiedsrichter = %d, erwartet 2", len(list))
+	}
+	for _, st := range list {
+		if !st.Uncertain {
+			t.Errorf("%s: nicht als unsicher gekennzeichnet", st.Name)
+		}
+	}
+}

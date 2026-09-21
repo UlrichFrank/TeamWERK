@@ -572,3 +572,86 @@ func gini(sorted []float64) float64 {
 	}
 	return g
 }
+
+// RefereeStat ist die Bilanz eines Schiedsrichters über die Staffel.
+//
+// Die Zahlen sind die Strafen DES SPIELS, nicht eine Bewertung der Person —
+// die Ansicht sagt das ausdrücklich. Technisch verhindern lässt sich die
+// Fehllesart nicht.
+type RefereeStat struct {
+	Name   string `json:"name"`
+	Games  int    `json:"games"`
+	TwoMin int    `json:"twoMin"`
+	Yellow int    `json:"yellow"`
+	Red    int    `json:"red"`
+	Blue   int    `json:"blue"`
+	// Uncertain heißt: in mindestens einem der Spiele musste der Name von dem
+	// des Gespannpartners geraten werden (parse_header.go).
+	Uncertain bool `json:"uncertain"`
+}
+
+// RefereeStats liefert je Schiedsrichter die Zahl seiner Spiele und die in
+// diesen Spielen verhängten Strafen — die BEIDER Mannschaften.
+//
+// Berichte ohne benannte Schiedsrichter erzeugen keine Zeile. Das schließt den
+// gesamten Bestand vor Migration 069 ein: dort steht nur die ungetrennte
+// Rohzeile, und ein Backfill über die Namensregel machte für alle Altberichte
+// den unsicheren Pfad zum Hauptpfad (design.md §7).
+func (s *Store) RefereeStats(ctx context.Context, staffelID int) ([]RefereeStat, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT r.referees_json, r.referees_uncertain,
+		       COALESCE(SUM(pg.two_min), 0), COALESCE(SUM(pg.yellow), 0),
+		       COALESCE(SUM(pg.red), 0), COALESCE(SUM(pg.blue), 0)
+		  FROM bwhv_reports r
+		  JOIN bwhv_games g ON g.id = r.bwhv_game_id
+		  LEFT JOIN bwhv_player_games pg ON pg.report_id = r.id
+		 WHERE g.staffel_id = ? AND r.state = 'parsed' AND TRIM(r.referees_json) <> ''
+		 GROUP BY r.id`, staffelID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	byName := map[string]*RefereeStat{}
+	var order []string
+	for rows.Next() {
+		var refJSON string
+		var uncertain bool
+		var twoMin, yellow, red, blue int
+		if err := rows.Scan(&refJSON, &uncertain, &twoMin, &yellow, &red, &blue); err != nil {
+			return nil, err
+		}
+		for _, name := range decodeStrings(refJSON) {
+			st, ok := byName[name]
+			if !ok {
+				st = &RefereeStat{Name: name}
+				byName[name] = st
+				order = append(order, name)
+			}
+			st.Games++
+			st.TwoMin += twoMin
+			st.Yellow += yellow
+			st.Red += red
+			st.Blue += blue
+			// Ein einziger geratener Schnitt genügt, um den Namen als unsicher
+			// zu kennzeichnen: er kann in diesem Spiel falsch geschnitten
+			// worden sein, und die Zeile trägt dann fremde Spiele mit.
+			st.Uncertain = st.Uncertain || uncertain
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	out := make([]RefereeStat, 0, len(order))
+	for _, name := range order {
+		out = append(out, *byName[name])
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Games != out[j].Games {
+			return out[i].Games > out[j].Games
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out, nil
+}
