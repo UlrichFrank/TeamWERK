@@ -7,12 +7,16 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
 
-// Ohne konfiguriertes Ablageverzeichnis tut der Job nichts. Das ist der Schalter,
-// mit dem eine Instanz ohne BWHV-Anbindung den Abruf abgeschaltet lässt.
-func TestSchedulerJob_OhneAblageverzeichnisPassiertNichts(t *testing.T) {
+// BWHV_ORG_ID=0 schaltet den Abruf hart ab. Das Ablageverzeichnis taugt dafür
+// nicht: sein Default greift immer, der Wert ist nie leer.
+func TestSchedulerJob_OrgIDNullSchaltetAb(t *testing.T) {
 	db := testutil.NewDB(t)
-	job := SchedulerJob(db, &appconfig.Config{})
-	job() // darf nicht panicken und nichts abrufen
+	seasonID := testutil.CreateSeason(t, db, "26/27")
+	if _, err := db.Exec(`UPDATE seasons SET is_active = 1 WHERE id = ?`, seasonID); err != nil {
+		t.Fatal(err)
+	}
+	// Ablageverzeichnis gesetzt, Org aus: es darf trotzdem nichts laufen.
+	SchedulerJob(db, &appconfig.Config{BwhvReportDir: t.TempDir(), BwhvOrgID: 0})()
 }
 
 func TestSchedulerJob_NilConfigIstUnschaedlich(t *testing.T) {

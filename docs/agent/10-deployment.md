@@ -129,16 +129,30 @@ Dafür gelten dieselben Maßstäbe:
   täglicher Katalog-Lauf um 06:00. Ein Tag ohne Spiel erzeugt keinen einzigen Request.
 - **Serielle Abrufe mit Pause** (`politePause`, 750 ms), keine Parallelisierung.
 - **Ausgehend nur HTTPS**, Timeout je Request.
-- Ein **manueller Anstoß** (`POST /api/staffeln/{id}/poll`) existiert für den Notfall und
-  ist auf Vorstand/Admin beschränkt.
+- Ein **manueller Anstoß** (`POST /api/staffeln/sync` bzw. `.../{id}/poll`) existiert
+  für Einrichtung und Notfall und ist auf Vorstand/Admin beschränkt.
 
-**Abschalten:** ohne gesetztes `BWHV_REPORT_DIR` läuft der Job nicht an. Eine Instanz
-ohne Verbandsanbindung braucht sonst nichts zu tun. `BWHV_ORG_ID` (Default 216 = BWHV)
-macht den Landesverband konfigurierbar.
+**Abschalten:** `BWHV_ORG_ID=0`. **Nicht** `BWHV_REPORT_DIR` — dessen Default
+(`./storage/bwhv-reports`) greift immer, der Wert ist nie leer, ein Guard darauf wäre
+wirkungslos. In der Praxis braucht eine Instanz ohne Verbandsanbindung gar nichts zu tun:
+ohne zugeordnete Staffel endet der Lauf vor dem ersten Netzzugriff. `BWHV_ORG_ID`
+(Default 216 = BWHV) macht zugleich den Landesverband konfigurierbar.
 
-**Vor dem ersten Lauf:** den neun Kadern der aktiven Saison unter `/admin/kader` ihre
-Staffel zuordnen (Auswahl aus dem Live-Katalog oder Freitext). Ohne Zuordnung findet der
-Poll nichts; ein unbekannter Code wird als Fehler protokolliert, nicht still übergangen.
+**Storage-Pfad:** `make deploy` legt `BWHV_REPORT_DIR` auf dem VPS idempotent an
+(`mkdir -p` + `chown www-data`) und ergänzt den Schlüssel in `/etc/teamwerk/env` — kein
+manueller Schritt. Lokal genügt der Default; das Verzeichnis entsteht beim ersten
+abgelegten Bericht von selbst (`os.MkdirAll`).
+
+**Vor dem ersten Lauf:** den Kadern der aktiven Saison unter `/admin/kader` ihre Staffel
+zuordnen (Auswahl aus dem Live-Katalog oder Freitext). Ohne Zuordnung findet der Poll
+nichts; ein unbekannter Code wird als Fehler protokolliert, nicht still übergangen.
+
+**Der manuelle Anstoß holt mehr als der Zeitplan.** `POST /api/staffeln/sync` (Knopf
+„Jetzt abrufen" auf `/staffeln`) macht Katalog, Spielpläne **und** alle offenen
+Spielberichte. Der tägliche 06:00-Lauf zieht bewusst nur Katalog und Spielpläne; die PDFs
+kommen sonst über das Spieltags-Fenster, und dessen Nachholzeitraum reicht nur
+`CatchUpDays` zurück. Bei einer Einrichtung mitten in der Saison blieben die älteren
+Berichte damit für immer ungeholt — deshalb ist der manuelle Weg der vollständige.
 
 **Speicherwachstum:** die PDFs werden dauerhaft behalten (bewusste Entscheidung — sie sind
 der Beleg und erlauben ein Reparse nach einem Parser-Fix ohne erneuten Fremdabruf). Eine

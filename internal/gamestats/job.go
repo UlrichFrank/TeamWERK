@@ -39,7 +39,14 @@ func SchedulerJob(db *sql.DB, cfg *appconfig.Config) func() {
 }
 
 func runPollTick(db *sql.DB, cfg *appconfig.Config) {
-	if cfg == nil || cfg.BwhvReportDir == "" {
+	// BwhvOrgID ist der Abschalter, NICHT BwhvReportDir: dessen getEnv-Default
+	// (./storage/bwhv-reports) greift immer, der Wert ist also nie leer. Ein
+	// Guard darauf wäre wirkungslos gewesen.
+	//
+	// Ohne zugeordnete Staffel geht ohnehin kein einziger Request raus —
+	// StaffelCodes liefert leer und der Lauf endet vor dem Netzzugriff. Der
+	// Schalter ist für Instanzen gedacht, die das hart ausschließen wollen.
+	if cfg == nil || cfg.BwhvOrgID <= 0 {
 		return
 	}
 	store := NewStore(db)

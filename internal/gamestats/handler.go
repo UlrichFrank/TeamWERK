@@ -341,8 +341,8 @@ func (h *Handler) GetReportForOwnGame(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, detail)
 }
 
-// SyncNow löst alle Staffelcodes der Saison gegen den Katalog auf, legt die
-// fehlenden bwhv_staffeln-Zeilen an und ruft Spielpläne ab.
+// SyncNow richtet die Staffeln ein und holt alles nach: Katalog,
+// Spielpläne und die offenen Spielberichte.
 //
 // Eigene Route neben PollNow, weil PollNow eine bereits aufgelöste Staffel
 // braucht: vor dem ersten Lauf gibt es zu einer frisch am Kader gepflegten
@@ -359,12 +359,15 @@ func (h *Handler) SyncNow(w http.ResponseWriter, r *http.Request) {
 	background.Go("bwhv-sync-manual", func() {
 		ctx, cancel := detachedContext()
 		defer cancel()
-		res, err := poller.SyncStaffeln(ctx, seasonID)
+		res, err := poller.SyncAndPollAll(ctx, seasonID)
 		if err != nil {
 			slog.Error("bwhv: manueller Sync fehlgeschlagen", "error", err)
 			return
 		}
-		slog.Info("bwhv: manueller Sync", "staffeln", res.Staffeln, "spiele_geaendert", res.GamesChanged)
+		slog.Info("bwhv: manueller Sync",
+			"staffeln", res.Staffeln, "spiele_geaendert", res.GamesChanged,
+			"berichte_geparst", res.ReportsParsed, "berichte_fehlgeschlagen", res.ReportsFailed,
+			"spieler_zugeordnet", res.PlayersLinked)
 		if res.Changed() {
 			h.hub.Broadcast(EventStaffeln)
 		}

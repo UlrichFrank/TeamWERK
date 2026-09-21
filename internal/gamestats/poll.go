@@ -196,3 +196,43 @@ func (p *Poller) RunDue(ctx context.Context, seasonID int, due []DueStaffel) (Po
 	}
 	return total, nil
 }
+
+// SyncAndPollAll richtet ein und holt nach: Katalog, Spielpläne UND alle
+// offenen Berichte jeder zugeordneten Staffel.
+//
+// Eigener Weg neben SyncStaffeln (Katalog + Spielplan), weil der tägliche
+// 06:00-Lauf bewusst keine PDFs zieht — die kommen über das Spieltags-Fenster.
+// Genau das greift bei einer Einrichtung mitten in der Saison aber nicht: das
+// Nachholfenster reicht CatchUpDays zurück, alles davor bliebe für immer
+// ungeholt. Der manuelle Anstoß meint "hol alles", und das tut er hier.
+func (p *Poller) SyncAndPollAll(ctx context.Context, seasonID int) (PollResult, error) {
+	total, err := p.SyncStaffeln(ctx, seasonID)
+	if err != nil {
+		return total, err
+	}
+	staffeln, err := p.store.ListStaffeln(ctx, seasonID)
+	if err != nil {
+		return total, err
+	}
+	if len(staffeln) == 0 {
+		return total, nil
+	}
+	cat, err := loadCatalog(ctx, p.client, p.orgID)
+	if err != nil {
+		return total, err
+	}
+	for _, st := range staffeln {
+		res, err := p.PollStaffel(ctx, seasonID, st, cat)
+		if err != nil {
+			slog.Error("bwhv: Nachhol-Abruf fehlgeschlagen", "staffel", st.Code, "error", err)
+			continue
+		}
+		// Staffeln/GamesChanged hat SyncStaffeln schon gezählt; hier zählen
+		// nur die Berichte dazu, sonst stünde alles doppelt in der Bilanz.
+		total.ReportsFetched += res.ReportsFetched
+		total.ReportsParsed += res.ReportsParsed
+		total.ReportsFailed += res.ReportsFailed
+		total.PlayersLinked += res.PlayersLinked
+	}
+	return total, nil
+}
