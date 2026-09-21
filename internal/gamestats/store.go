@@ -10,17 +10,8 @@ package gamestats
 import (
 	"context"
 	"database/sql"
-	"errors"
-	"fmt"
 	"strings"
-
-	"github.com/teamstuttgart/teamwerk/internal/bwhv"
 )
-
-// ErrStaffelUnbekannt meldet einen Staffelcode, den kein Katalog kennt.
-// Er wird sichtbar protokolliert und die Staffel im Lauf übersprungen —
-// ein stiller Leerlauf wäre die schlechtere Antwort.
-var ErrStaffelUnbekannt = errors.New("staffelcode in keinem Katalog gefunden")
 
 // Staffel ist eine gespeicherte Staffel-Zuordnung samt aufgelöster Herkunft.
 type Staffel struct {
@@ -66,56 +57,6 @@ func (s *Store) StaffelCodes(ctx context.Context, seasonID int) (map[string]int,
 		out[strings.TrimSpace(code)] = kaderID
 	}
 	return out, rows.Err()
-}
-
-// ResolveStaffel löst einen Staffelcode über den Katalog auf und legt die
-// Staffel an bzw. aktualisiert sie.
-//
-// Gespeichert wird der Code, nicht die Klassen-ID: die wechselt mit der
-// Saison. Gesucht wird zuerst auf Verbandsebene, dann in den Bezirken — die
-// Bezirksliste kommt vom Dienst selbst, statt sie aus dem Code-Suffix zu
-// raten. Bezirke sind dabei nur über o erreichbar, og bleibt der Verband
-// (design.md §1.2).
-func (s *Store) ResolveStaffel(ctx context.Context, c *bwhv.Client, seasonID, orgID int, code string) (*Staffel, error) {
-	periods, selected, err := c.FetchPeriods(ctx, orgID)
-	if err != nil {
-		return nil, err
-	}
-	_ = periods
-	if selected == "" {
-		return nil, fmt.Errorf("spielzeit des Verbands nicht ermittelbar")
-	}
-
-	candidates := []int{0} // 0 = Verbandsebene (kein o-Parameter)
-	orgs, err := c.FetchOrgs(ctx, orgID)
-	if err != nil {
-		return nil, err
-	}
-	for id := range orgs {
-		var n int
-		if _, err := fmt.Sscan(id, &n); err != nil || n == orgID || n <= 0 {
-			continue
-		}
-		candidates = append(candidates, n)
-	}
-
-	want := strings.EqualFold
-	for _, sub := range candidates {
-		classes, err := c.FetchCatalog(ctx, orgID, sub, selected)
-		if err != nil {
-			return nil, err
-		}
-		for _, cl := range classes {
-			if !want(cl.Sname, code) {
-				continue
-			}
-			return s.upsertStaffel(ctx, Staffel{
-				SeasonID: seasonID, Code: cl.Sname, Name: cl.Lname,
-				OrgID: orgID, SubOrgID: sub, PeriodID: selected,
-			})
-		}
-	}
-	return nil, fmt.Errorf("%w: %q", ErrStaffelUnbekannt, code)
 }
 
 func (s *Store) upsertStaffel(ctx context.Context, st Staffel) (*Staffel, error) {

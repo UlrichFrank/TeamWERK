@@ -2,7 +2,6 @@ package gamestats
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 
 	"github.com/teamstuttgart/teamwerk/internal/bwhv"
@@ -46,18 +45,30 @@ func (p *Poller) SyncStaffeln(ctx context.Context, seasonID int) (PollResult, er
 	if err != nil {
 		return res, err
 	}
+	if len(codes) == 0 {
+		return res, nil
+	}
+	cat, err := loadCatalog(ctx, p.client, p.orgID)
+	if err != nil {
+		return res, err
+	}
 	for code := range codes {
-		st, err := p.store.ResolveStaffel(ctx, p.client, seasonID, p.orgID, code)
+		entry, ok := cat.lookup(code)
+		if !ok {
+			slog.Error("bwhv: Staffelcode unbekannt", "code", code, "season_id", seasonID)
+			continue
+		}
+		st, err := p.store.upsertStaffel(ctx, Staffel{
+			SeasonID: seasonID, Code: code, Name: entry.Name,
+			OrgID: p.orgID, SubOrgID: entry.SubOrgID, PeriodID: cat.Period,
+		})
 		if err != nil {
-			if errors.Is(err, ErrStaffelUnbekannt) {
-				slog.Error("bwhv: Staffelcode unbekannt", "code", code, "season_id", seasonID)
-				continue
-			}
 			return res, err
 		}
-		changed, err := p.syncSchedule(ctx, *st)
+		changed, err := p.syncSchedule(ctx, *st, entry.ClassID)
 		if err != nil {
-			return res, err
+			slog.Error("bwhv: Spielplan-Abruf fehlgeschlagen", "code", code, "error", err)
+			continue
 		}
 		res.Staffeln++
 		res.GamesChanged += changed
@@ -65,22 +76,10 @@ func (p *Poller) SyncStaffeln(ctx context.Context, seasonID int) (PollResult, er
 	return res, nil
 }
 
-func (p *Poller) syncSchedule(ctx context.Context, st Staffel) (int, error) {
-	classes, err := p.client.FetchCatalog(ctx, st.OrgID, st.SubOrgID, st.PeriodID)
-	if err != nil {
-		return 0, err
-	}
-	var classID string
-	for _, c := range classes {
-		if c.Sname == st.Code {
-			classID = c.ID
-			break
-		}
-	}
-	if classID == "" {
-		slog.Error("bwhv: Staffel im Katalog verschwunden", "code", st.Code)
-		return 0, nil
-	}
+// syncSchedule holt den Spielplan einer Staffel. classID kommt aus dem
+// Katalog des Laufs — ein eigener Katalog-Abruf je Staffel wäre der teuerste
+// Teil des Ganzen (siehe catalog.go).
+func (p *Poller) syncSchedule(ctx context.Context, st Staffel, classID string) (int, error) {
 	sch, err := p.client.FetchSchedule(ctx, st.OrgID, st.SubOrgID, st.PeriodID, classID)
 	if err != nil {
 		return 0, err
@@ -89,9 +88,23 @@ func (p *Poller) syncSchedule(ctx context.Context, st Staffel) (int, error) {
 }
 
 // PollStaffel ruft Spielplan und offene Berichte einer Staffel ab.
-func (p *Poller) PollStaffel(ctx context.Context, seasonID int, st Staffel) (PollResult, error) {
+//
+// cat darf nil sein; dann wird der Katalog für diesen einen Lauf geladen. Ein
+// Aufrufer, der mehrere Staffeln abklappert, reicht denselben Katalog durch.
+func (p *Poller) PollStaffel(ctx context.Context, seasonID int, st Staffel, cat *catalog) (PollResult, error) {
 	var res PollResult
-	changed, err := p.syncSchedule(ctx, st)
+	if cat == nil {
+		var err error
+		if cat, err = loadCatalog(ctx, p.client, p.orgID); err != nil {
+			return res, err
+		}
+	}
+	entry, ok := cat.lookup(st.Code)
+	if !ok {
+		slog.Error("bwhv: Staffel im Katalog verschwunden", "code", st.Code)
+		return res, nil
+	}
+	changed, err := p.syncSchedule(ctx, st, entry.ClassID)
 	if err != nil {
 		return res, err
 	}
@@ -161,8 +174,15 @@ func (p *Poller) fetchOne(ctx context.Context, seasonID int, pr PendingReport, r
 // RunDue führt einen fälligen Lauf über alle offenen Staffeln aus.
 func (p *Poller) RunDue(ctx context.Context, seasonID int, due []DueStaffel) (PollResult, error) {
 	var total PollResult
+	if len(due) == 0 {
+		return total, nil
+	}
+	cat, err := loadCatalog(ctx, p.client, p.orgID)
+	if err != nil {
+		return total, err
+	}
 	for _, d := range due {
-		res, err := p.PollStaffel(ctx, seasonID, d.Staffel)
+		res, err := p.PollStaffel(ctx, seasonID, d.Staffel, cat)
 		if err != nil {
 			slog.Error("bwhv: Poll fehlgeschlagen", "staffel", d.Staffel.Code, "error", err)
 			continue

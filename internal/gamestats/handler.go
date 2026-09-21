@@ -297,7 +297,7 @@ func (h *Handler) PollNow(w http.ResponseWriter, r *http.Request) {
 	background.Go("bwhv-poll-manual", func() {
 		ctx, cancel := detachedContext()
 		defer cancel()
-		res, err := poller.PollStaffel(ctx, seasonID, st)
+		res, err := poller.PollStaffel(ctx, seasonID, st, nil)
 		if err != nil {
 			return
 		}

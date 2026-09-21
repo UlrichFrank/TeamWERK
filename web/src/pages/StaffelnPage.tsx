@@ -42,11 +42,18 @@ export default function StaffelnPage() {
     [staffeln, selectedId],
   )
 
-  useEffect(() => {
+  // Die Zuordnungsliste selbst muss nachladbar sein, nicht nur die Daten
+  // dahinter: nach dem ersten Abruf wechselt eine Staffel von "noch nichts
+  // abgerufen" (id 0) auf eine echte ID. Ohne das bliebe die Seite auf dem
+  // alten Zustand stehen und der Abruf sähe wirkungslos aus.
+  const reloadStaffeln = () =>
     fetchStaffeln()
       .then(setStaffeln)
       .catch(() => setError('Staffeln konnten nicht geladen werden.'))
-      .finally(() => setLoading(false))
+
+  useEffect(() => {
+    reloadStaffeln().finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const reload = () => {
@@ -61,7 +68,14 @@ export default function StaffelnPage() {
   }
 
   useEffect(reload, [selected?.id])
-  useLiveUpdates((event) => { if (event === 'bwhv-updated') reload() })
+  useLiveUpdates((event) => {
+    if (event !== 'bwhv-updated') return
+    // Erst die Liste (eine Staffel kann gerade erst eine ID bekommen haben),
+    // dann die Daten der gewählten. Wechselt dabei die ID, zieht der Effekt
+    // oben ohnehin nach.
+    void reloadStaffeln()
+    reload()
+  })
 
   // Der Abruf läuft serverseitig im Hintergrund weiter; die Seite lädt über
   // das SSE-Ereignis bwhv-updated nach, sobald etwas ankommt.

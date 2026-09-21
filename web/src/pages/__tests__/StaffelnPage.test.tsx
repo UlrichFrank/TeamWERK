@@ -190,4 +190,25 @@ describe('StaffelnPage', () => {
     await waitFor(() => expect(mock.history.post).toHaveLength(1))
     expect(mock.history.post[0].url).toBe('/staffeln/sync')
   })
+
+  // Der gemeldete Fehler: nach dem Abruf aktualisierte sich nichts. Ursache
+  // war, dass das Live-Update nur die Daten der gewählten Staffel nachlud,
+  // nicht die Zuordnungsliste — dort wechselt eine Staffel aber von id 0 auf
+  // eine echte ID, und bis dahin blockt die Reload-Logik.
+  test('Live-Update lädt auch die Zuordnungsliste nach', async () => {
+    mock.onGet('/staffeln').replyOnce(200, staffelnOhneAbruf)
+    mock.onGet('/staffeln').reply(200, staffeln)
+    mock.onGet(/\/staffeln\/\d+\/tabelle/).reply(200, table)
+    mock.onGet(/\/staffeln\/\d+\/spielplan/).reply(200, games)
+    mock.onGet(/\/staffeln\/\d+\/ranglisten/).reply(200, stats)
+
+    setup()
+    await waitFor(() => expect(screen.getByText(/noch nichts beim Verband abgerufen/)).toBeInTheDocument())
+
+    liveHandlers.forEach(fn => fn('bwhv-updated'))
+
+    // Nach dem Nachladen trägt die Staffel eine ID und die Tabelle erscheint.
+    await waitFor(() => expect(screen.getByText('Verein A')).toBeInTheDocument())
+    expect(screen.queryByText(/noch nichts beim Verband abgerufen/)).not.toBeInTheDocument()
+  })
 })
