@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { fetchReportForGame } from '../lib/staffeln'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { compressImage } from '../lib/imageCompress'
@@ -95,6 +96,25 @@ export default function MatchReportFormPage() {
     // überschrieben und der Bericht käme leer zur Prüfung an.
     const seededRef = useRef(false)
 
+    // prefillFromBwhv holt den ausgewerteten Verbandsbericht und übernimmt
+    // Endstand und Halbzeitstand. Liegt keiner vor (HTTP 404) oder ist er
+    // gescheitert, bleibt alles wie bisher leer — der Aufruf ist still.
+    // prefillFromBwhv holt den ausgewerteten Verbandsbericht und übernimmt
+    // Endstand und Halbzeitstand. Beide stammen aus dem Kopf des Berichts und
+    // werden NICHT aus dem Spielverlauf abgeleitet — die Halbzeitpause ist dort
+    // unsichtbar, weil die Spieluhr stillsteht. Liegt kein Bericht vor
+    // (HTTP 404) oder ist er gescheitert, bleibt alles leer; der Aufruf ist still.
+    const prefillFromBwhv = (gameID: number) => {
+        fetchReportForGame(gameID)
+            .then(rep => {
+                if (rep.homeGoals !== null) setHomeGoals(String(rep.homeGoals))
+                if (rep.guestGoals !== null) setAwayGoals(String(rep.guestGoals))
+                if (rep.homeGoalsHt !== null) setHomeGoalsHT(String(rep.homeGoalsHt))
+                if (rep.guestGoalsHt !== null) setAwayGoalsHT(String(rep.guestGoalsHt))
+            })
+            .catch(() => { /* kein Bericht: Felder bleiben leer wie bisher */ })
+    }
+
     const load = () => {
         if (!reportID) return
         api
@@ -112,6 +132,15 @@ export default function MatchReportFormPage() {
                     setAbstract(r.abstract)
                     setBodyMd(r.body_md)
                     seededRef.current = true
+                    // Ergebnisfelder aus dem offiziellen BWHV-Spielbericht
+                    // vorbefüllen, wenn der Autor selbst noch nichts eingetragen
+                    // hat. Die Eingabe des Autors hat Vorrang und wird nie
+                    // überschrieben. Bewusst im Frontend: ein Import
+                    // matchreports -> gamestats wäre Domain->Domain und bricht
+                    // internal/arch/arch_test.go (design.md §8).
+                    if (r.home_goals === null && r.away_goals === null) {
+                        prefillFromBwhv(r.game_id)
+                    }
                 }
             })
             .catch(err => setError(err.response?.data?.error ?? 'Bericht nicht gefunden'))

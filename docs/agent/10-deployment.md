@@ -1,6 +1,6 @@
 # Deployment & VPS
 
-IONOS VPS Linux XS+ · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, SMTP_*, VAPID_*, LOG_FORMAT, METRICS_TOKEN, HSTS_ENABLED — **kein** `FIELD_ENCRYPTION_KEY` mehr, Zero-Knowledge). DB `/var/lib/teamwerk/teamwerk.db`. **Backup-relevante Storage-Pfade** neben der DB: `BEITRAGSLAUF_DIR` (append-only Saison-Protokolle) und `TRAINING_DIARY_DIR` (Trainingsnachweise) — beide liegen unter `/var/lib/teamwerk/…` und werden von `make backup-files` mitgesichert; die Nachweise werden rollierend 90 Tage nach Saisonende automatisch bereinigt, ein älteres Backup holt gelöschte Nachweise also zurück. **Storage-Pfade müssen absolut in `/etc/teamwerk/env` stehen**: die relativen Defaults (`./storage/…`) lösen gegen `WorkingDirectory=/usr/local/bin` auf, wo `www-data` nicht schreiben darf. Der Env-Block im `deploy`-Target schreibt die Datei nur beim **ersten** Deploy — ein neu hinzugekommener Pfad fehlt auf Bestandsservern sonst dauerhaft, deshalb legt `make deploy` `TRAINING_DIARY_DIR` und `BEITRAGSLAUF_DIR` bei jedem Lauf idempotent an und ergänzt fehlende Env-Schlüssel. Beim Hinzufügen eines weiteren Storage-Pfads: diese Schleife im `deploy`-Target, `setup-vps.sh`, `.env.example` und die Backup-/Umzugs-Targets mitziehen. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk-scheduler.sh` (Wrapper lädt Env, sendet Better-Stack-Heartbeat bei Erfolg). Erstaufbau: `deploy/vps-setup-runbook.md` (Schritte) + `deploy/setup-vps.sh` (idempotentes Script).
+IONOS VPS Linux XS+ · Binary `/usr/local/bin/teamwerk` · systemd-Service `teamwerk` · Nginx Reverse Proxy 443→8080 (Certbot). Config `/etc/teamwerk/env` (PORT, DB_PATH, JWT_SECRET, SMTP_*, VAPID_*, LOG_FORMAT, METRICS_TOKEN, HSTS_ENABLED — **kein** `FIELD_ENCRYPTION_KEY` mehr, Zero-Knowledge). DB `/var/lib/teamwerk/teamwerk.db`. **Backup-relevante Storage-Pfade** neben der DB: `BEITRAGSLAUF_DIR` (append-only Saison-Protokolle), `TRAINING_DIARY_DIR` (Trainingsnachweise) und `BWHV_REPORT_DIR` (Spielbericht-PDFs des Verbands, ~116 MB je Saison, kumulativ über Jahre) — alle drei liegen unter `/var/lib/teamwerk/…` und werden von `make backup-files` mitgesichert; die Nachweise werden rollierend 90 Tage nach Saisonende automatisch bereinigt, ein älteres Backup holt gelöschte Nachweise also zurück. **Storage-Pfade müssen absolut in `/etc/teamwerk/env` stehen**: die relativen Defaults (`./storage/…`) lösen gegen `WorkingDirectory=/usr/local/bin` auf, wo `www-data` nicht schreiben darf. Der Env-Block im `deploy`-Target schreibt die Datei nur beim **ersten** Deploy — ein neu hinzugekommener Pfad fehlt auf Bestandsservern sonst dauerhaft, deshalb legt `make deploy` `TRAINING_DIARY_DIR`, `BEITRAGSLAUF_DIR` und `BWHV_REPORT_DIR` bei jedem Lauf idempotent an und ergänzt fehlende Env-Schlüssel. Beim Hinzufügen eines weiteren Storage-Pfads: diese Schleife im `deploy`-Target, `setup-vps.sh`, `.env.example` und die Backup-/Umzugs-Targets mitziehen. Scheduler-Cronjob `* * * * * /usr/local/bin/teamwerk-scheduler.sh` (Wrapper lädt Env, sendet Better-Stack-Heartbeat bei Erfolg). Erstaufbau: `deploy/vps-setup-runbook.md` (Schritte) + `deploy/setup-vps.sh` (idempotentes Script).
 
 SSH-Alias `teamwerk.team-stuttgart.org` (in `.env`), direkt `https://31.70.110.19`. Domain + Certbot-Zertifikat noch ausstehend.
 
@@ -113,6 +113,37 @@ Tresor-Passphrase verloren (alle Inhaber), sind **alle Bank-/SEPA-Daten unwieder
 verloren** (`group_private_key_enc` ist dann nicht mehr entschlüsselbar). Passphrase
 mindestens zwei verantwortlichen Personen bekannt machen + sicher hinterlegen
 (Passwort-Manager des Vorstands). **DB-Backup vor dem Migrationslauf** ziehen.
+
+## BWHV-Spielberichte — Betriebsvorbehalte
+
+Der Abruf von Spielplänen, Tabellen und Spielberichten (`internal/bwhv`,
+`internal/gamestats`) braucht **keine Zugangsdaten** — Schnittstelle und PDFs sind
+öffentlich. Die Vorsichtsmaßnahmen des H4A-Imports entfallen hier vollständig.
+
+Er pollt aber automatisiert einen fremden Dienst und lädt pro Saison rund 116 MB PDFs.
+Dafür gelten dieselben Maßstäbe:
+
+- **Eigener `User-Agent`** mit Projektname und Kontaktadresse (`bwhv.UserAgent`).
+- **Kein Dauer-Polling.** Eine Staffel wird nur abgefragt, wenn sie heute eine Begegnung
+  hat, deren frühester Anwurf ≥ 2 h zurückliegt und ein Bericht noch aussteht; dazu ein
+  täglicher Katalog-Lauf um 06:00. Ein Tag ohne Spiel erzeugt keinen einzigen Request.
+- **Serielle Abrufe mit Pause** (`politePause`, 750 ms), keine Parallelisierung.
+- **Ausgehend nur HTTPS**, Timeout je Request.
+- Ein **manueller Anstoß** (`POST /api/staffeln/{id}/poll`) existiert für den Notfall und
+  ist auf Vorstand/Admin beschränkt.
+
+**Abschalten:** ohne gesetztes `BWHV_REPORT_DIR` läuft der Job nicht an. Eine Instanz
+ohne Verbandsanbindung braucht sonst nichts zu tun. `BWHV_ORG_ID` (Default 216 = BWHV)
+macht den Landesverband konfigurierbar.
+
+**Vor dem ersten Lauf:** den neun Kadern der aktiven Saison unter `/admin/kader` ihre
+Staffel zuordnen (Auswahl aus dem Live-Katalog oder Freitext). Ohne Zuordnung findet der
+Poll nichts; ein unbekannter Code wird als Fehler protokolliert, nicht still übergangen.
+
+**Speicherwachstum:** die PDFs werden dauerhaft behalten (bewusste Entscheidung — sie sind
+der Beleg und erlauben ein Reparse nach einem Parser-Fix ohne erneuten Fremdabruf). Eine
+Retention ist kein Teil dieses Changes; bei Bedarf nach dem Muster von
+`trainingstagebuch-retention` nachrüsten.
 
 ## H4A-Spielimport — Betriebsvorbehalte
 

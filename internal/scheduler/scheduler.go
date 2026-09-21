@@ -44,6 +44,19 @@ type Scheduler struct {
 	db     *sql.DB
 	cfg    *appconfig.Config
 	mailer Mailer
+	// extraJobs laufen am Ende jedes Ticks. Sie sind der Weg, auf dem die
+	// Komposition (main.go) Arbeit aus Domänen-Paketen einhängt, ohne dass
+	// dieses Paket sie importieren müsste — scheduler ist Foundation und darf
+	// keine Domäne importieren (internal/arch/arch_test.go).
+	extraJobs []func()
+}
+
+// AddJob hängt einen zusätzlichen Tick-Job ein.
+func (s *Scheduler) AddJob(fn func()) *Scheduler {
+	if fn != nil {
+		s.extraJobs = append(s.extraJobs, fn)
+	}
+	return s
 }
 
 func New(db *sql.DB, cfg *appconfig.Config, m Mailer) *Scheduler {
@@ -67,6 +80,9 @@ func (s *Scheduler) Run() {
 	s.sendMatchReportReviewReminders()
 	s.purgeEventLog()
 	s.walCheckpoint()
+	for _, job := range s.extraJobs {
+		job()
+	}
 	s.recordHeartbeat()
 }
 

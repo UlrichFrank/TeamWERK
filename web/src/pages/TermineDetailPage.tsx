@@ -5,6 +5,7 @@ import { api } from '../lib/api'
 import ActionMenu from '../components/ActionMenu'
 import PersonChip from '../components/PersonChip'
 import MapsLink from '../components/MapsLink'
+import SpielberichtPanel from '../components/SpielberichtPanel'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { useAuth } from '../contexts/AuthContext'
@@ -590,6 +591,12 @@ export default function TermineDetailPage() {
       </div>
 
       <EventNoteSection note={g.note} />
+
+      {/* Offizieller BWHV-Spielbericht. Das Panel meldet sich selbst ab, wenn
+          es keinen gibt — der Abruf läuft erst nach Freigabe durch den Verband. */}
+      {isPast && g.event_type !== 'generisch' && (
+        <SpielberichtPanel gameId={g.id} />
+      )}
 
       {isTrainer && !isPast && (
         <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">

@@ -1,6 +1,9 @@
 package policy_test
 
 import (
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"testing"
 
@@ -434,6 +437,65 @@ func TestSuppressIstEngerAlsLoeschrecht(t *testing.T) {
 		}
 		if policy.CanSuppressEventNotification(p) {
 			t.Errorf("%v must not be allowed to suppress notifications", p.ClubFunctions)
+		}
+	}
+}
+
+// TestNavFor_SpiegeltAppShell hält fest, dass jeder Nav-Eintrag der Oberfläche
+// auch in NavFor vorkommt.
+//
+// AppShell.tsx trägt eine eigene, fest verdrahtete Liste und filtert sie gegen
+// die vom Server gelieferten navRoutes (= NavFor). Ein Eintrag, den NavFor
+// nicht kennt, wird damit **still ausgeblendet** — kein Fehler, keine Warnung,
+// der Menüpunkt existiert einfach nicht. Genau so verschwand der Eintrag
+// „Staffeln", bis jemand ihn vermisste.
+//
+// Der Test liest die Liste aus der TSX-Datei, statt sie hier zu wiederholen:
+// eine Kopie würde driften und genau den Abgleich verfehlen, um den es geht.
+func TestNavFor_SpiegeltAppShell(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "web", "src", "components", "AppShell.tsx"))
+	if err != nil {
+		t.Skipf("AppShell.tsx nicht lesbar (%v) — Gate übersprungen", err)
+	}
+
+	// Vereinigung über alle Personas: ein Eintrag muss für MINDESTENS eine
+	// Rolle erreichbar sein, nicht für jede.
+	bekannt := map[string]bool{}
+	for _, p := range []*policy.Principal{
+		adminP(), vorstandP(), trainerP(), slP(), spielerP(), kassiererP(),
+		{UserID: 9, Role: "standard", IsParent: true},
+		{UserID: 10, Role: "admin", HasMember: true},
+	} {
+		for _, item := range policy.NavFor(p) {
+			bekannt[item.Route] = true
+		}
+	}
+
+	reNavItem := regexp.MustCompile(`\{\s*to:\s*'([^']+)'\s*,\s*label:`)
+	var fehlend []string
+	for _, m := range reNavItem.FindAllStringSubmatch(string(raw), -1) {
+		pfad := m[1]
+		if !bekannt[pfad] {
+			fehlend = append(fehlend, pfad)
+		}
+	}
+	if len(fehlend) > 0 {
+		t.Errorf("Nav-Einträge in AppShell.tsx, die NavFor nicht kennt — sie werden im "+
+			"Betrieb still ausgeblendet: %v", fehlend)
+	}
+}
+
+// Der manuelle BWHV-Abruf greift nach außen und ist deshalb auf Vorstand/Admin
+// beschränkt — das Lesen der Staffeldaten steht dagegen allen offen.
+func TestCapabilities_PollBwhv(t *testing.T) {
+	for _, p := range []*policy.Principal{adminP(), vorstandP()} {
+		if !hasCap(policy.Capabilities(p), policy.CapPollBwhv) {
+			t.Errorf("Rolle %q sollte %s haben", p.Role, policy.CapPollBwhv)
+		}
+	}
+	for _, p := range []*policy.Principal{trainerP(), slP(), spielerP(), kassiererP()} {
+		if hasCap(policy.Capabilities(p), policy.CapPollBwhv) {
+			t.Errorf("Principal %+v darf %s nicht haben", p, policy.CapPollBwhv)
 		}
 	}
 }

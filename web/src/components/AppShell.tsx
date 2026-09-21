@@ -45,6 +45,7 @@ const navModules: NavModule[] = [
       { to: '/kalender', label: 'Kalender' },
       { to: '/termine', label: 'Termine' },
       { to: '/videos', label: 'Videos' },
+      { to: '/staffeln', label: 'Staffeln' },
       { to: '/anwesenheit', label: 'Anwesenheit' },
       { to: '/trainingstagebuch', label: 'Trainingstagebuch' },
     ],

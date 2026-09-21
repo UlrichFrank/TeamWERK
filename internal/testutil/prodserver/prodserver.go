@@ -16,6 +16,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
 	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
+	"github.com/teamstuttgart/teamwerk/internal/bwhv"
 	"github.com/teamstuttgart/teamwerk/internal/calendar"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
@@ -24,6 +25,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/duties"
 	"github.com/teamstuttgart/teamwerk/internal/files"
 	"github.com/teamstuttgart/teamwerk/internal/games"
+	"github.com/teamstuttgart/teamwerk/internal/gamestats"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
 	"github.com/teamstuttgart/teamwerk/internal/mailer"
@@ -81,6 +83,8 @@ func buildHandlers(t *testing.T, database *sql.DB) (*app.Handlers, *hub.EventHub
 		Calendar:       calendar.NewHandler(database),
 		Videos:         videos.NewHandler(database, hubInstance, cfg),
 		MatchReports:   matchreports.NewHandler(database, hubInstance, cfg),
+		GameStats: gamestats.NewHandler(database, hubInstance, bwhv.NewClient(),
+			gamestats.NewReportStore(cfg.BwhvReportDir), cfg.BwhvOrgID),
 		// Media fehlte hier bis zur Objekt-Matrix: GET /api/media/{id} lief mit
 		// nil-Receiver in einen Panic (500) statt in das Objekt-Gate des Handlers.
 		Media:         media.NewHandler(database, t.TempDir()),

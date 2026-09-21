@@ -55,6 +55,8 @@ BEITRAGSLAUF_DIR=/var/lib/teamwerk/beitragslauf-protokolle
 # (./storage/training-diary) liegt unter WorkingDirectory=/usr/local/bin und ist
 # für www-data nicht anlegbar — der Prozess käme nicht hoch.
 TRAINING_DIARY_DIR=/var/lib/teamwerk/training-diary
+BWHV_REPORT_DIR=/var/lib/teamwerk/bwhv-reports
+BWHV_ORG_ID=216
 JWT_SECRET=$JWT_SECRET
 SMTP_HOST=mail.agenturserver.de
 SMTP_PORT=587

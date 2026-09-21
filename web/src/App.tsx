@@ -43,6 +43,7 @@ import MatchReportListPage from './pages/MatchReportListPage'
 import MatchReportFormPage from './pages/MatchReportFormPage'
 import MatchReportPendingListPage from './pages/MatchReportPendingListPage'
 import VideosPage from './pages/VideosPage'
+import StaffelnPage from './pages/StaffelnPage'
 import VideoDetailPage from './pages/VideoDetailPage'
 import TeamAnwesenheitPage from './pages/TeamAnwesenheitPage'
 import ProfilAnwesenheitPage from './pages/ProfilAnwesenheitPage'
@@ -140,6 +141,7 @@ export default function App() {
               <Route path="spielberichte/pruefen" element={<RoleRoute roles={['admin','medien','vorstand']}><MatchReportPendingListPage /></RoleRoute>} />
               <Route path="spielberichte/:id" element={<MatchReportFormPage />} />
               <Route path="videos" element={<VideosPage />} />
+              <Route path="staffeln" element={<StaffelnPage />} />
               <Route path="videos/:id" element={<VideoDetailPage />} />
               <Route path="trainings" element={<Navigate to="/termine" replace />} />
               <Route path="trainings/:id" element={<Navigate to="/termine" replace />} />

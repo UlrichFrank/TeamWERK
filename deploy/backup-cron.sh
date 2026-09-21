@@ -17,7 +17,8 @@
 # Gesichert wird:
 #   - SQLite-DB (`sqlite3 .backup`, konsistenter Snapshot auch bei aktivem WAL)
 #   - Storage-Pfade aus /etc/teamwerk/env (UPLOAD_DIR, FILES_DIR, MEDIA_DIR,
-#     BEITRAGSLAUF_DIR, TRAINING_DIARY_DIR, MATCH_REPORT_IMAGE_DIR) als
+#     BEITRAGSLAUF_DIR, TRAINING_DIARY_DIR, MATCH_REPORT_IMAGE_DIR,
+#     BWHV_REPORT_DIR) als
 #     ein gemeinsames tar.gz
 #   - NICHT: Videos (VIDEO_STORAGE_DIR) — GB-Bereich, eigener Weg via
 #     `make backup-videos`
@@ -70,7 +71,7 @@ mv "$DEST/teamwerk.db.tmp" "$DEST/teamwerk.db"
 # 2. Storage-Pfade als ein gemeinsames tar.gz (Videos bewusst ausgenommen)
 # ---------------------------------------------------------------------------
 STORAGE_DIRS=()
-for var in UPLOAD_DIR FILES_DIR MEDIA_DIR BEITRAGSLAUF_DIR TRAINING_DIARY_DIR MATCH_REPORT_IMAGE_DIR; do
+for var in UPLOAD_DIR FILES_DIR MEDIA_DIR BEITRAGSLAUF_DIR TRAINING_DIARY_DIR MATCH_REPORT_IMAGE_DIR BWHV_REPORT_DIR; do
     val="${!var:-}"
     if [[ -n "$val" && -d "$val" ]]; then
         STORAGE_DIRS+=("$val")
