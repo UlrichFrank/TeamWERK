@@ -49,5 +49,5 @@
 
 ## 7. Abschluss
 
-- [ ] 7.1 Gotcha-Absatz in `docs/agent/06-gotchas.md` ergänzen: Abdeckungs-Unterschied (Ergebnisse vs. Berichte), feste Zwei-Punkte-Annahme, Schiedsrichter-Trennung aus den PDF-Spalten, Auflösung der eigenen Mannschaft über `bwhv_games.game_id` statt Namensvergleich. Verifikation: Absatz vorhanden und nennt die Fundstellen im Code.
+- [x] 7.1 Gotcha-Absatz in `docs/agent/06-gotchas.md` ergänzen: Abdeckungs-Unterschied (Ergebnisse vs. Berichte), feste Zwei-Punkte-Annahme, Schiedsrichter-Trennung aus den PDF-Spalten, Auflösung der eigenen Mannschaft über `bwhv_games.game_id` statt Namensvergleich. Verifikation: Absatz vorhanden und nennt die Fundstellen im Code.
 - [ ] 7.2 `/verify-change` ausführen: Build, Test, Lint, Route→Tests, brand-Tokens, lucide-Icons, Migrationsnummer, `openspec validate`. Verifikation: alle Prüfungen grün.

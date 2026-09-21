@@ -1,0 +1,20 @@
+Unter https://www.bwhv.org/spielbetrieb/ergebnisse/tabellen#/schedule sind die Ergebnisse aller Baden-Württembergischer Handball-Verband Spiele
+
+In Jeder Zeile sind in der Bemerkungsspalte die Spielberichte in PDF-Form hinterlegt, die früher von handball.net mit ~/Dev/handballnet_crawler herunterladbar und analysierbar waren
+z.B. https://spo.handball4all.de/misc/sboPublicReports.php?sGID=3504061
+
+Für die Mannschaften gilt folgende Staffelzuteilung (Team zu Staffel):
+mA1 mA-RL-BW							
+mA2 mA-BOL-SRM
+mB1 mB-RL-BW
+mB2 mB-OL-3-BW
+mC1 mC-OL-3-BW
+mC2 mC-BOL-SRM
+gD  gD-BOL-SRM
+wB  wB-BOL-1-SRM
+wC  wC-OL-2-BW
+
+Ich möchte wie bei ~/Dev/handballnet_crawler jeweils 1h nach dem Ende eines Spieles die Spielberichte herunterladen (wiederkehrend bei Fehlsversuch erneur versuchen)
+
+Wie bei Handballnet_crawler möchte ich die Daten in Teamwerk anzeigen können. Mache einen passenden Vorschlag dafür. Das soll vollständig in Teamwerk implementiert sein
+ 
