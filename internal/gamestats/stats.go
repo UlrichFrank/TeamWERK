@@ -103,16 +103,22 @@ type ReportDetail struct {
 	// Endstand und Halbzeitstand stammen aus dem Kopf des Berichts und liegen
 	// an der Begegnung. Sie werden NICHT aus dem Spielverlauf abgeleitet: die
 	// Halbzeitpause ist dort unsichtbar, weil die Spieluhr stillsteht.
-	HomeGoals    *int         `json:"homeGoals"`
-	GuestGoals   *int         `json:"guestGoals"`
-	HomeGoalsHT  *int         `json:"homeGoalsHt"`
-	GuestGoalsHT *int         `json:"guestGoalsHt"`
-	Spectators   string       `json:"spectators"`
-	Referees     string       `json:"referees"`
-	Warnings     []string     `json:"warnings"`
-	HasPDF       bool         `json:"hasPdf"`
-	Players      []PlayerLine `json:"players"`
-	Events       []EventLine  `json:"events"`
+	HomeGoals    *int   `json:"homeGoals"`
+	GuestGoals   *int   `json:"guestGoals"`
+	HomeGoalsHT  *int   `json:"homeGoalsHt"`
+	GuestGoalsHT *int   `json:"guestGoalsHt"`
+	Spectators   string `json:"spectators"`
+	// Referees ist die ungetrennte Rohzeile des Dokuments, RefereeNames die
+	// daraus gewonnenen Personen. Beide stehen nebeneinander: die Rohzeile ist
+	// der Beleg, aus dem eine später verbesserte Trennung ohne erneuten
+	// Fremdabruf gewonnen werden kann (design.md §7).
+	Referees          string       `json:"referees"`
+	RefereeNames      []string     `json:"refereeNames"`
+	RefereesUncertain bool         `json:"refereesUncertain"`
+	Warnings          []string     `json:"warnings"`
+	HasPDF            bool         `json:"hasPdf"`
+	Players           []PlayerLine `json:"players"`
+	Events            []EventLine  `json:"events"`
 }
 
 // PlayerLine ist eine Spielerzeile eines Berichts.
@@ -150,15 +156,17 @@ type EventLine struct {
 // Fehlt er oder ist er gescheitert, meldet die Funktion sql.ErrNoRows.
 func (s *Store) ReportForGame(ctx context.Context, bwhvGameID int) (*ReportDetail, error) {
 	var d ReportDetail
-	var warnings, pdfPath string
+	var warnings, pdfPath, refereesJSON string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT r.id, r.state, r.spectators, r.referees, r.warnings_json, r.pdf_path,
+		SELECT r.id, r.state, r.spectators, r.referees, r.referees_json,
+		       r.referees_uncertain, r.warnings_json, r.pdf_path,
 		       g.home_team, g.guest_team,
 		       g.home_goals, g.guest_goals, g.home_goals_ht, g.guest_goals_ht
 		  FROM bwhv_reports r
 		  JOIN bwhv_games g ON g.id = r.bwhv_game_id
 		 WHERE r.bwhv_game_id = ? AND r.state = 'parsed'`, bwhvGameID).
-		Scan(&d.ReportID, &d.State, &d.Spectators, &d.Referees, &warnings, &pdfPath,
+		Scan(&d.ReportID, &d.State, &d.Spectators, &d.Referees, &refereesJSON,
+			&d.RefereesUncertain, &warnings, &pdfPath,
 			&d.HomeTeam, &d.GuestTeam,
 			&d.HomeGoals, &d.GuestGoals, &d.HomeGoalsHT, &d.GuestGoalsHT)
 	if err != nil {
@@ -166,6 +174,7 @@ func (s *Store) ReportForGame(ctx context.Context, bwhvGameID int) (*ReportDetai
 	}
 	d.HasPDF = pdfPath != ""
 	d.Warnings = decodeWarnings(warnings)
+	d.RefereeNames = decodeStrings(refereesJSON)
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.id, p.member_id, p.name, pg.side, pg.jersey_number,

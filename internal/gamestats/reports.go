@@ -146,15 +146,19 @@ func (s *Store) SaveReport(ctx context.Context, p PendingReport, rep *bwhv.Repor
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO bwhv_reports (bwhv_game_id, sgid, state, pdf_path, spectators, referees,
-			warnings_json, failure_reason, attempts, fetched_at, parsed_at)
-		VALUES (?, ?, 'parsed', ?, ?, ?, ?, '', 1, ?, ?)
+			referees_json, referees_uncertain, warnings_json, failure_reason, attempts,
+			fetched_at, parsed_at)
+		VALUES (?, ?, 'parsed', ?, ?, ?, ?, ?, ?, '', 1, ?, ?)
 		ON CONFLICT (bwhv_game_id) DO UPDATE SET
 			state = 'parsed', pdf_path = excluded.pdf_path,
 			spectators = excluded.spectators, referees = excluded.referees,
+			referees_json = excluded.referees_json,
+			referees_uncertain = excluded.referees_uncertain,
 			warnings_json = excluded.warnings_json, failure_reason = '',
 			attempts = bwhv_reports.attempts + 1,
 			fetched_at = excluded.fetched_at, parsed_at = excluded.parsed_at`,
 		p.BwhvGameID, p.SGID, pdfPath, rep.Header.Spectators, rep.Header.Referees,
+		encodeStrings(rep.Header.RefereeNames), boolToInt(rep.Header.RefereesUncertain),
 		string(warnings), nowUTC(), nowUTC()); err != nil {
 		return err
 	}
@@ -238,3 +242,10 @@ func (s *Store) ActiveSeason(ctx context.Context) (int, error) {
 }
 
 func nowUTC() string { return time.Now().UTC().Format(time.RFC3339) }
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}

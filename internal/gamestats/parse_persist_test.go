@@ -212,3 +212,50 @@ func TestReportStore_LegtAbUndOeffnet(t *testing.T) {
 		t.Error("erwartet: Fehler bei fehlender Datei")
 	}
 }
+
+// Die getrennten Namen und der Vermerk der unsicheren Trennung müssen den Weg
+// durch SaveReport und ReportForGame überstehen — die Rohzeile bleibt daneben
+// stehen, sie ist der Beleg.
+func TestSaveReport_SchiedsrichterWerdenGetrenntGespeichert(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	ctx := context.Background()
+	p := seedPending(t, s, staffelID, "905272", "3504061")
+
+	rep, err := bwhv.ParseReport(fixturePDF(t, "spielbericht_905272.pdf"))
+	if err != nil {
+		t.Fatalf("ParseReport: %v", err)
+	}
+	rep.Header.Referees = "Max Mustermann Peter Müller"
+	rep.Header.RefereeNames = []string{"Max Mustermann", "Peter Müller"}
+	rep.Header.RefereesUncertain = true
+	if err := s.SaveReport(ctx, p, rep, "26/905272.pdf"); err != nil {
+		t.Fatalf("SaveReport: %v", err)
+	}
+
+	var raw, refJSON string
+	var uncertain int
+	if err := db.QueryRow(`SELECT referees, referees_json, referees_uncertain
+		FROM bwhv_reports WHERE bwhv_game_id = ?`, p.BwhvGameID).Scan(&raw, &refJSON, &uncertain); err != nil {
+		t.Fatal(err)
+	}
+	if raw != "Max Mustermann Peter Müller" {
+		t.Errorf("referees = %q, erwartet die unveränderte Rohzeile", raw)
+	}
+	if uncertain != 1 {
+		t.Errorf("referees_uncertain = %d, erwartet 1", uncertain)
+	}
+
+	detail, err := s.ReportForGame(ctx, p.BwhvGameID)
+	if err != nil {
+		t.Fatalf("ReportForGame: %v", err)
+	}
+	if len(detail.RefereeNames) != 2 || detail.RefereeNames[1] != "Peter Müller" {
+		t.Errorf("RefereeNames = %#v, erwartet zwei Namen", detail.RefereeNames)
+	}
+	if !detail.RefereesUncertain {
+		t.Error("RefereesUncertain = false, erwartet true")
+	}
+	if detail.Referees != raw {
+		t.Errorf("Referees = %q, erwartet die Rohzeile %q", detail.Referees, raw)
+	}
+}
