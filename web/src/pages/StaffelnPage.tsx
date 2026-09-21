@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Trophy, CalendarDays, ListOrdered, FileText, Home, MapPin } from 'lucide-react'
+import { Trophy, CalendarDays, ListOrdered, FileText, Home, MapPin, RefreshCw } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
-import { HEADER_FIELD } from '../lib/buttonStyles'
+import { useAuth } from '../contexts/AuthContext'
+import { api } from '../lib/api'
+import { HEADER_CTRL, HEADER_NEUTRAL, HEADER_FIELD } from '../lib/buttonStyles'
 import {
   Staffel, TableRow, ScheduleGame, PlayerStat,
-  fetchStaffeln, fetchTable, fetchSchedule, fetchRanglisten,
+  fetchStaffeln, fetchTable, fetchSchedule, fetchRanglisten, syncStaffeln,
   goalRatio, pointsLabel, sevenMeterRate,
 } from '../lib/staffeln'
 
@@ -29,6 +31,9 @@ export default function StaffelnPage() {
   const [stats, setStats] = useState<PlayerStat[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [polling, setPolling] = useState(false)
+  const [pollHinweis, setPollHinweis] = useState('')
+  const { hasCapability } = useAuth()
 
   const selectedId = Number(params.get('staffel')) || 0
   const tab = (params.get('tab') as Tab) || 'tabelle'
@@ -45,7 +50,7 @@ export default function StaffelnPage() {
   }, [])
 
   const reload = () => {
-    if (!selected) return
+    if (!selected || selected.id === 0) { setTable([]); setGames([]); setStats([]); return }
     Promise.all([
       fetchTable(selected.id),
       fetchSchedule(selected.id),
@@ -57,6 +62,25 @@ export default function StaffelnPage() {
 
   useEffect(reload, [selected?.id])
   useLiveUpdates((event) => { if (event === 'bwhv-updated') reload() })
+
+  // Der Abruf läuft serverseitig im Hintergrund weiter; die Seite lädt über
+  // das SSE-Ereignis bwhv-updated nach, sobald etwas ankommt.
+  const pollJetzt = async () => {
+    if (!selected) return
+    setPolling(true)
+    setPollHinweis('')
+    try {
+      // Ohne Snapshot gibt es noch keine Staffel-ID; dann muss erst die
+      // Auflösung gegen den Katalog laufen (SyncNow legt die Zeilen an).
+      if (selected.id === 0) await syncStaffeln()
+      else await api.post(`/staffeln/${selected.id}/poll`)
+      setPollHinweis('Abruf gestartet — neue Daten erscheinen hier, sobald sie da sind.')
+    } catch {
+      setPollHinweis('Der Abruf konnte nicht gestartet werden.')
+    } finally {
+      setPolling(false)
+    }
+  }
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params)
@@ -72,7 +96,7 @@ export default function StaffelnPage() {
         <h1 className="text-2xl font-bold text-brand-text mb-4">Staffeln</h1>
         <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
           Für diese Saison ist noch keiner Mannschaft eine Staffel zugeordnet. Der Vorstand
-          pflegt sie in der Kaderverwaltung.
+          pflegt sie unter Verwaltung → Kader, direkt an der Mannschaft.
         </div>
       </div>
     )
@@ -82,18 +106,31 @@ export default function StaffelnPage() {
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h1 className="text-2xl font-bold text-brand-text">Staffeln</h1>
-        <select
-          className={HEADER_FIELD}
-          value={selected?.id ?? ''}
-          onChange={(e) => setParam('staffel', e.target.value)}
-          aria-label="Mannschaft wählen"
-        >
-          {staffeln.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.teamName || s.code}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2">
+          <select
+            className={HEADER_FIELD}
+            value={selected?.id ?? ''}
+            onChange={(e) => setParam('staffel', e.target.value)}
+            aria-label="Mannschaft wählen"
+          >
+            {staffeln.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.teamName || s.code}
+              </option>
+            ))}
+          </select>
+          {hasCapability('poll_bwhv') && (
+            <button
+              onClick={pollJetzt}
+              disabled={polling || !selected}
+              className={`${HEADER_CTRL} ${HEADER_NEUTRAL}`}
+              title="Spielplan, Tabelle und offene Spielberichte dieser Staffel jetzt beim Verband abrufen"
+            >
+              <RefreshCw className={`w-4 h-4${polling ? ' animate-spin' : ''}`} />
+              Jetzt abrufen
+            </button>
+          )}
+        </div>
       </div>
 
       {selected && (
@@ -101,6 +138,12 @@ export default function StaffelnPage() {
           {selected.name || selected.code}{' '}
           <span className="text-brand-text-subtle">({selected.code})</span>
         </p>
+      )}
+
+      {pollHinweis && (
+        <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text mb-4">
+          {pollHinweis}
+        </div>
       )}
 
       {error && (
@@ -126,9 +169,21 @@ export default function StaffelnPage() {
         ))}
       </div>
 
-      {tab === 'tabelle' && <TableView rows={table} />}
-      {tab === 'spielplan' && <ScheduleView games={games} />}
-      {tab === 'ranglisten' && <RanglistenView stats={stats} />}
+      {selected && !selected.polled ? (
+        <Empty
+          text={
+            'Diese Staffel ist der Mannschaft zugeordnet, aber es wurde noch nichts beim ' +
+            'Verband abgerufen. Der Abruf läuft an Spieltagen automatisch — oder der ' +
+            'Vorstand stößt ihn oben mit „Jetzt abrufen" an.'
+          }
+        />
+      ) : (
+        <>
+          {tab === 'tabelle' && <TableView rows={table} />}
+          {tab === 'spielplan' && <ScheduleView games={games} />}
+          {tab === 'ranglisten' && <RanglistenView stats={stats} />}
+        </>
+      )}
     </div>
   )
 }

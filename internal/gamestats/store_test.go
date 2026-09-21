@@ -132,3 +132,77 @@ func TestStaffelCodes_NurMannschaftsKader(t *testing.T) {
 		t.Errorf("Übungsgruppe darf keine Staffel beisteuern: %v", codes)
 	}
 }
+
+// Der gemeldete Fehler: eine am Kader gepflegte Staffel war auf /staffeln
+// unsichtbar, solange noch kein Abruf gelaufen war — die Liste las FROM
+// bwhv_staffeln statt FROM kader. Die Zuordnung ist aber das, was der Vorstand
+// pflegt; der Snapshot ist die Folge.
+func TestListStaffelnWithTeam_ZeigtZuordnungOhneAbruf(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "26/27")
+	teamID := testutil.CreateTeam(t, db, "B-Jugend männlich")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	if _, err := db.Exec(`UPDATE kader SET staffel = 'mB-RL-BW' WHERE id = ?`, kaderID); err != nil {
+		t.Fatal(err)
+	}
+	// Bewusst KEINE bwhv_staffeln-Zeile: es lief noch kein Abruf.
+
+	list, err := NewStore(db).ListStaffelnWithTeam(context.Background(), seasonID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("Zuordnungen = %d, erwartet 1 — die Staffel steht am Kader", len(list))
+	}
+	if list[0].Code != "mB-RL-BW" || list[0].TeamName != "B-Jugend männlich" {
+		t.Errorf("Eintrag = %+v, erwartet mB-RL-BW / B-Jugend männlich", list[0])
+	}
+	if list[0].ID != 0 || list[0].Polled {
+		t.Errorf("ohne Abruf erwartet ID 0 und Polled=false, bekam ID %d / Polled %v",
+			list[0].ID, list[0].Polled)
+	}
+}
+
+func TestListStaffelnWithTeam_PolledNachAbruf(t *testing.T) {
+	db, s, seasonID, staffelID := newStaffel(t)
+	teamID := testutil.CreateTeam(t, db, "B-Jugend männlich")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	if _, err := db.Exec(`UPDATE kader SET staffel = 'mB-RL-BW' WHERE id = ?`, kaderID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SaveSchedule(context.Background(), staffelID, sampleSchedule(2)); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := s.ListStaffelnWithTeam(context.Background(), seasonID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("Zuordnungen = %d, erwartet 1", len(list))
+	}
+	if list[0].ID != staffelID || !list[0].Polled {
+		t.Errorf("nach Abruf erwartet ID %d und Polled=true, bekam ID %d / Polled %v",
+			staffelID, list[0].ID, list[0].Polled)
+	}
+}
+
+// Ein Kader ohne Staffel taucht nicht auf, eine Übungsgruppe ebenfalls nicht.
+func TestListStaffelnWithTeam_OhneZuordnungLeer(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "26/27")
+	teamID := testutil.CreateTeam(t, db, "B-Jugend männlich")
+	testutil.CreateKader(t, db, teamID, seasonID)
+	practiceID := testutil.CreatePracticeGroup(t, db, seasonID, "Torwarttraining")
+	if _, err := db.Exec(`UPDATE kader SET staffel = 'mC-OL-3-BW' WHERE id = ?`, practiceID); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := NewStore(db).ListStaffelnWithTeam(context.Background(), seasonID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Errorf("erwartet leer, bekam %+v", list)
+	}
+}

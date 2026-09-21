@@ -737,6 +737,7 @@ var matrix = []endpointCase{
 	// deshalb enger als das Lesen der Staffel-Daten (Authenticated).
 	{method: "GET", path: "/api/bwhv/staffel-katalog", expected: exVorstand},
 	{method: "POST", path: "/api/staffeln/{id}/poll", expected: exVorstand},
+	{method: "POST", path: "/api/staffeln/sync", expected: exVorstand},
 	{method: "POST", path: "/api/duty-slots/bulk-regen/preview", expected: exVorstand},
 	{method: "POST", path: "/api/duty-slots/bulk-regen/apply", expected: exVorstand},
 	{method: "POST", path: "/api/seasons", expected: exVorstand},

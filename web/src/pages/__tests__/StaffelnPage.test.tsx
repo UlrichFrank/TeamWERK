@@ -4,6 +4,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import MockAdapter from 'axios-mock-adapter'
 import { api } from '../../lib/api'
 import StaffelnPage from '../StaffelnPage'
+import { AuthContext, type AuthCtx } from '../../contexts/AuthContext'
 
 const liveHandlers: Array<(e: string) => void> = []
 vi.mock('../../hooks/useLiveUpdates', () => ({
@@ -13,8 +14,13 @@ vi.mock('../../hooks/useLiveUpdates', () => ({
 let mock: MockAdapter
 
 const staffeln = [
-  { id: 1, code: 'mB-RL-BW', name: 'B-Jugend Regionalliga', teamName: 'B-Jugend männlich', kaderId: 10 },
-  { id: 2, code: 'wC-OL-2-BW', name: 'C-Jugend Oberliga', teamName: 'C-Jugend weiblich', kaderId: 11 },
+  { id: 1, code: 'mB-RL-BW', name: 'B-Jugend Regionalliga', teamName: 'B-Jugend männlich', kaderId: 10, polled: true },
+  { id: 2, code: 'wC-OL-2-BW', name: 'C-Jugend Oberliga', teamName: 'C-Jugend weiblich', kaderId: 11, polled: true },
+]
+
+// Zugeordnet, aber noch nie abgerufen: id 0, polled false.
+const staffelnOhneAbruf = [
+  { id: 0, code: 'mB-RL-BW', name: '', teamName: 'B-Jugend männlich', kaderId: 10, polled: false },
 ]
 
 const table = [
@@ -45,11 +51,22 @@ function mockAll() {
   mock.onGet(/\/staffeln\/\d+\/ranglisten/).reply(200, stats)
 }
 
-function setup(initial = '/staffeln') {
+const ctx = (caps: string[]): AuthCtx => ({
+  user: { id: 1, email: 'a@test.local', role: 'standard', clubFunctions: [], isParent: false },
+  loading: false, impersonating: null, mapsProvider: 'auto', setMapsProvider: () => {},
+  capabilities: caps, hasCapability: (c: string) => caps.includes(c), navRoutes: [],
+  passwordChangeRecommended: false, dismissPasswordChangeHint: () => {},
+  keepAlive: () => {}, login: async () => {}, logout: async () => {},
+  startImpersonation: async () => {}, stopImpersonation: async () => {},
+})
+
+function setup(initial = '/staffeln', caps: string[] = []) {
   return render(
-    <MemoryRouter initialEntries={[initial]}>
-      <Routes><Route path="/staffeln" element={<StaffelnPage />} /></Routes>
-    </MemoryRouter>,
+    <AuthContext.Provider value={ctx(caps)}>
+      <MemoryRouter initialEntries={[initial]}>
+        <Routes><Route path="/staffeln" element={<StaffelnPage />} /></Routes>
+      </MemoryRouter>
+    </AuthContext.Provider>,
   )
 }
 
@@ -121,5 +138,56 @@ describe('StaffelnPage', () => {
 
     liveHandlers.forEach(fn => fn('games'))
     expect(mock.history.get.length).toBe(vorher)
+  })
+
+  // Der manuelle Abruf greift nach außen und hängt deshalb an der Capability
+  // poll_bwhv (Vorstand/Admin) — das Lesen steht allen offen.
+  test('Abruf-Knopf nur mit Capability poll_bwhv', async () => {
+    mockAll()
+    setup('/staffeln')
+    await waitFor(() => expect(screen.getByText('Verein A')).toBeInTheDocument())
+    expect(screen.queryByText('Jetzt abrufen')).not.toBeInTheDocument()
+  })
+
+  test('mit Capability wird der Abruf angestoßen', async () => {
+    mockAll()
+    mock.onPost(/\/staffeln\/\d+\/poll/).reply(200, { status: 'gestartet' })
+    setup('/staffeln', ['poll_bwhv'])
+    await waitFor(() => expect(screen.getByText('Jetzt abrufen')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Jetzt abrufen'))
+    await waitFor(() => expect(mock.history.post).toHaveLength(1))
+    expect(await screen.findByText(/Abruf gestartet/)).toBeInTheDocument()
+  })
+
+  test('ein fehlgeschlagener Abruf wird gemeldet', async () => {
+    mockAll()
+    mock.onPost(/\/staffeln\/\d+\/poll/).reply(403, { error: 'forbidden' })
+    setup('/staffeln', ['poll_bwhv'])
+    await waitFor(() => expect(screen.getByText('Jetzt abrufen')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Jetzt abrufen'))
+    expect(await screen.findByText(/konnte nicht gestartet werden/)).toBeInTheDocument()
+  })
+
+  // Der gemeldete Fehler: eine im Kader gepflegte Staffel erschien nicht, weil
+  // die Liste aus dem Abruf-Snapshot statt aus der Zuordnung kam.
+  test('zeigt eine zugeordnete Staffel auch ohne Abruf', async () => {
+    mock.onGet('/staffeln').reply(200, staffelnOhneAbruf)
+    setup()
+    await waitFor(() => expect(screen.getByText('mB-RL-BW')).toBeInTheDocument())
+    expect(screen.queryByText(/noch keiner Mannschaft eine Staffel zugeordnet/)).not.toBeInTheDocument()
+    expect(screen.getByText(/noch nichts beim Verband abgerufen/)).toBeInTheDocument()
+  })
+
+  test('ohne Snapshot stößt der Knopf die Einrichtung an', async () => {
+    mock.onGet('/staffeln').reply(200, staffelnOhneAbruf)
+    mock.onPost('/staffeln/sync').reply(200, { status: 'gestartet' })
+    setup('/staffeln', ['poll_bwhv'])
+    await waitFor(() => expect(screen.getByText('Jetzt abrufen')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Jetzt abrufen'))
+    await waitFor(() => expect(mock.history.post).toHaveLength(1))
+    expect(mock.history.post[0].url).toBe('/staffeln/sync')
   })
 })

@@ -241,6 +241,11 @@ const (
 	// haben): ein Lauf über die Restsaison kann hunderte Slots löschen/neu
 	// anlegen. Gleiche Begründung und gleiches Tier wie CapImportGames.
 	CapBulkRegenDuties = "bulk_regen_duties"
+
+	// CapPollBwhv erlaubt den manuellen Anstoß des BWHV-Abrufs einer Staffel.
+	// Wie CapBulkRegenDuties bewusst eng (Vorstand/Admin): der Lauf greift nach
+	// außen, das Lesen der Staffeldaten steht dagegen allen Eingeloggten offen.
+	CapPollBwhv = "poll_bwhv"
 )
 
 // Capabilities returns the list of capability strings for a given principal.
@@ -282,6 +287,9 @@ func Capabilities(p *Principal) []string {
 	if CanBulkRegenDuties(p) {
 		caps = append(caps, CapBulkRegenDuties)
 	}
+	if IsVorstandLike(p) {
+		caps = append(caps, CapPollBwhv)
+	}
 	if p.Role == "admin" {
 		caps = append(caps, CapImpersonate, CapManageDocuments, CapModerateChat)
 	}
@@ -306,6 +314,7 @@ func NavFor(p *Principal) []NavItem {
 	nav = append(nav, NavItem{"Kalender", "/kalender"})
 	nav = append(nav, NavItem{"Termine", "/termine"})
 	nav = append(nav, NavItem{"Videos", "/videos"})
+	nav = append(nav, NavItem{"Staffeln", "/staffeln"})
 	// Anwesenheits-Statistik nur für Trainer / sportliche Leitung / Admin.
 	if IsTrainerLike(p) {
 		nav = append(nav, NavItem{"Anwesenheit", "/anwesenheit"})

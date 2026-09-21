@@ -49,8 +49,15 @@ func userToken(t *testing.T) string {
 	return testutil.Token(t, 1, "standard", []string{"spieler"})
 }
 
+// Die Liste folgt der Zuordnung am Kader, nicht dem Snapshot — deshalb braucht
+// dieser Test einen Kader mit gesetzter Staffel.
 func TestListStaffeln_HappyPath(t *testing.T) {
-	srv, s, _, staffelID := newHandlerServer(t)
+	srv, s, seasonID, staffelID := newHandlerServer(t)
+	teamID := testutil.CreateTeam(t, s.db, "B-Jugend männlich")
+	kaderID := testutil.CreateKader(t, s.db, teamID, seasonID)
+	if _, err := s.db.Exec(`UPDATE kader SET staffel = 'mB-RL-BW' WHERE id = ?`, kaderID); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.SaveSchedule(context.Background(), staffelID, sampleSchedule(3)); err != nil {
 		t.Fatal(err)
 	}

@@ -4,11 +4,13 @@ import { api } from './api'
 // per JSON-Tag festgelegt und folgen camelCase.
 
 export interface Staffel {
+  /** 0, solange zu dieser Zuordnung noch nichts abgerufen wurde. */
   id: number
   code: string
   name: string
   teamName: string
   kaderId: number
+  polled: boolean
 }
 
 export interface TableRow {
@@ -107,6 +109,9 @@ export interface ReportDetail {
 }
 
 export const fetchStaffeln = () => api.get<Staffel[]>('/staffeln').then((r) => r.data)
+
+/** Löst alle Staffelcodes der Saison auf und ruft die Spielpläne ab. */
+export const syncStaffeln = () => api.post('/staffeln/sync').then((r) => r.data)
 export const fetchTable = (id: number) => api.get<TableRow[]>(`/staffeln/${id}/tabelle`).then((r) => r.data)
 export const fetchSchedule = (id: number) => api.get<ScheduleGame[]>(`/staffeln/${id}/spielplan`).then((r) => r.data)
 export const fetchRanglisten = (id: number) => api.get<PlayerStat[]>(`/staffeln/${id}/ranglisten`).then((r) => r.data)

@@ -196,20 +196,29 @@ func (s *Store) StaffelByID(ctx context.Context, id, seasonID int) (*Staffel, er
 	return &st, nil
 }
 
-// ListStaffelnWithTeam liefert die Staffeln der Saison samt Mannschaftsnamen.
+// ListStaffelnWithTeam liefert die Staffel-Zuordnungen der Saison.
 //
-// Der LEFT JOIN ist Absicht: eine Staffel ohne zugehörigen Kader entsteht, wenn
-// jemand die Zuordnung am Kader entfernt. Sie verschwindet dann aus der Pflege,
-// ihre Daten bleiben aber abrufbar, statt still aus der Ansicht zu fallen.
+// Die Abfrage geht FROM kader, nicht FROM bwhv_staffeln: die Zuordnung ist das,
+// was der Vorstand pflegt (kader.staffel), der Snapshot in bwhv_staffeln
+// entsteht erst beim ersten Abruf. Andersherum — und genau das war der Fehler —
+// bleibt eine frisch gepflegte Staffel unsichtbar, bis zufällig ein Poll lief,
+// und die Seite behauptet "noch keiner Mannschaft zugeordnet".
+//
+// Polled=false heißt deshalb "zugeordnet, aber noch nichts abgerufen" und ist
+// ein anzeigbarer Zustand, kein Fehler.
 func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID int) ([]staffelResponse, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT st.id, st.code, st.name,
-		       COALESCE(t.name, ''), COALESCE(k.id, 0)
-		  FROM bwhv_staffeln st
-		  LEFT JOIN kader k ON k.season_id = st.season_id AND k.staffel = st.code AND k.kind = 'team'
+		SELECT COALESCE(st.id, 0), k.staffel, COALESCE(st.name, ''),
+		       COALESCE(t.name, ''), k.id,
+		       CASE WHEN st.polled_at IS NULL THEN 0 ELSE 1 END
+		  FROM kader k
 		  LEFT JOIN teams t ON t.id = k.team_id
-		 WHERE st.season_id = ?
-		 ORDER BY t.name, st.code`, seasonID)
+		  LEFT JOIN bwhv_staffeln st ON st.season_id = k.season_id AND st.code = k.staffel
+		 WHERE k.season_id = ?
+		   AND k.kind = 'team'
+		   AND k.staffel IS NOT NULL
+		   AND TRIM(k.staffel) <> ''
+		 ORDER BY t.name, k.staffel`, seasonID)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +226,7 @@ func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID int) ([]staff
 	var out []staffelResponse
 	for rows.Next() {
 		var r staffelResponse
-		if err := rows.Scan(&r.ID, &r.Code, &r.Name, &r.TeamName, &r.KaderID); err != nil {
+		if err := rows.Scan(&r.ID, &r.Code, &r.Name, &r.TeamName, &r.KaderID, &r.Polled); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

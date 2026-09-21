@@ -651,6 +651,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 				r.Use(auth.RequireClubFunction("vorstand"))
 				r.Get("/api/bwhv/staffel-katalog", h.GameStats.GetKatalog)
 				r.Post("/api/staffeln/{id}/poll", h.GameStats.PollNow)
+				r.Post("/api/staffeln/sync", h.GameStats.SyncNow)
 			})
 		}
 

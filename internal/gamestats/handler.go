@@ -3,6 +3,7 @@ package gamestats
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -34,11 +35,14 @@ func NewHandler(db *sql.DB, h *hub.EventHub, client *bwhv.Client, reports *Repor
 
 // staffelResponse ist eine Staffel mit ihrer Mannschaft.
 type staffelResponse struct {
+	// ID ist 0, solange zu dieser Staffel noch nichts abgerufen wurde —
+	// bwhv_staffeln entsteht erst beim ersten Lauf.
 	ID       int    `json:"id"`
 	Code     string `json:"code"`
 	Name     string `json:"name"`
 	TeamName string `json:"teamName"`
 	KaderID  int    `json:"kaderId"`
+	Polled   bool   `json:"polled"`
 }
 
 // ListStaffeln liefert die Staffeln der aktiven Saison.
@@ -335,4 +339,36 @@ func (h *Handler) GetReportForOwnGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, detail)
+}
+
+// SyncNow löst alle Staffelcodes der Saison gegen den Katalog auf, legt die
+// fehlenden bwhv_staffeln-Zeilen an und ruft Spielpläne ab.
+//
+// Eigene Route neben PollNow, weil PollNow eine bereits aufgelöste Staffel
+// braucht: vor dem ersten Lauf gibt es zu einer frisch am Kader gepflegten
+// Zuordnung noch gar keine bwhv_staffeln-Zeile und damit keine ID, die man
+// adressieren könnte. Das ist der Knopf, der die Einrichtung abschließt.
+func (h *Handler) SyncNow(w http.ResponseWriter, r *http.Request) {
+	seasonID, err := h.store.ActiveSeason(r.Context())
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusBadRequest, "no_active_season", err)
+		return
+	}
+	poller := NewPoller(h.store, h.client, h.reports, h.orgID)
+
+	background.Go("bwhv-sync-manual", func() {
+		ctx, cancel := detachedContext()
+		defer cancel()
+		res, err := poller.SyncStaffeln(ctx, seasonID)
+		if err != nil {
+			slog.Error("bwhv: manueller Sync fehlgeschlagen", "error", err)
+			return
+		}
+		slog.Info("bwhv: manueller Sync", "staffeln", res.Staffeln, "spiele_geaendert", res.GamesChanged)
+		if res.Changed() {
+			h.hub.Broadcast(EventStaffeln)
+		}
+	})
+	h.hub.Broadcast(EventStaffeln)
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "gestartet"})
 }
