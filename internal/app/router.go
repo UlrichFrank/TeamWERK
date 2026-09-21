@@ -28,6 +28,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/dutyfairness"
 	"github.com/teamstuttgart/teamwerk/internal/files"
 	"github.com/teamstuttgart/teamwerk/internal/games"
+	"github.com/teamstuttgart/teamwerk/internal/gamestats"
 	"github.com/teamstuttgart/teamwerk/internal/health"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
@@ -77,6 +78,7 @@ type Handlers struct {
 	Health         *health.Handler
 	Videos         *videos.Handler
 	MatchReports   *matchreports.Handler
+	GameStats      *gamestats.Handler
 	Settings       *settings.Handler
 	SettingsStore  *settings.Store
 	// VideosTus ist der gemountete tusd-Upload-Handler (resumable Upload unter
@@ -540,6 +542,20 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Get("/api/training-group-categories", h.Config.GetTrainingGroupCategoriesHandler)
 		})
 
+		// BWHV-Staffeln: Tabellen, Spielpläne, Spielberichte und
+		// Spielerstatistik. Alle Eingeloggten — die Daten stammen aus einer
+		// öffentlich abrufbaren Quelle des Verbands, eine Abstufung innerhalb
+		// des Vereins hätte keinen Schutzzweck (design.md §9).
+		if h.GameStats != nil {
+			r.Get("/api/staffeln", h.GameStats.ListStaffeln)
+			r.Get("/api/staffeln/{id}/tabelle", h.GameStats.GetTable)
+			r.Get("/api/staffeln/{id}/spielplan", h.GameStats.GetSchedule)
+			r.Get("/api/staffeln/{id}/ranglisten", h.GameStats.GetRanglisten)
+			r.Get("/api/bwhv-games/{id}/report", h.GameStats.GetReport)
+			r.Get("/api/bwhv-reports/{id}/pdf", h.GameStats.GetReportPDF)
+			r.Get("/api/members/{id}/saisonstatistik", h.GameStats.GetMemberStats)
+		}
+
 		// Admin only
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireRole("admin"))
@@ -627,6 +643,16 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		})
 
 		// Vorstand
+		// Staffel-Katalog (für die Kaderpflege) und der manuelle Poll-Anstoß
+		// sind bewusst enger als das Lesen — sie greifen nach außen.
+		if h.GameStats != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(auth.RequireClubFunction("vorstand"))
+				r.Get("/api/bwhv/staffel-katalog", h.GameStats.GetKatalog)
+				r.Post("/api/staffeln/{id}/poll", h.GameStats.PollNow)
+			})
+		}
+
 		r.Group(func(r chi.Router) {
 			r.Use(auth.RequireClubFunction("vorstand"))
 			r.Post("/api/members", h.Members.Create)

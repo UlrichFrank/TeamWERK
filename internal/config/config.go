@@ -19,11 +19,19 @@ type Config struct {
 	// Bewusst getrennt von MediaDir: /api/media/{id} liefert an jeden
 	// Eingeloggten aus, Trainingsnachweise brauchen eine Prüfung pro Objekt.
 	TrainingDiaryDir string
-	SMTP             SMTPConfig
-	VAPIDPublicKey   string
-	VAPIDPrivateKey  string
-	VAPIDEmail       string
-	MailerDisabled   bool
+
+	// BwhvReportDir hält die abgerufenen Spielbericht-PDFs des BWHV.
+	// Backup-relevant: ~116 MB je Saison, kumulativ über Jahre.
+	BwhvReportDir string
+	// BwhvOrgID ist die Handball4All-Organisation des Verbands (BWHV: 216).
+	// Konfigurierbar, damit eine Instanz eines anderen Landesverbands nicht am
+	// verdrahteten Wert scheitert.
+	BwhvOrgID       int
+	SMTP            SMTPConfig
+	VAPIDPublicKey  string
+	VAPIDPrivateKey string
+	VAPIDEmail      string
+	MailerDisabled  bool
 	// MetricsToken schützt GET /api/metrics. Leer ⇒ Endpoint deaktiviert (404).
 	MetricsToken string
 	// LogFormat steuert den slog-Handler: "json" (Default, Prod) oder "text" (lokal).
@@ -93,6 +101,8 @@ func Load() (*Config, error) {
 		MediaDir:         getEnv("MEDIA_DIR", "./storage/media"),
 		BeitragslaufDir:  getEnv("BEITRAGSLAUF_DIR", "./storage/beitragslauf-protokolle"),
 		TrainingDiaryDir: getEnv("TRAINING_DIARY_DIR", "./storage/training-diary"),
+		BwhvReportDir:    getEnv("BWHV_REPORT_DIR", "./storage/bwhv-reports"),
+		BwhvOrgID:        getEnvInt("BWHV_ORG_ID", 216),
 		SMTP: SMTPConfig{
 			Host:     getEnv("SMTP_HOST", "mail.agenturserver.de"),
 			Port:     smtpPort,

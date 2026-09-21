@@ -109,7 +109,7 @@ einfacheren Weg, der live verifiziert wurde (siehe `design.md` §1):
 | `GET /api/members/{id}/saisonstatistik` | `TestSaisonstatistik_UnbekanntesMitglied` | 404 |
 | `GET /api/bwhv/staffel-katalog` | `TestStaffelKatalog_NurVorstand` | 403 für `standard` ohne `vorstand` |
 | `POST /api/staffeln/{id}/poll` | `TestManuellerPoll_BroadcastetUndNurVorstand` | 200 + `Broadcast`, 403 ohne `vorstand` |
-| `PUT /api/kader/{id}` | `TestKaderStaffel_UnpassenderCodeWirdAbgelehnt` | 400, `mB-RL-BW` an einem wC-Kader |
+| `PUT /api/kader/{id}` | `TestKaderStaffel_UnpassendesGeschlecht` | 400, `mB-RL-BW` an einem weiblichen Kader |
 | `PUT /api/kader/{id}` | `TestKaderStaffel_UebungsgruppeAbgelehnt` | 409 bei `kind='practice'` |
 
 **Garantierte Invarianten** (je mit eigenem Test im Domänen-Package):

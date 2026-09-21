@@ -721,6 +721,21 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/members/{id}/status", expected: exVorstand},
 	{method: "POST", path: "/api/games/import/h4a/preview", expected: exVorstand},
 	{method: "POST", path: "/api/games/import/h4a/apply", expected: exVorstand},
+	// BWHV-Staffeln, Lesezugriff: alle Eingeloggten. Die Daten stammen aus
+	// einer öffentlich abrufbaren Quelle des Verbands — eine Abstufung
+	// innerhalb des Vereins hätte keinen Schutzzweck (design.md §9).
+	{method: "GET", path: "/api/staffeln", expected: exAuth},
+	{method: "GET", path: "/api/staffeln/{id}/tabelle", expected: exAuth},
+	{method: "GET", path: "/api/staffeln/{id}/spielplan", expected: exAuth},
+	{method: "GET", path: "/api/staffeln/{id}/ranglisten", expected: exAuth},
+	{method: "GET", path: "/api/bwhv-games/{id}/report", expected: exAuth},
+	{method: "GET", path: "/api/bwhv-reports/{id}/pdf", expected: exAuth},
+	{method: "GET", path: "/api/members/{id}/saisonstatistik", expected: exAuth},
+
+	// BWHV-Staffeln: Katalog und manueller Poll greifen nach außen und sind
+	// deshalb enger als das Lesen der Staffel-Daten (Authenticated).
+	{method: "GET", path: "/api/bwhv/staffel-katalog", expected: exVorstand},
+	{method: "POST", path: "/api/staffeln/{id}/poll", expected: exVorstand},
 	{method: "POST", path: "/api/duty-slots/bulk-regen/preview", expected: exVorstand},
 	{method: "POST", path: "/api/duty-slots/bulk-regen/apply", expected: exVorstand},
 	{method: "POST", path: "/api/seasons", expected: exVorstand},

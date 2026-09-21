@@ -178,3 +178,49 @@ func nullableInt(v int) any {
 	}
 	return v
 }
+
+// StaffelByID liefert eine Staffel der angegebenen Saison.
+func (s *Store) StaffelByID(ctx context.Context, id, seasonID int) (*Staffel, error) {
+	var st Staffel
+	var sub sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, season_id, code, name, org_id, sub_org_id, period_id
+		  FROM bwhv_staffeln WHERE id = ? AND season_id = ?`, id, seasonID).
+		Scan(&st.ID, &st.SeasonID, &st.Code, &st.Name, &st.OrgID, &sub, &st.PeriodID)
+	if err != nil {
+		return nil, err
+	}
+	if sub.Valid {
+		st.SubOrgID = int(sub.Int64)
+	}
+	return &st, nil
+}
+
+// ListStaffelnWithTeam liefert die Staffeln der Saison samt Mannschaftsnamen.
+//
+// Der LEFT JOIN ist Absicht: eine Staffel ohne zugehörigen Kader entsteht, wenn
+// jemand die Zuordnung am Kader entfernt. Sie verschwindet dann aus der Pflege,
+// ihre Daten bleiben aber abrufbar, statt still aus der Ansicht zu fallen.
+func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID int) ([]staffelResponse, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT st.id, st.code, st.name,
+		       COALESCE(t.name, ''), COALESCE(k.id, 0)
+		  FROM bwhv_staffeln st
+		  LEFT JOIN kader k ON k.season_id = st.season_id AND k.staffel = st.code AND k.kind = 'team'
+		  LEFT JOIN teams t ON t.id = k.team_id
+		 WHERE st.season_id = ?
+		 ORDER BY t.name, st.code`, seasonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []staffelResponse
+	for rows.Next() {
+		var r staffelResponse
+		if err := rows.Scan(&r.ID, &r.Code, &r.Name, &r.TeamName, &r.KaderID); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}

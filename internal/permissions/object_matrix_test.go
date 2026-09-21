@@ -105,6 +105,17 @@ var openByDesign = map[string]string{
 	"OPTIONS /api/videos/{id}/hls/master.m3u8":           "CORS-Preflight läuft per Definition ohne Auth (HLSPreflight); die Auslieferung selbst hängt am ?st=-Stream-Token.",
 	"OPTIONS /api/videos/{id}/hls/{rendition}/{segment}": "CORS-Preflight läuft per Definition ohne Auth (HLSPreflight); die Auslieferung selbst hängt am ?st=-Stream-Token.",
 
+	// BWHV-Staffeldaten: vereinsweit sichtbar, weil die Quelle öffentlich ist.
+	// Es gibt keinen Eigentümer und nichts zu verbergen — die Entscheidung ist
+	// in design.md §2/§9 des Changes bwhv-spielberichte festgehalten.
+	"GET /api/staffeln/{id}/tabelle":        "Tabellenstand einer Staffel; öffentlich abrufbare Verbandsdaten ohne Personenbezug, vereinsweit sichtbar.",
+	"GET /api/staffeln/{id}/spielplan":      "Staffel-Spielplan inkl. fremder Begegnungen; öffentlich abrufbare Verbandsdaten, vereinsweit sichtbar.",
+	"GET /api/staffeln/{id}/ranglisten":     "Saisonbilanz aller Spieler einer Staffel; aus dem öffentlichen Spielbericht abgeleitet, vereinsweit sichtbar (bewusste Entscheidung, design.md §2).",
+	"GET /api/bwhv-games/{id}/report":       "Spielbericht einer Begegnung; das Dokument ist beim Verband ohne Anmeldung abrufbar, vereinsweit sichtbar.",
+	"GET /api/bwhv-reports/{id}/pdf":        "Beleg-PDF zum Bericht; identischer Inhalt zur Abrufquelle des Verbands, vereinsweit sichtbar.",
+	"GET /api/members/{id}/saisonstatistik": "Spielstatistik eines Mitglieds aus öffentlichen Spielberichten; bewusst vereinsweit sichtbar wie die Rangliste, aus der sie stammt.",
+	"POST /api/staffeln/{id}/poll":          "Manueller Abruf-Anstoß einer Staffel; die Staffel ist Vereinsstammdatum ohne Eigentümer, das Tier (Vorstand) IST die Berechtigung.",
+
 	// Vereinsstammdaten ohne Eigentümer: das Tier IST die Berechtigung.
 	"PUT /api/venues/{id}":                             "Veranstaltungsorte sind Vereinsstammdaten ohne Eigentümer; CRUD liegt laut Auth-Tier-Tabelle (docs/agent/04-api-db.md) bei Vorstand + Trainer/sportliche Leitung. Ein Objektrecht existiert nicht — jeder Trainer pflegt dieselbe Hallenliste.",
 	"DELETE /api/venues/{id}":                          "Wie PUT: Hallenliste ist vereinsweites Stammdatum (Auth-Tier Vorstand + Trainer/sL), kein personenbezogenes Objekt.",

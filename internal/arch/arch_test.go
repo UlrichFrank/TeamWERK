@@ -36,6 +36,9 @@ var foundation = map[string]bool{
 	"sepa": true, "upload": true, "files": true, "scheduler": true, "permissions": true,
 	"health": true, "metrics": true, "crypto": true, "timez": true, "httpcache": true,
 	"settings": true, "h4aimport": true, "eventlog": true,
+	// bwhv: Client und PDF-Parser der öffentlichen Handball4All-Schnittstelle.
+	// Kein DB-Zugriff; Gegenstück zu h4aimport, nur ohne Zugangsdaten.
+	"bwhv": true,
 	// background: Panic-sicherer Goroutine-Start (Betriebshärtung Welle 2,
 	// design.md Entscheidung 2). health importiert es für
 	// teamwerk_background_panics_total; notify für die SendAsync-Fassade.
@@ -57,6 +60,11 @@ var domain = map[string]bool{
 	"calendar": true, "stammvereine": true, "videos": true, "attendance": true,
 	"matchreports": true, "media": true, "trainingdiary": true,
 	"practicegroups": true,
+	// gamestats: Spielberichte, Tabellen und Spielerstatistik des BWHV.
+	// Domäne, obwohl der Scheduler (Foundation) den Poll braucht — die
+	// Komposition hängt ihn über Scheduler.AddJob ein, statt dass der
+	// Scheduler hier importiert (design.md §8).
+	"gamestats": true,
 }
 
 // composition = the wiring root. Allowed to import any internal package.

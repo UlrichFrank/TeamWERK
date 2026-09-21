@@ -2,7 +2,10 @@
 
 ### Requirement: Staffelcode je Kader und Saison
 
-Das System SHALL an jedem Kader einen optionalen Staffelcode führen. Da ein Kader
+Das System SHALL an jedem Kader einen optionalen Staffelcode führen. Der Code wird über
+die bestehende Route `PUT /api/kader/{id}` gepflegt und folgt deren Antwortvertrag
+(HTTP 204 bei Erfolg); er ist dort Tri-State — fehlendes Feld bedeutet unverändert, ein
+leerer Wert entfernt die Zuordnung. Da ein Kader
 saison-gebunden ist, gilt die Zuordnung je Saison ohne zusätzliche Verknüpfung.
 
 Das System SHALL den Staffelcode ausschließlich an Kadern der Art `team` zulassen und
@@ -10,7 +13,7 @@ einen Schreibversuch an einer Übungsgruppe (`kind='practice'`) mit HTTP 409 abl
 
 #### Scenario: Staffel wird an einem Mannschafts-Kader gesetzt
 - **WHEN** ein Nutzer mit Vereinsfunktion `vorstand` an einem Kader der Art `team` den Staffelcode `mB-RL-BW` setzt
-- **THEN** antwortet der Server mit HTTP 200 und der Code ist gespeichert
+- **THEN** antwortet der Server mit HTTP 204 und der Code ist gespeichert
 
 #### Scenario: Übungsgruppe nimmt keinen Staffelcode
 - **WHEN** ein Staffelcode an einem Kader mit `kind='practice'` gesetzt wird
@@ -43,7 +46,7 @@ HTTP 400 ablehnen, statt ihn ungeprüft zu übernehmen.
 
 #### Scenario: Passender Code wird angenommen
 - **WHEN** der Code `mB-RL-BW` an einem Kader mit `gender='m'` und `age_class='B-Jugend'` gesetzt wird
-- **THEN** antwortet der Server mit HTTP 200
+- **THEN** antwortet der Server mit HTTP 204
 
 ### Requirement: Auswahl aus dem Live-Katalog mit Freitext-Alternative
 

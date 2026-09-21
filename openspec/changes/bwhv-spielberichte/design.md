@@ -369,6 +369,14 @@ internal/gamestats/    DOMAIN       Persistenz, Identität, Ranglisten, Routen, 
 Exakt die Teilung, die `h4aimport` (Foundation) und `games/h4aimport_handler.go` (Domain)
 bereits vorleben. `internal/arch/arch_test.go` erzwingt sie.
 
+**Zweite Folge, erst bei der Umsetzung aufgefallen:** `internal/scheduler` ist in
+`arch_test.go` als **Foundation** klassifiziert und darf damit selbst keine Domäne
+importieren. Der Poll-Job kann also nicht dort liegen. Statt `gamestats` zur Foundation
+umzuwidmen — was die Begründung des nächsten Absatzes aushebeln würde, weil `matchreports`
+es dann importieren dürfte — bekommt der Scheduler ein `AddJob(func())`, und die
+Komposition (`main.go`) hängt `gamestats.SchedulerJob(db, cfg)` ein. Der Job selbst liegt
+in `internal/gamestats/job.go`. Das ist ein kleiner Seam und erhält beide Regeln.
+
 **Die nicht offensichtliche Folge:** Die Vorbefüllung der Ergebnisfelder des
 redaktionellen Spielberichts kann **nicht** im Backend geschehen. `internal/matchreports`
 ist ein Domain-Package; ein Import von `internal/gamestats` wäre Domain→Domain und bricht

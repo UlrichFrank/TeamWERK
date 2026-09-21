@@ -19,7 +19,14 @@ const TestJWTSecret = "test-secret-not-for-production"
 // TestConfig returns a minimal config suitable for handler tests.
 // SMTP and VAPID fields are empty; push notifications will fail silently.
 func TestConfig() *appconfig.Config {
-	return &appconfig.Config{JWTSecret: TestJWTSecret}
+	// BwhvOrgID muss gesetzt sein, damit die Staffel-Routen im Testrouter
+	// dieselben Auth-Tiers durchlaufen wie in Produktion. Das Ablageverzeichnis
+	// zeigt ins Nirgendwo — die Matrix-Tests rufen nie wirklich ab.
+	return &appconfig.Config{
+		JWTSecret:     TestJWTSecret,
+		BwhvOrgID:     216,
+		BwhvReportDir: "./storage/bwhv-reports",
+	}
 }
 
 // NewServer starts a test HTTP server with auth.Middleware applied.

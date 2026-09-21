@@ -51,34 +51,34 @@
 
 ## 6. Domain — internal/gamestats: Routen
 
-- [ ] 6.1 `internal/gamestats/handler.go`: `GET /api/staffeln`, `GET /api/staffeln/{id}/tabelle`, `GET /api/staffeln/{id}/spielplan` — Fehler über `httpx.WriteError`, Listen über `httpx.Paging`
-- [ ] 6.2 `internal/gamestats/handler.go`: `GET /api/staffeln/{id}/ranglisten` (Torschützen, 7m-Quote, Fair Play), eigene und fremde Spieler gleichermaßen
-- [ ] 6.3 `internal/gamestats/handler.go`: `GET /api/bwhv-games/{id}/report` (404 solange kein Bericht), `GET /api/bwhv-reports/{id}/pdf` (expliziter `Content-Type`, `Content-Disposition: attachment`, 404 ohne Datei)
-- [ ] 6.4 `internal/gamestats/handler.go`: `GET /api/members/{id}/saisonstatistik`; Berichte mit `parse_failed` fließen nicht ein
-- [ ] 6.5 `internal/gamestats/handler.go`: `GET /api/bwhv/staffel-katalog` (Vorstand) und `POST /api/staffeln/{id}/poll` (Vorstand) — Poll läuft über `background.Go`, sendet `h.hub.Broadcast("bwhv-updated")`
-- [ ] 6.6 `internal/app/router.go` + `main.go`: Lese-Routen im Authenticated-Tier, Katalog und Poll im Vorstand-Tier; `Handlers`-Struct und `NewHandler(db, hub, cfg)` verdrahten
-- [ ] 6.7 `internal/gamestats/handler_test.go`: Happy-Path + Fehlerfall je Route gemäß Test-Anforderungen im Proposal (401/403/404)
+- [x] 6.1 `internal/gamestats/handler.go`: `GET /api/staffeln`, `GET /api/staffeln/{id}/tabelle`, `GET /api/staffeln/{id}/spielplan` — Fehler über `httpx.WriteError`, Listen über `httpx.Paging`
+- [x] 6.2 `internal/gamestats/handler.go`: `GET /api/staffeln/{id}/ranglisten` (Torschützen, 7m-Quote, Fair Play), eigene und fremde Spieler gleichermaßen
+- [x] 6.3 `internal/gamestats/handler.go`: `GET /api/bwhv-games/{id}/report` (404 solange kein Bericht), `GET /api/bwhv-reports/{id}/pdf` (expliziter `Content-Type`, `Content-Disposition: attachment`, 404 ohne Datei)
+- [x] 6.4 `internal/gamestats/handler.go`: `GET /api/members/{id}/saisonstatistik`; Berichte mit `parse_failed` fließen nicht ein
+- [x] 6.5 `internal/gamestats/handler.go`: `GET /api/bwhv/staffel-katalog` (Vorstand) und `POST /api/staffeln/{id}/poll` (Vorstand) — Poll läuft über `background.Go`, sendet `h.hub.Broadcast("bwhv-updated")`
+- [x] 6.6 `internal/app/router.go` + `main.go`: Lese-Routen im Authenticated-Tier, Katalog und Poll im Vorstand-Tier; `Handlers`-Struct und `NewHandler(db, hub, cfg)` verdrahten
+- [x] 6.7 `internal/gamestats/handler_test.go`: Happy-Path + Fehlerfall je Route gemäß Test-Anforderungen im Proposal (401/403/404)
 
 ## 7. Backend — Staffel am Kader
 
-- [ ] 7.1 `internal/kader/handler.go`: `staffel` im `PUT` entgegennehmen (Tri-State: fehlt = unverändert, leer = löschen, Wert = setzen)
-- [ ] 7.2 `internal/kader/handler.go`: Validierung über `h4aimport.ParseStaffel` gegen `gender`/`age_class`; nicht interpretierbar oder unpassend → HTTP 400; `kind='practice'` → HTTP 409
-- [ ] 7.3 `internal/kader/handler_test.go`: `TestKaderStaffel_HappyPath`, `TestKaderStaffel_UnpassendesGeschlecht` (400), `TestKaderStaffel_UnpassendeAltersklasse` (400), `TestKaderStaffel_UebungsgruppeAbgelehnt` (409), `TestKaderStaffel_LeerenEntferntZuordnung`
+- [x] 7.1 `internal/kader/handler.go`: `staffel` im `PUT` entgegennehmen (Tri-State: fehlt = unverändert, leer = löschen, Wert = setzen)
+- [x] 7.2 `internal/kader/handler.go`: Validierung über `h4aimport.ParseStaffel` gegen `gender`/`age_class`; nicht interpretierbar oder unpassend → HTTP 400; `kind='practice'` → HTTP 409
+- [x] 7.3 `internal/kader/handler_test.go`: `TestKaderStaffel_HappyPath`, `TestKaderStaffel_UnpassendesGeschlecht` (400), `TestKaderStaffel_UnpassendeAltersklasse` (400), `TestKaderStaffel_UebungsgruppeAbgelehnt` (409), `TestKaderStaffel_LeerenEntferntZuordnung`
 
 ## 8. Backend — Scheduler, Konfiguration, Deployment
 
-- [ ] 8.1 `internal/scheduler/bwhv_poll.go`: Minutentakt-Job, wertet die Fenster aus §4.3 aus, startet den Lauf über `background.Go` (Goroutine-Gate)
-- [ ] 8.2 `internal/scheduler/bwhv_poll.go`: täglicher Katalog-/Spielplan-Lauf 06:00 und Nachzügler-Lauf 08:00 für offene Begegnungen der Vortage
-- [ ] 8.3 `internal/config`: `BWHV_REPORT_DIR` lesen (Default `./storage/bwhv-reports`), `.env.example` ergänzen
-- [ ] 8.4 `deploy/setup-vps.sh`, die idempotente Storage-Schleife im `deploy`-Target des Makefile, `deploy/backup-cron.sh` und die Backup-/Umzugs-Targets um `BWHV_REPORT_DIR` erweitern (Checkliste aus `docs/agent/10-deployment.md`)
-- [ ] 8.5 `internal/scheduler/bwhv_poll_test.go`: Fenster-Tests mit Datei-DB unter `t.TempDir()` (In-Memory-SQLite trägt die Goroutine nicht, siehe `docs/agent/07-testing.md`)
+- [x] 8.1 `internal/gamestats/job.go`: Minutentakt-Job als `SchedulerJob(db, cfg)`, wertet die Fenster aus §4.3 aus, startet den Lauf über `background.Go` (Goroutine-Gate). **Nicht in `internal/scheduler`:** der ist Foundation und darf keine Domäne importieren — die Komposition hängt den Job über das neue `Scheduler.AddJob` ein, statt den ganzen Lauf zu duplizieren.
+- [x] 8.2 `internal/gamestats/job.go`: täglicher Katalog-/Spielplan-Lauf 06:00; Nachzügler der Vortage laufen über das `nachzug`-Fenster (drei Tage) statt über einen eigenen Uhrzeit-Job
+- [x] 8.3 `internal/config`: `BWHV_REPORT_DIR` lesen (Default `./storage/bwhv-reports`), `.env.example` ergänzen
+- [x] 8.4 `deploy/setup-vps.sh`, die idempotente Storage-Schleife im `deploy`-Target des Makefile, `deploy/backup-cron.sh` und die Backup-/Umzugs-Targets um `BWHV_REPORT_DIR` erweitern (Checkliste aus `docs/agent/10-deployment.md`)
+- [x] 8.5 `internal/gamestats/job_test.go` + `poll_test.go`: Fenster- und Abschalt-Tests mit Datei-DB über `testutil.NewDB` (In-Memory-SQLite trägt die Goroutine nicht, siehe `docs/agent/07-testing.md`)
 
 ## 9. Harness — Architektur- und Matrix-Gates
 
-- [ ] 9.1 `internal/arch/arch_test.go`: `bwhv` als Foundation, `gamestats` als Domain klassifizieren; prüfen, dass `bwhv` kein Domain-Package importiert
-- [ ] 9.2 `internal/permissions/object_matrix_test.go`: die neuen `{id}`-Lese-Routen mit Begründung nach `openByDesign` (vereinsweit sichtbare, öffentliche Verbandsdaten)
-- [ ] 9.3 `internal/permissions/matrix_test.go`: neue Routen in der Tier-Matrix ergänzen
-- [ ] 9.4 `make test` grün inkl. Broadcast-Gate (`POST /api/staffeln/{id}/poll` broadcastet), Push-Fan-out-Gate (unverändert — kein Push) und Goroutine-Gate
+- [x] 9.1 `internal/arch/arch_test.go`: `bwhv` als Foundation, `gamestats` als Domain klassifizieren; prüfen, dass `bwhv` kein Domain-Package importiert
+- [x] 9.2 `internal/permissions/object_matrix_test.go`: die neuen `{id}`-Lese-Routen mit Begründung nach `openByDesign` (vereinsweit sichtbare, öffentliche Verbandsdaten)
+- [x] 9.3 `internal/permissions/matrix_test.go`: neue Routen in der Tier-Matrix ergänzen
+- [x] 9.4 `make test` grün inkl. Broadcast-Gate (`POST /api/staffeln/{id}/poll` broadcastet), Push-Fan-out-Gate (unverändert — kein Push) und Goroutine-Gate
 
 ## 10. Frontend — Staffeln-Ansicht
 

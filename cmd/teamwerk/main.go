@@ -31,6 +31,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/beitragslauf"
 	"github.com/teamstuttgart/teamwerk/internal/beitragssaetze"
+	"github.com/teamstuttgart/teamwerk/internal/bwhv"
 	"github.com/teamstuttgart/teamwerk/internal/calendar"
 	"github.com/teamstuttgart/teamwerk/internal/carpooling"
 	"github.com/teamstuttgart/teamwerk/internal/chat"
@@ -41,6 +42,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/dutyfairness"
 	"github.com/teamstuttgart/teamwerk/internal/files"
 	"github.com/teamstuttgart/teamwerk/internal/games"
+	"github.com/teamstuttgart/teamwerk/internal/gamestats"
 	"github.com/teamstuttgart/teamwerk/internal/health"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/kader"
@@ -284,36 +286,38 @@ func serve() {
 	}
 
 	handlers := &app.Handlers{
-		Auth:                auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),
-		Config:              appconfig.NewHandler(database, hubInstance),
-		Members:             members.NewHandler(database, hubInstance),
-		WelcomeEmail:        members.NewWelcomeEmailHandler(database, m),
-		Duties:              duties.NewHandler(database, cfg, hubInstance),
-		Dashboard:           dashboard.NewHandler(database),
-		DutyFairness:        dutyfairness.NewHandler(database),
-		Games:               games.NewHandler(database, cfg, hubInstance),
-		Kader:               kader.NewHandler(database, hubInstance),
-		PracticeGroups:      practicegroups.NewHandler(database, hubInstance),
-		Upload:              upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret, hubInstance),
-		Files:               files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret),
-		Media:               media.NewHandler(database, cfg.MediaDir),
-		Carpool:             carpooling.NewHandler(database, cfg, hubInstance),
-		Chat:                chat.NewHandler(database, hubInstance, cfg),
-		Notif:               notifications.NewHandler(database, cfg),
-		Training:            trainings.NewHandler(database, cfg, hubInstance),
-		Absences:            absences.NewHandler(database, hubInstance),
-		Attendance:          attendance.NewHandler(database, hubInstance),
-		TrainingDiary:       diaryHandler,
-		Teams:               teams.NewHandler(database, hubInstance),
-		Venues:              venues.NewHandler(database, hubInstance),
-		Beitragssaetze:      beitragssaetze.NewHandler(database, hubInstance),
-		Beitragslauf:        beitragslauf.NewHandler(database, hubInstance, cfg.BeitragslaufDir),
-		Stammvereine:        stammvereine.NewHandler(database, hubInstance),
-		Calendar:            calendar.NewHandler(database),
-		Health:              health.NewHandler(database, cfg.DBPath, cfg.MetricsToken),
-		Videos:              videosHandler,
-		VideosTus:           videosTus,
-		MatchReports:        matchreports.NewHandler(database, hubInstance, cfg),
+		Auth:           auth.NewHandler(database, cfg, cfg.JWTSecret, m, cfg.BaseURL, hubInstance),
+		Config:         appconfig.NewHandler(database, hubInstance),
+		Members:        members.NewHandler(database, hubInstance),
+		WelcomeEmail:   members.NewWelcomeEmailHandler(database, m),
+		Duties:         duties.NewHandler(database, cfg, hubInstance),
+		Dashboard:      dashboard.NewHandler(database),
+		DutyFairness:   dutyfairness.NewHandler(database),
+		Games:          games.NewHandler(database, cfg, hubInstance),
+		Kader:          kader.NewHandler(database, hubInstance),
+		PracticeGroups: practicegroups.NewHandler(database, hubInstance),
+		Upload:         upload.NewHandler(database, cfg.UploadDir, cfg.JWTSecret, hubInstance),
+		Files:          files.NewHandler(database, cfg.FilesDir, cfg.JWTSecret),
+		Media:          media.NewHandler(database, cfg.MediaDir),
+		Carpool:        carpooling.NewHandler(database, cfg, hubInstance),
+		Chat:           chat.NewHandler(database, hubInstance, cfg),
+		Notif:          notifications.NewHandler(database, cfg),
+		Training:       trainings.NewHandler(database, cfg, hubInstance),
+		Absences:       absences.NewHandler(database, hubInstance),
+		Attendance:     attendance.NewHandler(database, hubInstance),
+		TrainingDiary:  diaryHandler,
+		Teams:          teams.NewHandler(database, hubInstance),
+		Venues:         venues.NewHandler(database, hubInstance),
+		Beitragssaetze: beitragssaetze.NewHandler(database, hubInstance),
+		Beitragslauf:   beitragslauf.NewHandler(database, hubInstance, cfg.BeitragslaufDir),
+		Stammvereine:   stammvereine.NewHandler(database, hubInstance),
+		Calendar:       calendar.NewHandler(database),
+		Health:         health.NewHandler(database, cfg.DBPath, cfg.MetricsToken),
+		Videos:         videosHandler,
+		VideosTus:      videosTus,
+		MatchReports:   matchreports.NewHandler(database, hubInstance, cfg),
+		GameStats: gamestats.NewHandler(database, hubInstance, bwhv.NewClient(),
+			gamestats.NewReportStore(cfg.BwhvReportDir), cfg.BwhvOrgID),
 		Settings:            settings.NewHandler(database, settingsStore, hubInstance),
 		SettingsStore:       settingsStore,
 		Hub:                 hub.NewHandler(hubInstance, buildHash, auth.UserIDFromCtx),
@@ -515,7 +519,9 @@ func runScheduler() {
 		fatal("scheduler: open db failed", "error", err)
 	}
 	defer database.Close()
-	scheduler.New(database, cfg, mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)).Run()
+	scheduler.New(database, cfg, mailer.New(cfg.SMTP, cfg.BaseURL, cfg.MailerDisabled)).
+		AddJob(gamestats.SchedulerJob(database, cfg)).
+		Run()
 }
 
 func runMigrateForce() {

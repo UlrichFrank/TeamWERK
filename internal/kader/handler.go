@@ -349,6 +349,9 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 		AgeClass              *string `json:"age_class"`
 		ExtendedMembersAdd    []int   `json:"extended_members_add"`
 		ExtendedMembersRemove []int   `json:"extended_members_remove"`
+		// Staffel ist Tri-State wie template_id beim Spiel: Feld fehlt =
+		// unverändert, leerer String = Zuordnung entfernen, Wert = setzen.
+		Staffel *string `json:"staffel"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
@@ -373,6 +376,16 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 			httpx.WriteJSON(w, http.StatusConflict, map[string]any{
 				"error": "Übungsgruppen haben keinen erweiterten Kader",
 			})
+			return
+		}
+	}
+
+	// Staffelcode prüfen, BEVOR irgendetwas geschrieben wird: ein 400 mitten im
+	// Update hinterließe sonst eine Teil-Persistenz (dieselbe Regel wie beim
+	// Bewirtungs-PUT, das beide Felder vor dem ersten Schreibvorgang validiert).
+	if req.Staffel != nil {
+		if status, msg := h.validateStaffel(r.Context(), id, *req.Staffel); status != 0 {
+			httpx.WriteJSON(w, status, map[string]any{"error": msg})
 			return
 		}
 	}
@@ -403,6 +416,13 @@ func (h *Handler) UpdateKader(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, memberID := range req.MembersRemove {
 		if err := execTx(`DELETE FROM kader_members WHERE kader_id=? AND member_id=?`, id, memberID); err != nil {
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+			return
+		}
+	}
+	if req.Staffel != nil {
+		code := strings.TrimSpace(*req.Staffel)
+		if err := execTx(`UPDATE kader SET staffel = ? WHERE id = ?`, nullIfEmpty(code), id); err != nil {
 			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}

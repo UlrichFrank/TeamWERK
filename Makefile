@@ -27,6 +27,7 @@ MEDIA_DIR_REMOTE                  := /var/lib/teamwerk/media
 BEITRAGSLAUF_DIR_REMOTE           := /var/lib/teamwerk/beitragslauf-protokolle
 MATCH_REPORT_IMAGE_DIR_REMOTE     := /var/lib/teamwerk/match-report-images
 TRAINING_DIARY_DIR_REMOTE         := /var/lib/teamwerk/training-diary
+BWHV_REPORT_DIR_REMOTE            := /var/lib/teamwerk/bwhv-reports
 VIDEO_STORAGE_DIR_REMOTE          := /storage/videos
 UPLOAD_DIR_LOCAL                  := $(REPO_ROOT)/storage/uploads
 FILES_DIR_LOCAL                   := $(REPO_ROOT)/storage/files
@@ -34,6 +35,7 @@ MEDIA_DIR_LOCAL                   := $(REPO_ROOT)/storage/media
 BEITRAGSLAUF_DIR_LOCAL            := $(REPO_ROOT)/storage/beitragslauf-protokolle
 MATCH_REPORT_IMAGE_DIR_LOCAL      := $(REPO_ROOT)/storage/match-report-images
 TRAINING_DIARY_DIR_LOCAL          := $(REPO_ROOT)/storage/training-diary
+BWHV_REPORT_DIR_LOCAL             := $(REPO_ROOT)/storage/bwhv-reports
 VIDEO_STORAGE_DIR_LOCAL           := $(REPO_ROOT)/storage/videos
 EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
@@ -114,7 +116,7 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart, S
 	@# auf einem frischen VPS mit nur selbstsigniertem Zertifikat schreibt
 	@# deploy/setup-vps.sh den Schlüssel deshalb schon explizit als false vor, das
 	@# hier greift nur bei fehlendem Schlüssel.
-	@for kv in "TRAINING_DIARY_DIR=$(TRAINING_DIARY_DIR_REMOTE)" "BEITRAGSLAUF_DIR=$(BEITRAGSLAUF_DIR_REMOTE)" "HSTS_ENABLED=true"; do \
+	@for kv in "TRAINING_DIARY_DIR=$(TRAINING_DIARY_DIR_REMOTE)" "BEITRAGSLAUF_DIR=$(BEITRAGSLAUF_DIR_REMOTE)" "BWHV_REPORT_DIR=$(BWHV_REPORT_DIR_REMOTE)" "HSTS_ENABLED=true"; do \
 		key=$${kv%%=*}; val=$${kv#*=}; \
 		mkcmd=""; \
 		case "$$key" in \
@@ -264,6 +266,9 @@ backup-files: ## Alle kleinen Datei-Blobs vom VPS sichern (Dokumente, Beitragsla
 	fi
 	@# Trainingsnachweise: die Retention löscht sie 90 Tage nach Saisonende
 	@# unwiderruflich vom Server — ein Backup ist der einzige Rückweg.
+	@if ssh $(REMOTE) "test -d $(BWHV_REPORT_DIR_REMOTE)"; then \
+		rsync -az $(REMOTE):$(BWHV_REPORT_DIR_REMOTE)/ $(BACKUP_DIR)/bwhv-reports/; \
+	fi
 	@if ssh $(REMOTE) "test -d $(TRAINING_DIARY_DIR_REMOTE)"; then \
 		rsync -az $(REMOTE):$(TRAINING_DIARY_DIR_REMOTE)/ $(BACKUP_DIR)/training-diary/; \
 	else \
