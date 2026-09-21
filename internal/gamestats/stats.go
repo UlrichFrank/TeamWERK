@@ -33,6 +33,21 @@ func fairPlayScore(twoMin, warnings, disq int) float64 {
 	return float64(warnings)*0.5 + float64(twoMin)*1 + float64(disq)*3
 }
 
+// Die dritte Zeitstrafe eines Spielers IST die Disqualifikation (Rote Karte):
+// die Mannschaftsliste trägt dafür beide Einträge (drei Hinausstellungszeiten
+// und die Disqualifikation, im Spielverlauf mit derselben Uhrzeit), der Vorfall
+// darf aber nur einmal zählen — als Rot. Sonst wöge er in der Fair-Play-Wertung
+// 2 + 3 statt 3 und stünde in den Ranglisten doppelt.
+//
+// Bewusst in der Abfrage statt im Parser: gespeichert bleibt, was im Dokument
+// steht (der Beleg), und Bestandsberichte sind ohne erneuten Abruf korrigiert.
+// Eine Rote Karte nach null bis zwei Zeitstrafen ist davon nicht berührt.
+// pg ist der Alias von bwhv_player_games.
+const (
+	twoMinCounted = `(CASE WHEN pg.two_min >= 3 THEN 2 ELSE pg.two_min END)`
+	redCounted    = `(CASE WHEN pg.two_min >= 3 THEN MAX(pg.red, 1) ELSE pg.red END)`
+)
+
 // statSelect summiert die Mannschaftslisten-Zeilen ausgewerteter Berichte.
 // Berichte im Zustand parse_failed tragen keine Zeilen und fallen damit von
 // selbst heraus — der Filter steht trotzdem explizit da.
@@ -42,9 +57,9 @@ const statSelect = `
 	       COALESCE(SUM(pg.goals), 0),
 	       COALESCE(SUM(pg.seven_m_attempts), 0),
 	       COALESCE(SUM(pg.seven_m_goals), 0),
-	       COALESCE(SUM(pg.two_min), 0),
+	       COALESCE(SUM(` + twoMinCounted + `), 0),
 	       COALESCE(SUM(pg.yellow), 0),
-	       COALESCE(SUM(pg.red), 0)
+	       COALESCE(SUM(` + redCounted + `), 0)
 	  FROM bwhv_players p
 	  JOIN bwhv_player_games pg ON pg.player_id = p.id
 	  JOIN bwhv_reports r ON r.id = pg.report_id AND r.state = 'parsed'`
@@ -185,7 +200,7 @@ func (s *Store) ReportForGame(ctx context.Context, bwhvGameID int) (*ReportDetai
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.id, p.member_id, p.name, pg.side, pg.jersey_number,
 		       pg.goals, pg.seven_m_attempts, pg.seven_m_goals,
-		       pg.two_min, pg.yellow, pg.red, p.conflict
+		       `+twoMinCounted+`, pg.yellow, `+redCounted+`, p.conflict
 		  FROM bwhv_player_games pg
 		  JOIN bwhv_players p ON p.id = pg.player_id
 		 WHERE pg.report_id = ?

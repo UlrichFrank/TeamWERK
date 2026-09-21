@@ -771,3 +771,46 @@ func TestStaffelStats_SpieleUndSiebenmeterFehlversuche(t *testing.T) {
 		}
 	}
 }
+
+// Die dritte Zeitstrafe IST die Disqualifikation (Rote Karte): der Bericht
+// trägt dafür beide Einträge, gezählt wird sie nur einmal — als Rot. Eine
+// Rote Karte ohne vorherige Zeitstrafen (0 bis 2) bleibt unberührt.
+func TestTeamStats_DritteZeitstrafeIstDieRoteKarte(t *testing.T) {
+	db, s, _, staffelID := newStaffel(t)
+	gameID := seedResult(t, db, staffelID, "1", "2026-09-20", "Verein A", "Verein B", intp(10), intp(8))
+	seedParsedReport(t, db, staffelID, gameID, "parsed",
+		map[string]string{"home": "Verein A", "guest": "Verein B"},
+		[]rosterLine{
+			// 3× 2 min mit eingetragener Disqualifikation → 2× 2 min + 1× Rot.
+			{name: "Anna", side: "home", twoMin: 3, red: 1},
+			// 3× 2 min, Rot nicht eigens eingetragen → dasselbe Ergebnis.
+			{name: "Bea", side: "home", twoMin: 3},
+			// Direkte Rote Karte nach einer Zeitstrafe bleibt, wie sie ist.
+			{name: "Cem", side: "guest", twoMin: 1, red: 1},
+			// Zwei Zeitstrafen sind noch kein Rot.
+			{name: "Dan", side: "guest", twoMin: 2},
+		})
+
+	ts, err := s.TeamStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("TeamStats: %v", err)
+	}
+	a := teamStatOf(t, ts, "Verein A")
+	if a.TwoMin != 4 || a.Red != 2 {
+		t.Errorf("A = %d× 2 min, %d× Rot, erwartet 4× 2 min und 2× Rot (je Spieler 2 + 1)", a.TwoMin, a.Red)
+	}
+	b := teamStatOf(t, ts, "Verein B")
+	if b.TwoMin != 3 || b.Red != 1 {
+		t.Errorf("B = %d× 2 min, %d× Rot, erwartet 3× 2 min und 1× Rot", b.TwoMin, b.Red)
+	}
+
+	stats, err := s.StaffelStats(context.Background(), staffelID)
+	if err != nil {
+		t.Fatalf("StaffelStats: %v", err)
+	}
+	for _, p := range stats {
+		if p.Name == "Anna" && (p.TwoMin != 2 || p.Disq != 1) {
+			t.Errorf("Anna = %d× 2 min, %d× Disq, erwartet 2 und 1", p.TwoMin, p.Disq)
+		}
+	}
+}

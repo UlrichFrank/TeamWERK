@@ -438,8 +438,8 @@ func (s *Store) addReportStats(ctx context.Context, staffelID int, stats map[str
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT `+teamNameExpr+` AS team,
 		       COUNT(DISTINCT pg.report_id),
-		       COALESCE(SUM(pg.two_min), 0), COALESCE(SUM(pg.yellow), 0),
-		       COALESCE(SUM(pg.red), 0), COALESCE(SUM(pg.blue), 0)
+		       COALESCE(SUM(`+twoMinCounted+`), 0), COALESCE(SUM(pg.yellow), 0),
+		       COALESCE(SUM(`+redCounted+`), 0), COALESCE(SUM(pg.blue), 0)
 		  FROM bwhv_player_games pg
 		  JOIN bwhv_reports r ON r.id = pg.report_id AND r.state = 'parsed'
 		  JOIN bwhv_games g ON g.id = r.bwhv_game_id
@@ -600,8 +600,8 @@ type RefereeStat struct {
 func (s *Store) RefereeStats(ctx context.Context, staffelID int) ([]RefereeStat, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT r.referees_json, r.referees_uncertain,
-		       COALESCE(SUM(pg.two_min), 0), COALESCE(SUM(pg.yellow), 0),
-		       COALESCE(SUM(pg.red), 0), COALESCE(SUM(pg.blue), 0)
+		       COALESCE(SUM(`+twoMinCounted+`), 0), COALESCE(SUM(pg.yellow), 0),
+		       COALESCE(SUM(`+redCounted+`), 0), COALESCE(SUM(pg.blue), 0)
 		  FROM bwhv_reports r
 		  JOIN bwhv_games g ON g.id = r.bwhv_game_id
 		  LEFT JOIN bwhv_player_games pg ON pg.report_id = r.id
