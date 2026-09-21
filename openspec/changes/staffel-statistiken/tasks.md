@@ -8,7 +8,7 @@
 
 ## 2. Aggregate im Store
 
-- [ ] 2.1 Neue Datei `internal/gamestats/aggregates.go` mit `CrossTable(ctx, staffelID)`: alle Mannschaften der Staffel plus je Paarung Ergebnis **oder** Datum, „gespielt" = `home_goals IS NOT NULL`. Verifikation: Tabellen-Test mit gespielter, torloser (`0:0`) und künftiger Begegnung deckt alle drei Zellenarten ab.
+- [x] 2.1 Neue Datei `internal/gamestats/aggregates.go` mit `CrossTable(ctx, staffelID)`: alle Mannschaften der Staffel plus je Paarung Ergebnis **oder** Datum, „gespielt" = `home_goals IS NOT NULL`. Verifikation: Tabellen-Test mit gespielter, torloser (`0:0`) und künftiger Begegnung deckt alle drei Zellenarten ab.
 - [ ] 2.2 `StandingsProgression(ctx, staffelID)`: Spieltage nach `date[:10]` gruppiert, kumulierte Punkte/Differenz/Tore, Sortierung Punkte → Differenz → Tore, Punktewertung als benannte Konstante mit Kommentar (design.md §2). Verifikation: Test über drei Spieltage prüft die Rangfolge je Spieltag, ein Test belegt das Trimmen des ISO-Timestamps.
 - [ ] 2.3 `TeamStats(ctx, staffelID)`: Torverhältnis/Angriff/Verteidigung aus `bwhv_games`, Fair-Play und Torverteilung aus `bwhv_player_games` (nur `state='parsed'`), je Mannschaft die Zahl der Spiele. Verifikation: Test belegt gefüllte Tor-Werte **ohne** jeden Bericht und eine leere (nicht nullwertige) Fair-Play-Wertung für eine Mannschaft ohne Bericht.
 - [ ] 2.4 Gini-Koeffizient über die Saisonsummen je Spieler (design.md §6), `0` bei Mittelwert `0`, dazu Median und Durchschnitt. Verifikation: Unit-Test mit gleichverteilten Werten (≈0), mit einem Alleinwerfer (nahe 1) und mit torloser Mannschaft (0).
