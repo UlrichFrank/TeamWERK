@@ -304,3 +304,35 @@ func (h *Handler) PollNow(w http.ResponseWriter, r *http.Request) {
 	h.hub.Broadcast(EventStaffeln)
 	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "gestartet", "staffel": st.Code})
 }
+
+// GetReportForOwnGame liefert den Bericht zu einem TeamWERK-Spieltermin.
+//
+// Eigene Route neben GetReport, weil die Spieldetail-Ansicht eine games.id
+// kennt, der Staffel-Spielplan aber eine bwhv_games.id. Die Alternative wäre
+// ein zusätzlicher Auflösungs-Roundtrip im Frontend gewesen.
+func (h *Handler) GetReportForOwnGame(w http.ResponseWriter, r *http.Request) {
+	id, ok := httpx.PathID(r, "id")
+	if !ok {
+		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidID, nil)
+		return
+	}
+	bwhvGameID, err := h.store.BwhvGameForGame(r.Context(), id)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err)
+		return
+	case err != nil:
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	detail, err := h.store.ReportForGame(r.Context(), bwhvGameID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err)
+		return
+	case err != nil:
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, detail)
+}

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import AttendanceStatsView from '../components/AttendanceStatsView'
+import SaisonbilanzPanel from '../components/SaisonbilanzPanel'
 
 interface MemberRef { id: number; first_name: string; last_name: string; club_functions?: string[] }
 
@@ -71,6 +72,9 @@ export function ProfilAnwesenheitContent({ forcedMemberId }: { forcedMemberId?: 
         </div>
       )}
       <AttendanceStatsView memberId={effectiveId} />
+      <div className="mt-4">
+        <SaisonbilanzPanel memberId={effectiveId} />
+      </div>
     </div>
   )
 }

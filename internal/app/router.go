@@ -552,6 +552,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Get("/api/staffeln/{id}/spielplan", h.GameStats.GetSchedule)
 			r.Get("/api/staffeln/{id}/ranglisten", h.GameStats.GetRanglisten)
 			r.Get("/api/bwhv-games/{id}/report", h.GameStats.GetReport)
+			r.Get("/api/games/{id}/bwhv-report", h.GameStats.GetReportForOwnGame)
 			r.Get("/api/bwhv-reports/{id}/pdf", h.GameStats.GetReportPDF)
 			r.Get("/api/members/{id}/saisonstatistik", h.GameStats.GetMemberStats)
 		}

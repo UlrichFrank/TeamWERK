@@ -21,7 +21,7 @@ var rePenaltyTime = regexp.MustCompile(`\d{1,3}:\d{2}`)
 func parseRosters(d *document, h Header) (home, guest Roster, err error) {
 	headerIdx, ok := d.findLine("Nr.", "Name")
 	if !ok {
-		return home, guest, fmt.Errorf("Spielbericht ohne Kopfzeile der Mannschaftsliste (erwartet \"Nr.\" und \"Name\")")
+		return home, guest, fmt.Errorf("spielbericht ohne Kopfzeile der Mannschaftsliste (erwartet \"Nr.\" und \"Name\")")
 	}
 	model, err := buildColumnModel(d, headerIdx)
 	if err != nil {
@@ -53,7 +53,7 @@ func parseRosters(d *document, h Header) (home, guest Roster, err error) {
 		}
 	}
 	if len(home.Players) == 0 && len(guest.Players) == 0 {
-		return home, guest, fmt.Errorf("Spielbericht ohne auswertbare Mannschaftslisten")
+		return home, guest, fmt.Errorf("spielbericht ohne auswertbare Mannschaftslisten")
 	}
 	return home, guest, nil
 }

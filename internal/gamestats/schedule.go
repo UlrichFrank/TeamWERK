@@ -181,3 +181,12 @@ func (s *Store) GameByID(ctx context.Context, id int) (*ScheduleGame, error) {
 	}
 	return &list[0], nil
 }
+
+// BwhvGameForGame löst einen TeamWERK-Spieltermin auf die zugehörige
+// BWHV-Begegnung auf.
+func (s *Store) BwhvGameForGame(ctx context.Context, gameID int) (int, error) {
+	var id int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT id FROM bwhv_games WHERE game_id = ? LIMIT 1`, gameID).Scan(&id)
+	return id, err
+}

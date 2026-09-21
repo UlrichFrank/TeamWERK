@@ -301,10 +301,10 @@ func (c *Client) FetchReport(ctx context.Context, reportURL, sgid string) ([]byt
 		return nil, err
 	}
 	if !strings.Contains(strings.ToLower(ctype), "pdf") && !strings.HasPrefix(string(b), "%PDF") {
-		return nil, fmt.Errorf("Antwort ist kein PDF (Content-Type %q, %d Bytes)", ctype, len(b))
+		return nil, fmt.Errorf("antwort ist kein PDF (Content-Type %q, %d Bytes)", ctype, len(b))
 	}
 	if !strings.HasPrefix(string(b), "%PDF") {
-		return nil, fmt.Errorf("Antwort trägt keine PDF-Signatur (%d Bytes)", len(b))
+		return nil, fmt.Errorf("antwort trägt keine PDF-Signatur (%d Bytes)", len(b))
 	}
 	return b, nil
 }

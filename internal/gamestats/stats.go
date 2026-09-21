@@ -94,14 +94,25 @@ func (s *Store) MemberStats(ctx context.Context, memberID, seasonID int) ([]Play
 
 // ReportDetail ist ein Bericht mit Mannschaftslisten und Spielverlauf.
 type ReportDetail struct {
-	ReportID   int          `json:"reportId"`
-	State      string       `json:"state"`
-	Spectators string       `json:"spectators"`
-	Referees   string       `json:"referees"`
-	Warnings   []string     `json:"warnings"`
-	HasPDF     bool         `json:"hasPdf"`
-	Players    []PlayerLine `json:"players"`
-	Events     []EventLine  `json:"events"`
+	ReportID int    `json:"reportId"`
+	State    string `json:"state"`
+	// HomeTeam/GuestTeam kommen aus der Begegnung, nicht aus dem Vereinsnamen
+	// der Instanz — die Anzeige soll ohne verdrahtete Marke auskommen.
+	HomeTeam  string `json:"homeTeam"`
+	GuestTeam string `json:"guestTeam"`
+	// Endstand und Halbzeitstand stammen aus dem Kopf des Berichts und liegen
+	// an der Begegnung. Sie werden NICHT aus dem Spielverlauf abgeleitet: die
+	// Halbzeitpause ist dort unsichtbar, weil die Spieluhr stillsteht.
+	HomeGoals    *int         `json:"homeGoals"`
+	GuestGoals   *int         `json:"guestGoals"`
+	HomeGoalsHT  *int         `json:"homeGoalsHt"`
+	GuestGoalsHT *int         `json:"guestGoalsHt"`
+	Spectators   string       `json:"spectators"`
+	Referees     string       `json:"referees"`
+	Warnings     []string     `json:"warnings"`
+	HasPDF       bool         `json:"hasPdf"`
+	Players      []PlayerLine `json:"players"`
+	Events       []EventLine  `json:"events"`
 }
 
 // PlayerLine ist eine Spielerzeile eines Berichts.
@@ -141,9 +152,15 @@ func (s *Store) ReportForGame(ctx context.Context, bwhvGameID int) (*ReportDetai
 	var d ReportDetail
 	var warnings, pdfPath string
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, state, spectators, referees, warnings_json, pdf_path
-		  FROM bwhv_reports WHERE bwhv_game_id = ? AND state = 'parsed'`, bwhvGameID).
-		Scan(&d.ReportID, &d.State, &d.Spectators, &d.Referees, &warnings, &pdfPath)
+		SELECT r.id, r.state, r.spectators, r.referees, r.warnings_json, r.pdf_path,
+		       g.home_team, g.guest_team,
+		       g.home_goals, g.guest_goals, g.home_goals_ht, g.guest_goals_ht
+		  FROM bwhv_reports r
+		  JOIN bwhv_games g ON g.id = r.bwhv_game_id
+		 WHERE r.bwhv_game_id = ? AND r.state = 'parsed'`, bwhvGameID).
+		Scan(&d.ReportID, &d.State, &d.Spectators, &d.Referees, &warnings, &pdfPath,
+			&d.HomeTeam, &d.GuestTeam,
+			&d.HomeGoals, &d.GuestGoals, &d.HomeGoalsHT, &d.GuestGoalsHT)
 	if err != nil {
 		return nil, err
 	}

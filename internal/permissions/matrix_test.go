@@ -729,6 +729,7 @@ var matrix = []endpointCase{
 	{method: "GET", path: "/api/staffeln/{id}/spielplan", expected: exAuth},
 	{method: "GET", path: "/api/staffeln/{id}/ranglisten", expected: exAuth},
 	{method: "GET", path: "/api/bwhv-games/{id}/report", expected: exAuth},
+	{method: "GET", path: "/api/games/{id}/bwhv-report", expected: exAuth},
 	{method: "GET", path: "/api/bwhv-reports/{id}/pdf", expected: exAuth},
 	{method: "GET", path: "/api/members/{id}/saisonstatistik", expected: exAuth},
 

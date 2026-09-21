@@ -20,7 +20,7 @@ import (
 // ErrStaffelUnbekannt meldet einen Staffelcode, den kein Katalog kennt.
 // Er wird sichtbar protokolliert und die Staffel im Lauf übersprungen —
 // ein stiller Leerlauf wäre die schlechtere Antwort.
-var ErrStaffelUnbekannt = errors.New("Staffelcode in keinem Katalog gefunden")
+var ErrStaffelUnbekannt = errors.New("staffelcode in keinem Katalog gefunden")
 
 // Staffel ist eine gespeicherte Staffel-Zuordnung samt aufgelöster Herkunft.
 type Staffel struct {
@@ -83,7 +83,7 @@ func (s *Store) ResolveStaffel(ctx context.Context, c *bwhv.Client, seasonID, or
 	}
 	_ = periods
 	if selected == "" {
-		return nil, fmt.Errorf("Spielzeit des Verbands nicht ermittelbar")
+		return nil, fmt.Errorf("spielzeit des Verbands nicht ermittelbar")
 	}
 
 	candidates := []int{0} // 0 = Verbandsebene (kein o-Parameter)

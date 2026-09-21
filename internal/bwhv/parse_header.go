@@ -32,7 +32,7 @@ func parseHeader(d *document) (Header, error) {
 		}
 	}
 	if h.GameNo == "" {
-		return h, fmt.Errorf("Spielbericht ohne erkennbare Kopfzeile (Staffel, Spiel Nr., Datum)")
+		return h, fmt.Errorf("spielbericht ohne erkennbare Kopfzeile (Staffel, Spiel Nr., Datum)")
 	}
 
 	for _, l := range d.Lines {
@@ -72,7 +72,7 @@ func parseHeader(d *document) (Header, error) {
 		}
 	}
 	if h.HomeTeam == "" || h.GuestTeam == "" {
-		return h, fmt.Errorf("Spielbericht ohne erkennbare Mannschaften in der Zeile \"Heim - Gast\"")
+		return h, fmt.Errorf("spielbericht ohne erkennbare Mannschaften in der Zeile \"Heim - Gast\"")
 	}
 	h.Referees = parseReferees(d)
 	return h, nil

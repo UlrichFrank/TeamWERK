@@ -15,10 +15,10 @@
 | Tier | Zugriff |
 |---|---|
 | Public | Login, Register, Passwort-Reset, Beitrittsantrag, Downloads |
-| Authenticated | alle Eingeloggten (Profil, Dienstbörse, Spiele, Chat, …) |
+| Authenticated | alle Eingeloggten (Profil, Dienstbörse, Spiele, Chat, BWHV-Staffeln: Tabelle/Spielplan/Ranglisten/Spielbericht/Saisonstatistik, …) |
 | Trainer + sportliche_leitung | Slots, Anfragen, Training |
 | Vorstand (+ Trainer/sL) | Spiele, Kader, Duty-Slots, Saisons (lesen), Venues (CRUD), `/api/practice-groups` (Übungsgruppen) |
-| Vorstand | Mitglieder-CRUD, Verein, Teams, Nutzer, Einladungen, Duty-Types/-Templates, H4A-Spielimport (`POST /api/games/import/h4a/preview` + `/apply`), Massen-Dienstregeneration (`POST /api/duty-slots/bulk-regen/preview` + `/apply`) |
+| Vorstand | Mitglieder-CRUD, Verein, Teams, Nutzer, Einladungen, Duty-Types/-Templates, H4A-Spielimport (`POST /api/games/import/h4a/preview` + `/apply`), Massen-Dienstregeneration (`POST /api/duty-slots/bulk-regen/preview` + `/apply`), BWHV-Staffel-Katalog (`GET /api/bwhv/staffel-katalog`) und manueller Abruf (`POST /api/staffeln/{id}/poll`) |
 | Vorstand + Kassierer | Mitglieder lesen, `PUT /members/{id}/bank-details` (Feld-Whitelist), Fee-Run |
 | Admin only | Impersonate |
 
@@ -30,6 +30,8 @@
 - **Status-Felder** sind CHECK-Constraints (z.B. `members.status`: `aktiv|verletzt|pausiert|ausgetreten`) — gültige Werte in der jeweiligen Migration nachsehen.
 - **`venues.hall_number`** (BWHV-Hallennummer) und **`games.external_id`** (BWHV-Spielnummer) sind die Fremdschlüssel des H4A-Imports (Migration `042`). Beide nullable: `hall_number` mit **Partial-Unique-Index** (`WHERE hall_number IS NOT NULL` — nicht zuordenbare Nicht-BWHV-Orte bleiben NULL), `external_id` **ohne** UNIQUE (manuell angelegte Spiele koexistieren; die Eindeutigkeit prüft der Import fachlich).
 - **`members.join_date`/`exit_date`** steuern die Beitrags-Halbierung (Migration `014`): `join_date` ist App-Pflichtfeld (DB nullbar), `exit_date` Pflicht bei `status='ausgetreten'`. **`seasons.is_inaugural`** (INTEGER 0/1) markiert das erste Abrechnungsjahr (alle zahlen halb). Details siehe Gotcha „SEPA-Beitragslauf".
+- **`bwhv_games` ist kein `games`.** Der Staffel-Spielplan des Verbands (~810 Begegnungen je Saison, überwiegend fremde Vereine) lebt ausschließlich in `bwhv_games`; der Abruf legt **nie** eine `games`-Zeile an. Verknüpft wird nur über `bwhv_games.game_id`, wo die BWHV-Spielnummer einer vorhandenen `games.external_id` entspricht. `games` trägt deshalb auch weiterhin **keine Ergebnisspalten** — der Spielstand steht in `bwhv_games`, für eigene und fremde Begegnungen gleichermaßen.
+- **`kader.staffel`** trägt den Staffelcode (`gClassSname`, z.B. `mB-RL-BW`), nicht die Handball4All-Klassen-ID: die wechselt mit der Saison, der Code nicht. Nur an Kadern mit `kind='team'` (Übungsgruppen → HTTP 409).
 - **`user_events`** (Migration `050`, Event-Log) trägt **keinen** Fremdschlüssel auf ein Domänen-Objekt — kein `ref_type`/`ref_id`, nur ein Sprungziel `url`, das ins Leere zeigen darf. Die Zeile ist zum Sendezeitpunkt eingefroren, weil das referenzierte Objekt (gelöschter Termin, entfernter Dienst-Slot) danach oft nicht mehr existiert. `category` hat einen `CHECK` über acht Werte **ohne** `chat` — Chat läuft über einen eigenen Kanal (`push.SendToUserWithBadge`) und schreibt bewusst nicht hierher; eine neunte Kategorie braucht eine Migration, keinen Code-Pfad. Details siehe Gotcha „Event-Log".
 
 ## Paginierung

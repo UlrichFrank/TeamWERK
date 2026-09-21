@@ -144,7 +144,7 @@ func buildColumnModel(d *document, headerIdx int) (*columnModel, error) {
 		label string
 	}{{colNumber, "Nr."}, {colName, "Name"}, {colGoals, "Tore"}} {
 		if !m.has(need.col) {
-			return nil, fmt.Errorf("Kopfzeile der Mannschaftsliste nicht interpretierbar, Spalte %q fehlt: %q",
+			return nil, fmt.Errorf("kopfzeile der Mannschaftsliste nicht interpretierbar, Spalte %q fehlt: %q",
 				need.label, base.Text())
 		}
 	}

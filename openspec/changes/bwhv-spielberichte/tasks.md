@@ -82,26 +82,26 @@
 
 ## 10. Frontend — Staffeln-Ansicht
 
-- [ ] 10.1 `web/src/lib/api`-Aufrufe + Typen für Staffeln, Tabelle, Spielplan, Ranglisten, Bericht, Saisonstatistik
-- [ ] 10.2 `web/src/pages/StaffelnPage.tsx`: Mannschafts-Umschalter als Header-Control (`HEADER_FIELD`), Reiter Tabelle / Spielplan / Ranglisten
-- [ ] 10.3 `StaffelnPage`: Tabelle und Spielplan als `<table>` mit Mobile-`MobileCard`-Variante; nur `brand-*`-Tokens, Icons aus `lucide-react`
-- [ ] 10.4 `StaffelnPage`: `useLiveUpdates` auf `bwhv-updated`
-- [ ] 10.5 `web/src/App.tsx` Route `/staffeln` + Nav-Eintrag in `AppShell.tsx` (alle Eingeloggten)
-- [ ] 10.6 `StaffelnPage.test.tsx`: Umschalter wechselt die Staffel, Reiter rendern, Live-Update löst Reload aus
+- [x] 10.1 `web/src/lib/api`-Aufrufe + Typen für Staffeln, Tabelle, Spielplan, Ranglisten, Bericht, Saisonstatistik
+- [x] 10.2 `web/src/pages/StaffelnPage.tsx`: Mannschafts-Umschalter als Header-Control (`HEADER_FIELD`), Reiter Tabelle / Spielplan / Ranglisten
+- [x] 10.3 `StaffelnPage`: Tabelle und Spielplan als `<table>` mit Mobile-`MobileCard`-Variante; nur `brand-*`-Tokens, Icons aus `lucide-react`
+- [x] 10.4 `StaffelnPage`: `useLiveUpdates` auf `bwhv-updated`
+- [x] 10.5 `web/src/App.tsx` Route `/staffeln` + Nav-Eintrag in `AppShell.tsx` (alle Eingeloggten)
+- [x] 10.6 `StaffelnPage.test.tsx`: Umschalter wechselt die Staffel, Reiter rendern, Live-Update löst Reload aus
 
 ## 11. Frontend — Spielbericht, Profil, Vorbefüllung
 
-- [ ] 11.1 Spieldetail: Reiter „Spielbericht" — Endstand/Halbzeit, Zuschauer, Schiedsrichter, Torschützen beider Teams, Strafen, PDF-Download; Warnungen aus `warnings_json` als Hinweis
-- [ ] 11.2 Spieldetail: Spielverlauf als Timeline-Grafik (Torkurve über die Spielzeit), Hover/Tap zeigt Schütze und Spielstand
-- [ ] 11.3 Spieldetail: nicht zugeordnete eigene Spieler kenntlich machen und Zuordnung anbieten
-- [ ] 11.4 Spieler-Profil: Saisonbilanz (Spiele, Tore, 7m-Quote, Strafen, Verlauf)
-- [ ] 11.5 `MatchReportEditor`: Ergebnisfelder aus dem BWHV-Bericht vorbefüllen, wenn einer vorliegt; Autor-Eingabe hat Vorrang; **kein Backend-Import** (design.md §8)
-- [ ] 11.6 Vitest: Vorbefüllung bei vorhandenem Bericht, leere Felder ohne Bericht, `parse_failed` füllt nicht vor, Autor-Änderung überlebt
+- [x] 11.1 Spieldetail: Reiter „Spielbericht" — Endstand/Halbzeit, Zuschauer, Schiedsrichter, Torschützen beider Teams, Strafen, PDF-Download; Warnungen aus `warnings_json` als Hinweis
+- [x] 11.2 Spieldetail: Spielverlauf als Timeline-Grafik (Torkurve über die Spielzeit), Hover/Tap zeigt Schütze und Spielstand
+- [x] 11.3 Spieldetail: nicht zugeordnete eigene Spieler kenntlich machen und Zuordnung anbieten
+- [x] 11.4 Spieler-Profil: Saisonbilanz (Spiele, Tore, 7m-Quote, Strafen, Verlauf)
+- [x] 11.5 `MatchReportFormPage`: Ergebnisfelder aus dem BWHV-Bericht vorbefüllen, wenn einer vorliegt und der Autor noch nichts eingetragen hat; **kein Backend-Import** (design.md §8). Endstand und Halbzeitstand kommen aus dem Berichtskopf (`bwhv_games`), **nicht** aus dem Spielverlauf — die Halbzeitpause ist dort unsichtbar, weil die Spieluhr stillsteht.
+- [x] 11.6 Vitest: Vorbefüllung bei vorhandenem Bericht, leere Felder ohne Bericht, `parse_failed` füllt nicht vor, Autor-Änderung überlebt
 
 ## 12. Dokumentation und Abschluss
 
-- [ ] 12.1 `docs/agent/06-gotchas.md`: Absatz „BWHV-Spielberichte" — `og`/`o`-Falle, `sGID` als Bereitschaftssignal, Poll-Fenster ohne Zustandsfeld, gestufte Kreuzprobe, Identitätsregel (Name primär), Grenze zu `games`
-- [ ] 12.2 `docs/agent/10-deployment.md`: Betriebsvorbehalt (User-Agent, kein Dauer-Polling, serielle Abrufe), `BWHV_REPORT_DIR` im Backup-Set, Speicherwachstum ~116 MB/Saison
-- [ ] 12.3 `docs/agent/04-api-db.md`: neue Routen und Auth-Tiers ergänzen
-- [ ] 12.4 `/verify-change` ausführen; `openspec validate --strict` grün
-- [ ] 12.5 Vor dem ersten Prod-Lauf: Staffeln an den neun Kadern der aktiven Saison pflegen, dann einen manuellen Poll je Staffel auslösen und das Ergebnis sichten
+- [x] 12.1 `docs/agent/06-gotchas.md`: Absatz „BWHV-Spielberichte" — `og`/`o`-Falle, `sGID` als Bereitschaftssignal, Poll-Fenster ohne Zustandsfeld, gestufte Kreuzprobe, Identitätsregel (Name primär), Grenze zu `games`
+- [x] 12.2 `docs/agent/10-deployment.md`: Betriebsvorbehalt (User-Agent, kein Dauer-Polling, serielle Abrufe), `BWHV_REPORT_DIR` im Backup-Set, Speicherwachstum ~116 MB/Saison
+- [x] 12.3 `docs/agent/04-api-db.md`: neue Routen und Auth-Tiers ergänzen
+- [x] 12.4 `/verify-change` ausführen; `openspec validate --strict` grün
+- [x] 12.5 Vor dem ersten Prod-Lauf: Staffeln an den neun Kadern der aktiven Saison pflegen, dann einen manuellen Poll je Staffel auslösen und das Ergebnis sichten

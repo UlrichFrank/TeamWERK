@@ -112,6 +112,7 @@ var openByDesign = map[string]string{
 	"GET /api/staffeln/{id}/spielplan":      "Staffel-Spielplan inkl. fremder Begegnungen; öffentlich abrufbare Verbandsdaten, vereinsweit sichtbar.",
 	"GET /api/staffeln/{id}/ranglisten":     "Saisonbilanz aller Spieler einer Staffel; aus dem öffentlichen Spielbericht abgeleitet, vereinsweit sichtbar (bewusste Entscheidung, design.md §2).",
 	"GET /api/bwhv-games/{id}/report":       "Spielbericht einer Begegnung; das Dokument ist beim Verband ohne Anmeldung abrufbar, vereinsweit sichtbar.",
+	"GET /api/games/{id}/bwhv-report":       "Derselbe Bericht, adressiert über den eigenen Spieltermin statt über die BWHV-Begegnung; identische Sichtbarkeit.",
 	"GET /api/bwhv-reports/{id}/pdf":        "Beleg-PDF zum Bericht; identischer Inhalt zur Abrufquelle des Verbands, vereinsweit sichtbar.",
 	"GET /api/members/{id}/saisonstatistik": "Spielstatistik eines Mitglieds aus öffentlichen Spielberichten; bewusst vereinsweit sichtbar wie die Rangliste, aus der sie stammt.",
 	"POST /api/staffeln/{id}/poll":          "Manueller Abruf-Anstoß einer Staffel; die Staffel ist Vereinsstammdatum ohne Eigentümer, das Tier (Vorstand) IST die Berechtigung.",
