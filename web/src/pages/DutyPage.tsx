@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Home, Plane, Calendar, UserCheck, History, Users } from 'lucide-react'
+import { Home, Plane, Calendar, UserCheck, History } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
-import { AUDIENCE_FILTER_FUNCTIONS } from '../lib/audience'
 import TeamFilter from '../components/TeamFilter'
 import EventSearchInput from '../components/EventSearchInput'
 import FilterEmptyState from '../components/FilterEmptyState'
@@ -81,23 +80,21 @@ function parseFilters(sp: URLSearchParams) {
     : new Set(ALL_TYPES)
   const mine = sp.get('mine') === '1'
   const past = sp.get('past') === '1'
-  const audienceAll = sp.get('audience') === 'all'
   const focusRaw = sp.get('focus')
   const focusMatch = focusRaw?.match(/^(slot|game)-(\d+)$/)
   const focus = focusMatch ? { kind: focusMatch[1] as 'slot' | 'game', id: parseInt(focusMatch[2]) } : null
-  return { team, types, mine, past, audienceAll, focus }
+  return { team, types, mine, past, focus }
 }
 
 export default function DutyPage() {
-  const { user, hasCapability } = useAuth()
+  const { hasCapability } = useAuth()
   // Slot-Verwaltung (Bearbeiten/Löschen) = manage_duties (admin/vorstand/trainer/
   // sportliche_leitung) — deckungsgleich mit dem Backend-Gate der duty-slots-Routen.
   // Vorstand ist hier bewusst eingeschlossen (Dienste wie Kasse/Einkauf).
   const canManageDuties = hasCapability('manage_duties')
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const { team: filterTeamIds, types: filterTypes, mine: viewMine, past: showPast, audienceAll, focus } = parseFilters(searchParams)
-  const showAudiencePill = AUDIENCE_FILTER_FUNCTIONS.some(f => user?.clubFunctions?.includes(f))
+  const { team: filterTeamIds, types: filterTypes, mine: viewMine, past: showPast, focus } = parseFilters(searchParams)
 
   // q lebt getrennt von parseFilters: die Filterung wirkt sofort, die URL zieht
   // verzögert nach (design.md §9).
@@ -116,7 +113,7 @@ export default function DutyPage() {
     ['generisch', 'Sonstiges', <Calendar className="w-3.5 h-3.5" />],
   ]
 
-  const updateFilter = (patch: { team?: Set<number>; types?: Set<string>; mine?: boolean; past?: boolean; audienceAll?: boolean; focus?: { kind: 'slot' | 'game'; id: number } | null }) => {
+  const updateFilter = (patch: { team?: Set<number>; types?: Set<string>; mine?: boolean; past?: boolean; focus?: { kind: 'slot' | 'game'; id: number } | null }) => {
     const next = new URLSearchParams(searchParams)
     if ('team' in patch && patch.team) {
       const value = serializeTeamIds(patch.team, teams.length)
@@ -135,10 +132,6 @@ export default function DutyPage() {
     if ('past' in patch) {
       if (patch.past) next.set('past', '1')
       else next.delete('past')
-    }
-    if ('audienceAll' in patch) {
-      if (patch.audienceAll) next.set('audience', 'all')
-      else next.delete('audience')
     }
     if ('focus' in patch) {
       if (patch.focus) next.set('focus', `${patch.focus.kind}-${patch.focus.id}`)
@@ -174,7 +167,6 @@ export default function DutyPage() {
     setLoading(true)
     const params = new URLSearchParams()
     if (viewMine) params.set('view', 'mine')
-    if (audienceAll) params.set('audience', 'all')
     // Ohne „Vergangene": Datumsfenster serverseitig ab heute — spart die
     // komplette Historie in der Payload. Mit Toggle wird alles geladen.
     if (!showPast) {
@@ -186,9 +178,9 @@ export default function DutyPage() {
     api.get(url).then(r => setGroups(r.data ?? [])).finally(() => setLoading(false))
   }
 
-  // load kapselt viewMine/audienceAll/showPast, soll nur bei deren Änderung neu laufen
+  // load kapselt viewMine/showPast, soll nur bei deren Änderung neu laufen
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { load() }, [viewMine, audienceAll, showPast])
+  useEffect(() => { load() }, [viewMine, showPast])
   useLiveUpdates((event) => { if (event === 'duties') load() })
 
   useEffect(() => {
@@ -249,7 +241,7 @@ export default function DutyPage() {
   // TerminePage.tsx gibt es hier bewusst KEINE automatische Filter-Erweiterung:
   // der Fokus wird ausschließlich durch einen Klick auf eine bereits sichtbare
   // Zeile/ein bereits sichtbares Spiel gesetzt (kein Push-Notification-Deep-Link
-  // wie bei Termine), die Filter (inkl. past/mine/audience) sind beim
+  // wie bei Termine), die Filter (inkl. past/mine) sind beim
   // Zurücknavigieren also unverändert dieselben, unter denen das Ziel zuvor
   // sichtbar war — ein Mismatch ist damit nur durch zwischenzeitliche
   // Löschung/Live-Update zu erwarten, nicht durch die Filter selbst. Ein
@@ -323,19 +315,6 @@ export default function DutyPage() {
             <History className="w-3.5 h-3.5" />
             {!compact && <span>Vergangene</span>}
           </button>
-          {showAudiencePill && (
-            <button
-              onClick={() => updateFilter({ audienceAll: !audienceAll })}
-              aria-label="Nur meine Audience"
-              title={audienceAll ? 'Alle Audiences sichtbar — klicken für Filter auf meine Audience' : 'Nur meine Audience — klicken für alle Audiences'}
-              className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
-                !audienceAll ? HEADER_PRIMARY : HEADER_NEUTRAL
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              {!compact && <span>Nur Audience</span>}
-            </button>
-          )}
         </div>
       </div>
 

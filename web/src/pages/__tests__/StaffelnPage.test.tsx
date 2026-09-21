@@ -199,41 +199,6 @@ describe('StaffelnPage', () => {
     await waitFor(() => expect(screen.queryByText(/Zuschauer:/)).not.toBeInTheDocument())
   })
 
-  // "Nur Audience" ist dem Vorstand und den Trainern vorbehalten und lädt die
-  // Liste mit audience=own neu; ein normaler Nutzer sieht den Schalter nicht.
-  test('Nur Audience: Schalter für Vorstand, lädt die eigene Staffelliste', async () => {
-    // Der spezifischere Handler zuerst: axios-mock-adapter nimmt den ersten Treffer.
-    mock.onGet('/staffeln', { params: { audience: 'own' } }).reply(200, [staffeln[1]])
-    mockAll()
-    setup('/staffeln', [], ['vorstand'])
-    const pill = await screen.findByRole('button', { name: 'Nur meine Audience' })
-    expect(pill).toHaveAttribute('aria-pressed', 'false')
-    fireEvent.click(pill)
-    await waitFor(() => expect(pill).toHaveAttribute('aria-pressed', 'true'))
-    await waitFor(() => {
-      const select = screen.getByLabelText('Mannschaft wählen')
-      expect(select).toHaveTextContent('wC')
-      expect(select).not.toHaveTextContent('mB1')
-    })
-  })
-
-  test('Nur Audience: kein Schalter ohne Vorstands-/Trainerfunktion', async () => {
-    mockAll()
-    setup('/staffeln', [], ['spieler'])
-    await screen.findByLabelText('Mannschaft wählen')
-    expect(screen.queryByRole('button', { name: 'Nur meine Audience' })).not.toBeInTheDocument()
-  })
-
-  test('Nur Audience ohne eigene Staffel bietet den Rückweg zu allen Staffeln', async () => {
-    mock.onGet('/staffeln', { params: { audience: 'own' } }).reply(200, [])
-    mock.onGet('/staffeln').reply(200, staffeln)
-    mockStats()
-    mock.onGet(/\/staffeln\/\d+\/(tabelle|spielplan|ranglisten)$/).reply(200, [])
-    setup('/staffeln?audience=own', [], ['vorstand'])
-    fireEvent.click(await screen.findByRole('button', { name: 'Alle Staffeln anzeigen' }))
-    await screen.findByLabelText('Mannschaft wählen')
-  })
-
   // Gleichauf heißt gleicher Platz: 8, 8, 3 Tore ergeben 1, 1, 3 — nicht 1, 2, 3.
   test('Torschützen-Rangliste teilt den Platz bei Gleichstand', async () => {
     mockAll()

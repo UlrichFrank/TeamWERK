@@ -7,7 +7,7 @@ import {
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
-import { HEADER_CTRL, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_FIELD } from '../lib/buttonStyles'
+import { HEADER_CTRL, HEADER_NEUTRAL, HEADER_FIELD } from '../lib/buttonStyles'
 import {
   Staffel, TableRow, ScheduleGame, PlayerStat,
   CrossTable as CrossTableData, ProgressionDay, TeamStats, RefereeStat, Affiliation,
@@ -15,7 +15,6 @@ import {
   fetchCrossTable, fetchProgression, fetchTeamStats, fetchRefereeStats, fetchAffiliation,
   goalRatio, pointsLabel, sevenMeterRate, matchesSearch, gameSearchFields,
 } from '../lib/staffeln'
-import { AUDIENCE_FILTER_FUNCTIONS } from '../lib/audience'
 import { sharedRanks } from '../lib/ranking'
 import { isOwnTeam, isOwnPlayer } from '../lib/staffelHighlight'
 import SpielberichtPanel from '../components/SpielberichtPanel'
@@ -72,11 +71,9 @@ export default function StaffelnPage() {
   const [polling, setPolling] = useState(false)
   const [pollHinweis, setPollHinweis] = useState('')
   const [search, setSearch] = useState('')
-  const { user, hasCapability } = useAuth()
+  const { hasCapability } = useAuth()
 
   const selectedId = Number(params.get('staffel')) || 0
-  const audienceOwn = params.get('audience') === 'own'
-  const showAudiencePill = AUDIENCE_FILTER_FUNCTIONS.some((f) => user?.clubFunctions?.includes(f))
   const tab = (params.get('tab') as Tab) || 'tabelle'
   const selected = useMemo(
     () => staffeln.find((s) => s.id === selectedId) ?? staffeln[0],
@@ -88,14 +85,14 @@ export default function StaffelnPage() {
   // abgerufen" (id 0) auf eine echte ID. Ohne das bliebe die Seite auf dem
   // alten Zustand stehen und der Abruf sähe wirkungslos aus.
   const reloadStaffeln = () =>
-    fetchStaffeln(audienceOwn)
+    fetchStaffeln()
       .then(setStaffeln)
       .catch(() => setError('Staffeln konnten nicht geladen werden.'))
 
   useEffect(() => {
     reloadStaffeln().finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audienceOwn])
+  }, [])
 
   // Alle Reiter werden gemeinsam geladen: sie zeigen dieselbe Staffel, und ein
   // Reiterwechsel soll nicht auf einen Abruf warten. Die Zugehoerigkeit kommt
@@ -162,19 +159,10 @@ export default function StaffelnPage() {
     return (
       <div>
         <h1 className="text-2xl font-bold text-brand-text mb-4">Staffeln</h1>
-        {audienceOwn ? (
-          <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
-            Für deine Mannschaften ist keine Staffel zugeordnet.{' '}
-            <button className="underline" onClick={() => setParam('audience', 'all')}>
-              Alle Staffeln anzeigen
-            </button>
-          </div>
-        ) : (
           <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
             Für diese Saison ist noch keiner Mannschaft eine Staffel zugeordnet. Der Vorstand
             pflegt sie unter Verwaltung → Kader, direkt an der Mannschaft.
           </div>
-        )}
       </div>
     )
   }
@@ -205,23 +193,6 @@ export default function StaffelnPage() {
               placeholder="Suchen…"
               aria-label="Suche in Tabelle und Spielplan"
             />
-          )}
-          {showAudiencePill && (
-            <button
-              onClick={() => {
-                const next = new URLSearchParams(params)
-                if (audienceOwn) next.delete('audience')
-                else next.set('audience', 'own')
-                setParams(next, { replace: true })
-              }}
-              aria-pressed={audienceOwn}
-              aria-label="Nur meine Audience"
-              title={audienceOwn ? 'Nur meine Audience — klicken für alle Staffeln' : 'Alle Staffeln — klicken für Filter auf meine Audience'}
-              className={`${HEADER_CTRL} ${audienceOwn ? HEADER_PRIMARY : HEADER_NEUTRAL}`}
-            >
-              <Users className="w-4 h-4" />
-              <span className="hidden sm:inline">Nur Audience</span>
-            </button>
           )}
           {hasCapability('poll_bwhv') && (
             <button
