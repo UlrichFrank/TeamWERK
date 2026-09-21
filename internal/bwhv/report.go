@@ -30,7 +30,14 @@ type Header struct {
 	HomeGoalsHT  int
 	GuestGoalsHT int
 	Spectators   string
-	Referees     string
+	// Referees ist die ungetrennte Namenszeile des Dokuments — der Beleg, aus
+	// dem eine später verbesserte Trennung ohne erneuten Fremdabruf gewonnen
+	// werden kann.
+	Referees string
+	// RefereeNames sind die getrennten Personen; RefereesUncertain meldet eine
+	// geratene Trennung (parse_header.go).
+	RefereeNames      []string
+	RefereesUncertain bool
 }
 
 // RosterPlayer ist eine Zeile der Mannschaftsliste.

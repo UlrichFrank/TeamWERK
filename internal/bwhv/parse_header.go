@@ -74,7 +74,8 @@ func parseHeader(d *document) (Header, error) {
 	if h.HomeTeam == "" || h.GuestTeam == "" {
 		return h, fmt.Errorf("spielbericht ohne erkennbare Mannschaften in der Zeile \"Heim - Gast\"")
 	}
-	h.Referees = parseReferees(d)
+	h.Referees = refereeLineText(d)
+	h.RefereeNames, h.RefereesUncertain = parseReferees(d)
 	return h, nil
 }
 
@@ -91,25 +92,89 @@ func splitTeams(s string) (home, guest string, ok bool) {
 	return home, guest, home != "" && guest != ""
 }
 
-// parseReferees liest die Namenszeile unter "Schiedsrichter". Fehlen die
-// Namen, steht dort "N.N. N.N." — das wird als leer behandelt.
-func parseReferees(d *document) string {
+// refereeNameLine liefert die Zeile unter "Schiedsrichter", die die Namen des
+// Gespanns trägt. Sie ist an der Beschriftung "Name" erkennbar.
+func refereeNameLine(d *document) (textLine, bool) {
 	idx, ok := d.findLine("Schiedsrichter")
+	if !ok {
+		return textLine{}, false
+	}
+	for i := idx; i < len(d.Lines) && i < idx+6; i++ {
+		if strings.HasPrefix(strings.TrimSpace(d.Lines[i].Text()), "Name") {
+			return d.Lines[i], true
+		}
+	}
+	return textLine{}, false
+}
+
+// refereeLineText liefert die ungetrennte Namenszeile, so wie sie im Dokument
+// steht. Sie bleibt der Beleg: eine später verbesserte Trennung ist damit ohne
+// erneuten Fremdabruf möglich, genau wie beim behaltenen PDF. Fehlen die
+// Namen, steht dort "N.N. N.N." — das wird als leer behandelt.
+func refereeLineText(d *document) string {
+	l, ok := refereeNameLine(d)
 	if !ok {
 		return ""
 	}
-	for i := idx; i < len(d.Lines) && i < idx+6; i++ {
-		txt := strings.TrimSpace(d.Lines[i].Text())
-		if !strings.HasPrefix(txt, "Name") {
+	rest := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(l.Text()), "Name"))
+	if isPlaceholderName(rest) {
+		return ""
+	}
+	return rest
+}
+
+// parseReferees trennt die Schiedsrichter an den Spaltenpositionen der
+// Textebene: ein Textlauf je Name. Das ist derselbe Weg, auf dem die
+// Mannschaftsliste ihre Spaltengrenzen gewinnt (columns.go) — die Trennung
+// stammt aus dem Dokument und muss nicht geraten werden.
+//
+// Der zweite Rückgabewert meldet eine geratene Trennung. Er ist nur im
+// Einspalten-Fall gesetzt, in dem die Namensregel greift: die kann bei
+// Doppelnamen, Adelspartikeln und Bindestrichnamen falsch schneiden, und das
+// soll am Bericht sichtbar bleiben statt als gesichertes Ergebnis
+// durchzulaufen.
+//
+// Eine gar nicht interpretierbare Zeile liefert eine leere Liste. Sie lässt
+// den Bericht NICHT scheitern — die Namen sind für die Auswertung des Spiels
+// entbehrlich, anders als Mannschaften und Endstand.
+func parseReferees(d *document) ([]string, bool) {
+	l, ok := refereeNameLine(d)
+	if !ok {
+		return nil, false
+	}
+	var names []string
+	for i, g := range l.Groups {
+		s := strings.TrimSpace(g.S)
+		if i == 0 {
+			s = strings.TrimSpace(strings.TrimPrefix(s, "Name"))
+		}
+		if s == "" || isPlaceholderName(s) {
 			continue
 		}
-		rest := strings.TrimSpace(strings.TrimPrefix(txt, "Name"))
-		if isPlaceholderName(rest) {
-			return ""
-		}
-		return rest
+		names = append(names, s)
 	}
-	return ""
+	if len(names) != 1 {
+		return names, false
+	}
+	return splitRefereePair(names[0])
+}
+
+// splitRefereePair ist der Rückfall für den Einspalten-Fall: das Dokument
+// liefert beide Namen in einem einzigen Lauf, die Trennung muss aus dem Aufbau
+// der Namen geraten werden. Sie greift nur für den Regelfall zweier
+// Vorname-Nachname-Paare; alles Längere liefert lieber nichts als einen
+// erfundenen Namen.
+func splitRefereePair(s string) ([]string, bool) {
+	w := strings.Fields(s)
+	switch {
+	case len(w) == 4:
+		return []string{w[0] + " " + w[1], w[2] + " " + w[3]}, true
+	case len(w) >= 1 && len(w) <= 3:
+		// Ein Name, keine Vermutung: die Zeile nennt nur eine Person.
+		return []string{strings.Join(w, " ")}, false
+	default:
+		return nil, false
+	}
 }
 
 // isPlaceholderName erkennt die Platzhalter des Dienstes für nicht gemeldete

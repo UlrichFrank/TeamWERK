@@ -239,3 +239,85 @@ func numbersOf(r Roster) []int {
 	}
 	return out
 }
+
+// refereeDoc baut eine Textebene mit der Schiedsrichter-Zeile aus den
+// übergebenen Textläufen. Ein Lauf je Name entspricht zwei Spalten im
+// Dokument, ein einziger Lauf dem Einspalten-Fall.
+func refereeDoc(runs ...string) *document {
+	line := textLine{Page: 1, Y: 100, Groups: []textGroup{{X: 40, End: 70, S: "Name"}}}
+	x := 100.0
+	for _, r := range runs {
+		line.Groups = append(line.Groups, textGroup{X: x, End: x + 80, S: r})
+		x += 120
+	}
+	return &document{Lines: []textLine{
+		{Page: 1, Y: 120, Groups: []textGroup{{X: 40, End: 120, S: "Schiedsrichter"}}},
+		line,
+	}}
+}
+
+// Zwei Textläufe heißt: die Trennung steht im Dokument. Sie wird übernommen
+// und nicht als unsicher vermerkt.
+func TestParseReferees_ZweiSpaltenZweiNamen(t *testing.T) {
+	names, uncertain := parseReferees(refereeDoc("Max Mustermann", "Peter Müller"))
+	if len(names) != 2 || names[0] != "Max Mustermann" || names[1] != "Peter Müller" {
+		t.Fatalf("Namen = %#v, erwartet [Max Mustermann Peter Müller]", names)
+	}
+	if uncertain {
+		t.Error("uncertain = true, erwartet false — die Trennung stammt aus dem Dokument")
+	}
+}
+
+// Ein einziger Lauf: die Namensregel greift und der Schnitt ist geraten.
+func TestParseReferees_EineSpalteIstUnsicher(t *testing.T) {
+	names, uncertain := parseReferees(refereeDoc("Max Mustermann Peter Müller"))
+	if len(names) != 2 || names[0] != "Max Mustermann" || names[1] != "Peter Müller" {
+		t.Fatalf("Namen = %#v, erwartet zwei getrennte Namen", names)
+	}
+	if !uncertain {
+		t.Error("uncertain = false, erwartet true — der Schnitt ist geraten")
+	}
+}
+
+func TestParseReferees_PlatzhalterErzeugtNichts(t *testing.T) {
+	names, uncertain := parseReferees(refereeDoc("N.N.", "N.N."))
+	if len(names) != 0 {
+		t.Fatalf("Namen = %#v, erwartet leer", names)
+	}
+	if uncertain {
+		t.Error("uncertain = true, erwartet false — es wurde nichts geraten")
+	}
+}
+
+// Eine Zeile, die die Namensregel nicht deuten kann, liefert nichts — lieber
+// keine Namen als erfundene.
+func TestParseReferees_UnbrauchbareZeileLiefertNichts(t *testing.T) {
+	names, uncertain := parseReferees(refereeDoc("a b c d e f g"))
+	if len(names) != 0 || uncertain {
+		t.Fatalf("Namen = %#v / uncertain = %v, erwartet leer und false", names, uncertain)
+	}
+}
+
+// Die Rohzeile bleibt erhalten: sie ist der Beleg für eine spätere,
+// verbesserte Trennung ohne erneuten Fremdabruf.
+func TestParseReferees_RohzeileBleibtErhalten(t *testing.T) {
+	if got := refereeLineText(refereeDoc("Max Mustermann", "Peter Müller")); got != "Max Mustermann Peter Müller" {
+		t.Errorf("Rohzeile = %q, erwartet %q", got, "Max Mustermann Peter Müller")
+	}
+}
+
+// Der Bericht darf an einer unbrauchbaren Schiedsrichter-Zeile nicht
+// scheitern: die Namen sind für die Auswertung des Spiels entbehrlich. Das
+// Fixture trägt N.N.-Platzhalter und ist damit genau dieser Fall.
+func TestParseReport_UnbrauchbareSchiedsrichterzeileKipptNicht(t *testing.T) {
+	r := parseFixture(t, "spielbericht_905272.pdf")
+	if len(r.Header.RefereeNames) != 0 {
+		t.Errorf("RefereeNames = %#v, erwartet leer (Platzhalter)", r.Header.RefereeNames)
+	}
+	if r.Header.RefereesUncertain {
+		t.Error("RefereesUncertain = true, erwartet false")
+	}
+	if len(r.Home.Players) == 0 || len(r.Events) == 0 {
+		t.Fatal("erwartet: der Bericht ist trotz fehlender Schiedsrichter vollständig ausgewertet")
+	}
+}

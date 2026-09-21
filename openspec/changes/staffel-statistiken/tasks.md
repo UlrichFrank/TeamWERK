@@ -1,9 +1,9 @@
 ## 1. Schiedsrichter getrennt erfassen (Parser + Schema)
 
 - [x] 1.1 Migration `069_bwhv_referees_split` (up/down) legt `bwhv_reports.referees_json TEXT NOT NULL DEFAULT ''` und `referees_uncertain INTEGER NOT NULL DEFAULT 0` an; `referees` bleibt unangetastet. Verifikation: `make migrate-up` läuft durch, `make migrate-down` nimmt beide Spalten zurück, `.schema bwhv_reports` zeigt sie.
-- [ ] 1.2 `parseReferees` (`internal/bwhv/parse_header.go`) liefert `([]string, bool)` — Namen aus `textLine.Groups` (ein Lauf je Name), zweiter Rückgabewert markiert die unsichere Trennung. Verifikation: neuer Test in `internal/bwhv/parse_test.go` mit zwei Läufen ⇒ zwei Namen, `uncertain=false`.
-- [ ] 1.3 Namensregel als Rückfall für den Einspalten-Fall (Aufteilung in zwei Vorname-Nachname-Paare), setzt `uncertain=true`. Verifikation: Test mit einem Lauf „Max Mustermann Peter Müller" ⇒ zwei Namen + `uncertain=true`; Test mit `N.N. N.N.` ⇒ leere Liste.
-- [ ] 1.4 Eine gar nicht interpretierbare Schiedsrichter-Zeile liefert eine leere Liste und lässt den Bericht **nicht** scheitern. Verifikation: Test belegt, dass der Bericht trotz unbrauchbarer Zeile `parsed` bleibt (Anforderung „Nicht trennbare Zeile kippt den Bericht nicht").
+- [x] 1.2 `parseReferees` (`internal/bwhv/parse_header.go`) liefert `([]string, bool)` — Namen aus `textLine.Groups` (ein Lauf je Name), zweiter Rückgabewert markiert die unsichere Trennung. Verifikation: neuer Test in `internal/bwhv/parse_test.go` mit zwei Läufen ⇒ zwei Namen, `uncertain=false`.
+- [x] 1.3 Namensregel als Rückfall für den Einspalten-Fall (Aufteilung in zwei Vorname-Nachname-Paare), setzt `uncertain=true`. Verifikation: Test mit einem Lauf „Max Mustermann Peter Müller" ⇒ zwei Namen + `uncertain=true`; Test mit `N.N. N.N.` ⇒ leere Liste.
+- [x] 1.4 Eine gar nicht interpretierbare Schiedsrichter-Zeile liefert eine leere Liste und lässt den Bericht **nicht** scheitern. Verifikation: Test belegt, dass der Bericht trotz unbrauchbarer Zeile `parsed` bleibt (Anforderung „Nicht trennbare Zeile kippt den Bericht nicht").
 - [ ] 1.5 `report.go` und `reports.go` schreiben `referees_json`/`referees_uncertain` mit; `ReportDetail` gibt beide aus (`referees` bleibt als Rohzeile im JSON). Verifikation: bestehende `internal/gamestats`-Tests bleiben grün, ein neuer Test liest einen Bericht mit zwei Schiedsrichtern zurück.
 
 ## 2. Aggregate im Store
