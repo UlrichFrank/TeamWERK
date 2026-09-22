@@ -3,6 +3,7 @@ import { Activity, Home, MapPin } from 'lucide-react'
 import type { MatrixCell, MatrixGame, TeamMatrix } from '../../lib/staffeln'
 import { HEADER_CTRL, HEADER_NEUTRAL } from '../../lib/buttonStyles'
 import { isOwnPlayer } from '../../lib/staffelHighlight'
+import { useMediaQuery } from '../../lib/useMediaQuery'
 import TorMomentumModal from './TorMomentumModal'
 
 // Sechs Werte je Begegnung. Ohne "Blau": bwhv_player_games.blue wird konstant
@@ -26,9 +27,6 @@ const TD = 'px-2 py-2 text-sm text-brand-text text-center tabular-nums'
 // eine Zeile nach drei Spalten nicht mehr zuzuordnen.
 const STICKY = 'sticky left-0 z-10 text-left whitespace-nowrap'
 
-/** Nur die auf Mobile sichtbaren Wertespalten tragen keine sm:-Schranke. */
-const wertKlasse = (w: (typeof WERTE)[number]) => (w.mobil ? '' : 'hidden sm:table-cell')
-
 /**
  * Spielmatrix einer Mannschaft: Zeile = Spieler, Spaltengruppe = Begegnung.
  *
@@ -39,6 +37,13 @@ const wertKlasse = (w: (typeof WERTE)[number]) => (w.mobil ? '' : 'hidden sm:tab
  */
 export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix; ownPlayers: number[] }) {
   const [ablauf, setAblauf] = useState<MatrixGame | null>(null)
+  // Ausgeblendete Spalten dürfen nicht per CSS (`display:none`) verschwinden:
+  // ein <th colSpan> zählt seine Kinder unabhängig von deren Sichtbarkeit, ein
+  // per CSS verstecktes <td> aber nicht — das Grid der Kopf- und Datenzeilen
+  // liefe auseinander (Gesamt-Spalten landeten unter Spiel-Spalten). Deshalb
+  // wird auf Mobile weniger gerendert statt weniger gezeigt.
+  const isMobile = useMediaQuery('(max-width: 639px)')
+  const sichtbareWerte = isMobile ? WERTE.filter((w) => w.mobil) : WERTE
 
   if (matrix.games.length === 0) {
     return (
@@ -67,14 +72,14 @@ export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix
               {matrix.games.map((g) => (
                 <th
                   key={g.bwhvGameId}
-                  colSpan={WERTE.length}
+                  colSpan={sichtbareWerte.length}
                   className={`${TH} border-l border-brand-border-subtle align-top`}
                 >
                   <SpaltenKopf game={g} onAblauf={() => setAblauf(g)} />
                 </th>
               ))}
               <th
-                colSpan={WERTE.length + 1}
+                colSpan={sichtbareWerte.length + 1}
                 className={`${TH} border-l border-brand-border-subtle`}
               >
                 Gesamt
@@ -83,21 +88,21 @@ export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix
             <tr>
               <th className={`${TH} ${STICKY} bg-brand-surface-card`} />
               {matrix.games.map((g) => (
-                WERTE.map((w) => (
+                sichtbareWerte.map((w) => (
                   <th
                     key={`${g.bwhvGameId}-${w.key}`}
                     title={w.titel}
-                    className={`${TH} ${wertKlasse(w)} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
+                    className={`${TH} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
                   >
                     {w.label}
                   </th>
                 ))
               ))}
-              {WERTE.map((w) => (
+              {sichtbareWerte.map((w) => (
                 <th
                   key={`total-${w.key}`}
                   title={w.titel}
-                  className={`${TH} ${wertKlasse(w)} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
+                  className={`${TH} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
                 >
                   {w.label}
                 </th>
@@ -117,10 +122,10 @@ export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix
                 >
                   <td className={`${TD} ${STICKY} ${bg} font-medium`}>{p.name}</td>
                   {p.cells.map((c, i) => (
-                    WERTE.map((w) => (
+                    sichtbareWerte.map((w) => (
                       <td
                         key={`${matrix.games[i].bwhvGameId}-${w.key}`}
-                        className={`${TD} ${wertKlasse(w)} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
+                        className={`${TD} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
                       >
                         {/* "–" heißt "stand nicht in der Mannschaftsliste",
                             "0" heißt "war dabei und hat nicht getroffen". */}
@@ -130,7 +135,7 @@ export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix
                       </td>
                     ))
                   ))}
-                  <SummenZellen cell={p.total} bold />
+                  <SummenZellen cell={p.total} werte={sichtbareWerte} bold />
                   <td className={`${TD} font-medium`}>{p.games}</td>
                 </tr>
               )
@@ -138,16 +143,16 @@ export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix
             <tr className="border-t-2 border-brand-border font-semibold">
               <td className={`${TD} ${STICKY} bg-brand-surface-card text-left`}>Mannschaft</td>
               {matrix.gameTotals.map((c, i) => (
-                WERTE.map((w) => (
+                sichtbareWerte.map((w) => (
                   <td
                     key={`gt-${matrix.games[i].bwhvGameId}-${w.key}`}
-                    className={`${TD} ${wertKlasse(w)} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
+                    className={`${TD} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
                   >
                     {matrix.games[i].hasReport ? zahl(c[w.key]) : <span className="text-brand-text-subtle">–</span>}
                   </td>
                 ))
               ))}
-              <SummenZellen cell={matrix.total} bold />
+              <SummenZellen cell={matrix.total} werte={sichtbareWerte} bold />
               <td className={TD}>{matrix.reportGames}</td>
             </tr>
           </tbody>
@@ -172,13 +177,15 @@ function zahl(v: number) {
   return v === 0 ? <span className="text-brand-text-subtle">0</span> : v
 }
 
-function SummenZellen({ cell, bold }: { cell: MatrixCell; bold?: boolean }) {
+function SummenZellen(
+  { cell, werte, bold }: { cell: MatrixCell; werte: typeof WERTE; bold?: boolean },
+) {
   return (
     <>
-      {WERTE.map((w) => (
+      {werte.map((w) => (
         <td
           key={`sum-${w.key}`}
-          className={`${TD} ${wertKlasse(w)} ${bold ? 'font-semibold' : ''} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
+          className={`${TD} ${bold ? 'font-semibold' : ''} ${w.key === 'goals' ? 'border-l border-brand-border-subtle' : ''}`}
         >
           {zahl(cell[w.key])}
         </td>
