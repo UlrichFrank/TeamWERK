@@ -89,21 +89,40 @@ const referees = [
 // Der Nutzer gehört zu Verein A und ist dort selbst Spieler 1.
 const affiliation = { teamNames: ['Verein A'], playerIds: [1] }
 
-function mockStats(aff = affiliation) {
+// Spielmatrix des Nutzers: eine gespielte Begegnung mit Bericht, ein Spieler.
+const leereZelle = { goals: 0, sevenMAttempts: 0, sevenMGoals: 0, twoMin: 0, warnings: 0, disq: 0 }
+const spielmatrix = [{
+  team: 'Verein A',
+  halfDurationMinutes: 25,
+  games: [{
+    bwhvGameId: 5, date: '2026-09-20', homeTeam: 'Verein A', guestTeam: 'Verein B',
+    isHome: true, homeGoals: 29, guestGoals: 25, hasReport: true,
+  }],
+  players: [{
+    playerId: 1, memberId: null, name: 'Anna Beispiel',
+    cells: [{ ...leereZelle, goals: 8 }], total: { ...leereZelle, goals: 8 }, games: 1,
+  }],
+  gameTotals: [{ ...leereZelle, goals: 29 }],
+  total: { ...leereZelle, goals: 29 },
+  reportGames: 1,
+}]
+
+function mockStats(aff = affiliation, matrix: unknown[] = spielmatrix) {
   mock.onGet(/\/staffeln\/\d+\/kreuztabelle/).reply(200, cross)
   mock.onGet(/\/staffeln\/\d+\/tabellenverlauf/).reply(200, progression)
   mock.onGet(/\/staffeln\/\d+\/teamstatistik/).reply(200, teamStats)
   mock.onGet(/\/staffeln\/\d+\/schiedsrichter/).reply(200, referees)
   mock.onGet(/\/staffeln\/\d+\/affiliation/).reply(200, aff)
+  mock.onGet(/\/staffeln\/\d+\/player-games/).reply(200, { teams: matrix })
 }
 
-function mockAll(aff = affiliation) {
+function mockAll(aff = affiliation, matrix: unknown[] = spielmatrix) {
   mock.onGet('/staffeln').reply(200, staffeln)
   mock.onGet(/\/staffeln\/\d+\/tabelle$/).reply(200, table)
   mock.onGet(/\/staffeln\/\d+\/tabellenverlauf/).reply(200, progression)
   mock.onGet(/\/staffeln\/\d+\/spielplan/).reply(200, games)
   mock.onGet(/\/staffeln\/\d+\/ranglisten/).reply(200, stats)
-  mockStats(aff)
+  mockStats(aff, matrix)
 }
 
 const ctx = (caps: string[], clubFunctions: string[] = []): AuthCtx => ({
@@ -297,6 +316,27 @@ describe('StaffelnPage', () => {
     mockAll()
     setup('/staffeln?tab=verlauf')
     await waitFor(() => expect(screen.getByRole('img', { name: /Platzierungsverlauf/ })).toBeInTheDocument())
+  })
+
+  // Der Reiter trägt zwei Darstellungen: den Tabellenverlauf der Staffel und
+  // darunter die Spielmatrix der eigenen Mannschaft (design.md §12).
+  test('der Reiter verlauf zeigt Tabellenverlauf UND Spielmatrix', async () => {
+    mockAll()
+    setup('/staffeln?tab=verlauf')
+    await waitFor(() => expect(screen.getByRole('img', { name: /Platzierungsverlauf/ })).toBeInTheDocument())
+    expect(await screen.findByText('Anna Beispiel')).toBeInTheDocument()
+    expect(screen.getByText(/1 Spiel, davon\s+1 mit Spielbericht/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Ablauf/ })).toBeInTheDocument()
+  })
+
+  // Ohne verknüpfte Begegnung gibt es keine Mannschaft — und statt einer
+  // leeren Tabelle den Grund dafür (design.md §2).
+  test('der Reiter verlauf nennt den Grund, wenn die Spielmatrix fehlt', async () => {
+    mockAll(affiliation, [])
+    setup('/staffeln?tab=verlauf')
+    await waitFor(() => expect(screen.getByRole('img', { name: /Platzierungsverlauf/ })).toBeInTheDocument())
+    expect(await screen.findByText(/Verbindung zur eigenen Mannschaft/)).toBeInTheDocument()
+    expect(screen.queryByText('Anna Beispiel')).not.toBeInTheDocument()
   })
 
   describe('Kreuztabelle', () => {

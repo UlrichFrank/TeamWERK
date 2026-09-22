@@ -32,6 +32,6 @@
 
 ## 5. Abschluss
 
-- [ ] 5.1 `make test` und `pnpm -C web test` grün, `make lint` ohne neue Befunde. Verifikation: beide Läufe lokal.
-- [ ] 5.2 `/verify-change` durchlaufen (Route→Tests, brand-Tokens, lucide-Icons, keine Migration, `openspec validate`). Verifikation: Checkliste ohne offene Punkte.
-- [ ] 5.3 Gotcha-Absatz „Staffel-Statistiken" in `docs/agent/06-gotchas.md` um die beiden nicht-ableitbaren Punkte ergänzen: Halbzeitgrenze aus dem Kopf-Halbzeitstand statt aus der Spielzeit (§6) und die Prüfung der konfigurierten Spieldauer gegen den Bericht (§7), inklusive des Belegs aus der Fixture `905272` (`mB-RL-BW` mit 25-Minuten-Halbzeiten). Verifikation: der Absatz nennt beide Regeln samt Begründung.
+- [x] 5.1 `make test` und `pnpm -C web test` grün, `make lint` ohne neue Befunde. Verifikation: beide Läufe lokal.
+- [x] 5.2 `/verify-change` durchlaufen (Route→Tests, brand-Tokens, lucide-Icons, keine Migration, `openspec validate`). Verifikation: Checkliste ohne offene Punkte.
+- [x] 5.3 Gotcha-Absatz „Staffel-Statistiken" in `docs/agent/06-gotchas.md` um die beiden nicht-ableitbaren Punkte ergänzen: Halbzeitgrenze aus dem Kopf-Halbzeitstand statt aus der Spielzeit (§6) und die Prüfung der konfigurierten Spieldauer gegen den Bericht (§7), inklusive des Belegs aus der Fixture `905272` (`mB-RL-BW` mit 25-Minuten-Halbzeiten). Verifikation: der Absatz nennt beide Regeln samt Begründung.
