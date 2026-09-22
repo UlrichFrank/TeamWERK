@@ -558,6 +558,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			// Englisch nach der Namenskonvention für API-Routen, auch wenn die
 			// Ansicht unter einem deutschen Pfad liegt.
 			r.Get("/api/staffeln/{id}/affiliation", h.GameStats.GetAffiliation)
+			r.Get("/api/staffeln/{id}/player-games", h.GameStats.GetPlayerGames)
 			r.Get("/api/bwhv-games/{id}/report", h.GameStats.GetReport)
 			r.Get("/api/games/{id}/bwhv-report", h.GameStats.GetReportForOwnGame)
 			r.Get("/api/bwhv-reports/{id}/pdf", h.GameStats.GetReportPDF)

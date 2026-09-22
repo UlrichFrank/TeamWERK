@@ -9,10 +9,10 @@
 
 ## 2. Route und Handler
 
-- [ ] 2.1 `GetPlayerGames` in `internal/gamestats/handler.go` — `staffelOfRequest` für die 404-Behandlung, `claims.UserID` für die Zugehörigkeit, Fehler über `httpx.WriteError`. Verifikation: `go build ./...` und `golangci-lint run` grün.
-- [ ] 2.2 `r.Get("/api/staffeln/{id}/player-games", h.GameStats.GetPlayerGames)` im Authenticated-Tier von `internal/app/router.go`, neben `/affiliation` (englisch nach der Namenskonvention). Verifikation: Broadcast-Gate bleibt grün — Lese-Route, kein Allowlist-Eintrag nötig.
-- [ ] 2.3 Happy-Path und Fehlerfälle testen: 200 mit Matrix, 200 mit leerer Mannschaftsmenge, 404 bei unbekannter Staffel, 401 ohne Token. Verifikation: `go test ./internal/gamestats/` grün.
-- [ ] 2.4 Die neue `{id}`-Route in `openByDesign` der Objektrechte-Matrix eintragen, mit derselben Begründung wie `/tabelle` und `/affiliation`. Verifikation: `go test ./internal/permissions/` grün.
+- [x] 2.1 `GetPlayerGames` in `internal/gamestats/handler.go` — `staffelOfRequest` für die 404-Behandlung, `claims.UserID` für die Zugehörigkeit, Fehler über `httpx.WriteError`. Verifikation: `go build ./...` und `golangci-lint run` grün.
+- [x] 2.2 `r.Get("/api/staffeln/{id}/player-games", h.GameStats.GetPlayerGames)` im Authenticated-Tier von `internal/app/router.go`, neben `/affiliation` (englisch nach der Namenskonvention). Verifikation: Broadcast-Gate bleibt grün — Lese-Route, kein Allowlist-Eintrag nötig.
+- [x] 2.3 Happy-Path und Fehlerfälle testen: 200 mit Matrix, 200 mit leerer Mannschaftsmenge, 404 bei unbekannter Staffel, 401 ohne Token. Verifikation: `go test ./internal/gamestats/` grün.
+- [x] 2.4 Die neue `{id}`-Route in `openByDesign` der Objektrechte-Matrix eintragen, mit derselben Begründung wie `/tabelle` und `/affiliation`. Verifikation: `go test ./internal/permissions/` grün.
 
 ## 3. Ableitung des Torverlaufs (Frontend-Logik)
 

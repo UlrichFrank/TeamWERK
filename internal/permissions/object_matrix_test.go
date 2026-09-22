@@ -116,6 +116,7 @@ var openByDesign = map[string]string{
 	"GET /api/staffeln/{id}/teamstatistik":   "Mannschafts-Ranglisten einer Staffel; Aggregat über öffentlich abrufbare Verbandsdaten, vereinsweit sichtbar.",
 	"GET /api/staffeln/{id}/schiedsrichter":  "Schiedsrichter-Rangliste einer Staffel; Namen und Strafen stehen im öffentlichen Spielbericht, vereinsweit sichtbar.",
 	"GET /api/staffeln/{id}/affiliation":     "Eigene Zugehörigkeit zu einer Staffel; die Antwort hängt am Token des Aufrufers und enthält ausschließlich dessen eigene Mannschaften und Spielerzeilen — ein fremdes Objekt gibt es hier nicht.",
+	"GET /api/staffeln/{id}/player-games":    "Spielmatrix der eigenen Mannschaften einer Staffel; wie /affiliation hängt die Antwort am Token und zeigt nur die dem Aufrufer zuzurechnenden Mannschaften — ein fremdes Objekt gibt es hier nicht. Die Werte selbst stammen aus dem öffentlichen Spielbericht.",
 	"GET /api/bwhv-games/{id}/report":        "Spielbericht einer Begegnung; das Dokument ist beim Verband ohne Anmeldung abrufbar, vereinsweit sichtbar.",
 	"GET /api/games/{id}/bwhv-report":        "Derselbe Bericht, adressiert über den eigenen Spieltermin statt über die BWHV-Begegnung; identische Sichtbarkeit.",
 	"GET /api/bwhv-reports/{id}/pdf":         "Beleg-PDF zum Bericht; identischer Inhalt zur Abrufquelle des Verbands, vereinsweit sichtbar.",

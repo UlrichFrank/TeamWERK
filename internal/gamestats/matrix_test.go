@@ -3,6 +3,8 @@ package gamestats
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
@@ -314,5 +316,80 @@ func TestPlayerGameMatrix_ZweiEigeneMannschaftenInEinerStaffel(t *testing.T) {
 	}
 	if len(m3.Games) != 1 || m3.Games[0].BwhvGameID != g2 {
 		t.Errorf("Mannschaft 3: Spalten = %#v, erwartet nur die eigene Begegnung", m3.Games)
+	}
+}
+
+// --- Route ----------------------------------------------------------------
+
+type playerGamesResponse struct {
+	Teams []TeamMatrix `json:"teams"`
+}
+
+// Der Weg vom Token bis zur Matrix in einem Stück.
+func TestGetPlayerGames_HappyPath(t *testing.T) {
+	srv, s, seasonID, staffelID := newHandlerServer(t)
+	g1 := seedResult(t, s.db, staffelID, "1", "2026-09-20", "Team Stuttgart 2", "Fremd", intp(29), intp(25))
+	userID, teamID := ownTeamSetup(t, s.db, seasonID, staffelID, g1, true)
+	setAgeClassRule(t, s.db, teamID, "B-Jugend", 25)
+	seedParsedReport(t, s.db, staffelID, g1, "parsed",
+		map[string]string{"home": "TS 2", "guest": "Fremd"},
+		[]rosterLine{{name: "Anna", side: "home", goals: 5}})
+
+	token := testutil.Token(t, userID, "standard", []string{"spieler"})
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/player-games", token)
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var resp playerGamesResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("Antwort nicht lesbar: %v (%s)", err, body)
+	}
+	if len(resp.Teams) != 1 {
+		t.Fatalf("Mannschaften = %d, erwartet 1: %s", len(resp.Teams), body)
+	}
+	m := resp.Teams[0]
+	if m.Team != "Team Stuttgart 2" || len(m.Games) != 1 || len(m.Players) != 1 {
+		t.Errorf("Matrix = %+v, erwartet eine Mannschaft mit einem Spiel und einem Spieler", m)
+	}
+	if m.HalfDurationMinutes == nil || *m.HalfDurationMinutes != 25 {
+		t.Errorf("HalfDurationMinutes = %v, erwartet 25", m.HalfDurationMinutes)
+	}
+}
+
+// Ohne Zugehörigkeit steht die Menge leer in der Antwort — als Array, nicht
+// als null, damit das Frontend nicht dagegen prüfen muss.
+func TestGetPlayerGames_OhneZugehoerigkeitLeer(t *testing.T) {
+	srv, _, _, staffelID := newStatsServer(t)
+	code, body := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/player-games", userToken(t))
+	if code != http.StatusOK {
+		t.Fatalf("Status = %d: %s", code, body)
+	}
+	var resp playerGamesResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("Antwort nicht lesbar: %v (%s)", err, body)
+	}
+	if resp.Teams == nil {
+		t.Errorf("teams = null, erwartet leeres Array: %s", body)
+	}
+	if len(resp.Teams) != 0 {
+		t.Errorf("teams = %#v, erwartet leer", resp.Teams)
+	}
+}
+
+// Eine unbekannte Staffel erfindet keine Matrix.
+func TestGetPlayerGames_UnbekannteStaffel(t *testing.T) {
+	srv, _, _, _ := newHandlerServer(t)
+	code, _ := get(t, srv, "/api/staffeln/999999/player-games", userToken(t))
+	if code != http.StatusNotFound {
+		t.Errorf("Status = %d, erwartet 404", code)
+	}
+}
+
+// Das Authenticated-Tier greift.
+func TestGetPlayerGames_OhneToken(t *testing.T) {
+	srv, _, _, staffelID := newHandlerServer(t)
+	code, _ := get(t, srv, "/api/staffeln/"+itoa(staffelID)+"/player-games", "")
+	if code != http.StatusUnauthorized {
+		t.Errorf("Status = %d, erwartet 401", code)
 	}
 }

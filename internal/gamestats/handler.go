@@ -238,6 +238,26 @@ func (h *Handler) GetAffiliation(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, aff)
 }
 
+// GetPlayerGames liefert die Spielmatrix der eigenen Mannschaften einer
+// Staffel: je Spieler und gespielter Begegnung seine Werte.
+//
+// Nach GetAffiliation die zweite nutzerabhängige Route dieser Ansicht — welche
+// Mannschaft gemeint ist, entscheidet die Zugehörigkeit. Die vier
+// Statistik-Routen bleiben bewusst für alle Nutzer gleich.
+func (h *Handler) GetPlayerGames(w http.ResponseWriter, r *http.Request) {
+	st, ok := h.staffelOfRequest(w, r)
+	if !ok {
+		return
+	}
+	claims := auth.ClaimsFromCtx(r.Context())
+	teams, err := h.store.PlayerGameMatrix(r.Context(), st.ID, claims.UserID)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]any{"teams": teams})
+}
+
 // GetReport liefert den ausgewerteten Bericht einer Begegnung.
 func (h *Handler) GetReport(w http.ResponseWriter, r *http.Request) {
 	id, ok := httpx.PathID(r, "id")

@@ -32,6 +32,7 @@ func newHandlerServer(t *testing.T) (*httptest.Server, *Store, int, int) {
 		r.Get("/api/staffeln/{id}/teamstatistik", h.GetTeamStats)
 		r.Get("/api/staffeln/{id}/schiedsrichter", h.GetRefereeStats)
 		r.Get("/api/staffeln/{id}/affiliation", h.GetAffiliation)
+		r.Get("/api/staffeln/{id}/player-games", h.GetPlayerGames)
 		r.Get("/api/bwhv-games/{id}/report", h.GetReport)
 		r.Get("/api/bwhv-reports/{id}/pdf", h.GetReportPDF)
 		r.Get("/api/members/{id}/saisonstatistik", h.GetMemberStats)
@@ -554,7 +555,6 @@ func TestStaffelSpielplan_LoestHalleAuf(t *testing.T) {
 		t.Errorf("unbekannte Halle = %+v, erwartet Venue == nil", unbekannt)
 	}
 }
-
 
 // Sichtbarkeit wie der Teamfilter der Dienstbörse: Spieler und Eltern sehen nur
 // die Staffeln ihres Stammkader-Teams, der erweiterte Kader zählt nicht,
