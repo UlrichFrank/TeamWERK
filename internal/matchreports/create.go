@@ -131,11 +131,18 @@ func (h *Handler) adoptOrConflict(w http.ResponseWriter, req createReq, userID i
 	writeJSON(w, http.StatusOK, createResp{ID: id})
 }
 
-// Delete löscht einen Draft-Bericht (nur im State draft/publish_failed) und
-// räumt die zugehörigen Bilder auf. Published-Berichte sind unlöschbar aus
-// TeamWERK — dafür gibt es das Typo3-Backend.
+// Delete löscht einen Bericht und räumt die zugehörigen Bilder auf.
+// Published-Berichte sind unlöschbar aus TeamWERK — dafür gibt es das
+// Typo3-Backend. Zwei getrennte Berechtigungen, je nach State:
 //
-//	DELETE /api/match-reports/{id}
+//   - draft/publish_failed: Autor oder Admin (Bericht gehört ihm noch).
+//
+//   - pending_review: NUR Freigeber (medien/vorstand/admin) — der Autor hat
+//     mit submit-for-review die Verfügung abgegeben (kein Rückweg zum
+//     Autor, siehe handler.go State-Machine-Kommentar). Löschen ist hier der
+//     endgültige Abbruch, keine Reject-Rückgabe an den Autor.
+//
+//     DELETE /api/match-reports/{id}
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	if claims == nil {
@@ -164,17 +171,24 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if authorID != claims.UserID && claims.Role != auth.RoleAdmin {
-		writeErr(w, http.StatusForbidden, "forbidden")
-		return
-	}
-	if state != StateDraft && state != StatePublishFailed {
+	switch state {
+	case StateDraft, StatePublishFailed:
+		if authorID != claims.UserID && claims.Role != auth.RoleAdmin {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+	case StatePendingReview:
+		if !isReviewer(claims) {
+			writeErr(w, http.StatusForbidden, "forbidden")
+			return
+		}
+	default:
 		writeErr(w, http.StatusConflict, "already_published")
 		return
 	}
 
-	// Bilder-Dateien vom Draft löschen. DB-Referenzen fallen per ON DELETE
-	// CASCADE mit dem Bericht mit.
+	// Bilder-Dateien löschen. DB-Referenzen fallen per ON DELETE CASCADE mit
+	// dem Bericht mit.
 	h.removeAllImageFiles(id)
 
 	if _, err := h.db.Exec(`DELETE FROM match_reports WHERE id=?`, id); err != nil {

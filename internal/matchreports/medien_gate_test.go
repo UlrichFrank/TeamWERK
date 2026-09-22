@@ -270,6 +270,115 @@ func TestPublish_AuthorWithMedienCanSelfPublish(t *testing.T) {
 	}
 }
 
+// ─── TC-MG11 · Medien-Freigeber löscht pending_review-Bericht ─────────────────
+
+func TestDelete_MedienCanDeletePendingReview(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, gameID := setupBasicGame(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
+	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
+	if _, err := db.Exec(
+		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
+		reportID); err != nil {
+		t.Fatal(err)
+	}
+	reviewerID := testutil.CreateMedienUser(t, db)
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+	token := testutil.Token(t, reviewerID, auth.RoleStandard, []string{"medien"})
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/match-reports/%d", reportID), token)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM match_reports WHERE id=?`, reportID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("expected report to be deleted, still found %d rows", count)
+	}
+}
+
+// ─── TC-MG12 · Vorstand-Freigeber löscht pending_review-Bericht ───────────────
+
+func TestDelete_VorstandCanDeletePendingReview(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, gameID := setupBasicGame(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
+	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
+	if _, err := db.Exec(
+		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
+		reportID); err != nil {
+		t.Fatal(err)
+	}
+	vorstandID := testutil.CreateVorstandUser(t, db)
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+	token := testutil.Token(t, vorstandID, auth.RoleStandard, []string{"vorstand"})
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/match-reports/%d", reportID), token)
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+}
+
+// ─── TC-MG13 · Autor ohne Freigeber-Funktion darf eingereichten Bericht nicht löschen
+
+func TestDelete_AuthorCannotDeletePendingReview(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, gameID := setupBasicGame(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
+	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
+	if _, err := db.Exec(
+		`UPDATE match_reports SET state='pending_review', submitted_at=CURRENT_TIMESTAMP WHERE id=?`,
+		reportID); err != nil {
+		t.Fatal(err)
+	}
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+	token := testutil.Token(t, authorID, auth.RoleStandard, nil)
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/match-reports/%d", reportID), token)
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM match_reports WHERE id=?`, reportID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Errorf("expected report to survive the forbidden delete, found %d rows", count)
+	}
+}
+
+// ─── TC-MG14 · Löschen im State published bleibt verboten (Regression) ────────
+
+func TestDelete_PublishedStaysForbidden(t *testing.T) {
+	db := testutil.NewDB(t)
+	_, _, gameID := setupBasicGame(t, db)
+	authorID := testutil.CreateUser(t, db, auth.RoleStandard)
+	reportID := testutil.CreateMatchReport(t, db, gameID, authorID, 0)
+	if _, err := db.Exec(`UPDATE match_reports SET state='published' WHERE id=?`, reportID); err != nil {
+		t.Fatal(err)
+	}
+	vorstandID := testutil.CreateVorstandUser(t, db)
+
+	h := newHandlerWithPublisher(db, &fakePublisher{})
+	srv := testServer(t, h)
+	token := testutil.Token(t, vorstandID, auth.RoleStandard, []string{"vorstand"})
+	res := testutil.Delete(t, srv, fmt.Sprintf("/api/match-reports/%d", reportID), token)
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("expected 409, got %d — %s", res.StatusCode, readBody(t, res))
+	}
+	body := readBody(t, res)
+	if !contains(body, "already_published") {
+		t.Errorf("expected error=already_published, got %s", body)
+	}
+}
+
 // ─── Hilfen ───────────────────────────────────────────────────────────────────
 
 func contains(haystack, needle string) bool {

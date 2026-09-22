@@ -12,6 +12,11 @@
 //
 // Nach `published` ist der Bericht in TeamWERK read-only. Änderungen und
 // Löschungen laufen ausschließlich in der TYPO3-Backend-Redaktion.
+//
+// pending_review hat KEINEN Rückweg zum Autor (kein Reject, keine Bearbeitung
+// durch den Autor) — ein Freigeber kann einen dort liegenden Bericht aber per
+// DELETE endgültig abbrechen (kein Zustand, ein Ende; siehe Delete in
+// create.go).
 package matchreports
 
 import (
@@ -31,8 +36,10 @@ import (
 //	                              │
 //	                              └─(4xx/5xx)─▶ publish_failed ─retry─▶ publishing
 //
-// Kein Rückweg — kein Reject, kein Withdraw (siehe design.md D-3 des
-// spielbericht-medien-gate-Change).
+// Kein Rückweg zum Autor — kein Reject, kein Withdraw durch den Autor (siehe
+// design.md D-3 des spielbericht-medien-gate-Change). Ein Freigeber darf einen
+// pending_review-Bericht per DELETE endgültig abbrechen (siehe
+// spielbericht-pending-delete) — das ist kein Rückweg, sondern das Ende.
 const (
 	StateDraft         = "draft"
 	StatePendingReview = "pending_review"
