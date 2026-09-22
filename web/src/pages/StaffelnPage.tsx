@@ -10,9 +10,10 @@ import { api } from '../lib/api'
 import { HEADER_CTRL, HEADER_NEUTRAL, HEADER_FIELD } from '../lib/buttonStyles'
 import {
   Staffel, TableRow, ScheduleGame, PlayerStat,
-  CrossTable as CrossTableData, ProgressionDay, TeamStats, RefereeStat, Affiliation,
+  CrossTable as CrossTableData, ProgressionDay, TeamStats, RefereeStat, Affiliation, TeamMatrix,
   fetchStaffeln, fetchTable, fetchSchedule, fetchRanglisten, syncStaffeln,
   fetchCrossTable, fetchProgression, fetchTeamStats, fetchRefereeStats, fetchAffiliation,
+  fetchPlayerGames,
   goalRatio, pointsLabel, sevenMeterRate, matchesSearch, gameSearchFields,
 } from '../lib/staffeln'
 import { sharedRanks } from '../lib/ranking'
@@ -21,6 +22,7 @@ import SpielberichtPanel from '../components/SpielberichtPanel'
 import MapsLink from '../components/MapsLink'
 import CrossTable from '../components/staffeln/CrossTable'
 import StandingsChart from '../components/staffeln/StandingsChart'
+import Spielmatrix from '../components/staffeln/Spielmatrix'
 import { GoalTablesView, FairPlayView, DistributionView } from '../components/staffeln/TeamStatsViews'
 import RefereeView from '../components/staffeln/RefereeView'
 
@@ -65,6 +67,7 @@ export default function StaffelnPage() {
   const [progression, setProgression] = useState<ProgressionDay[]>([])
   const [teamStats, setTeamStats] = useState<TeamStats | null>(null)
   const [referees, setReferees] = useState<RefereeStat[]>([])
+  const [matrices, setMatrices] = useState<TeamMatrix[]>([])
   const [affiliation, setAffiliation] = useState<Affiliation>({ teamNames: [], playerIds: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -102,18 +105,19 @@ export default function StaffelnPage() {
     if (!selected || selected.id === 0) {
       setTable([]); setGames([]); setStats([])
       setCross(null); setProgression([]); setTeamStats(null); setReferees([])
-      setAffiliation({ teamNames: [], playerIds: [] })
+      setAffiliation({ teamNames: [], playerIds: [] }); setMatrices([])
       return
     }
     const id = selected.id
     Promise.all([
       fetchTable(id), fetchSchedule(id), fetchRanglisten(id),
       fetchCrossTable(id), fetchProgression(id), fetchTeamStats(id),
-      fetchRefereeStats(id), fetchAffiliation(id),
+      fetchRefereeStats(id), fetchAffiliation(id), fetchPlayerGames(id),
     ])
-      .then(([t, g, s, ct, pr, ts, ref, aff]) => {
+      .then(([t, g, s, ct, pr, ts, ref, aff, mx]) => {
         setTable(t); setGames(g); setStats(s)
         setCross(ct); setProgression(pr); setTeamStats(ts); setReferees(ref); setAffiliation(aff)
+        setMatrices(mx)
       })
       .catch(() => setError('Staffeldaten konnten nicht geladen werden.'))
   }
@@ -260,7 +264,14 @@ export default function StaffelnPage() {
           {tab === 'kreuztabelle' && (
             cross ? <CrossTable data={cross} ownTeams={affiliation.teamNames} /> : <Empty text={NOCH_NICHTS} />
           )}
-          {tab === 'verlauf' && <StandingsChart days={progression} ownTeams={affiliation.teamNames} />}
+          {tab === 'verlauf' && (
+            <VerlaufView
+              days={progression}
+              ownTeams={affiliation.teamNames}
+              matrices={matrices}
+              ownPlayers={affiliation.playerIds}
+            />
+          )}
           {tab === 'tore' && (
             teamStats ? <GoalTablesView data={teamStats} ownTeams={affiliation.teamNames} /> : <Empty text={NOCH_NICHTS} />
           )}
@@ -273,6 +284,38 @@ export default function StaffelnPage() {
           {tab === 'ranglisten' && <RanglistenView stats={stats} ownPlayers={affiliation.playerIds} />}
           {tab === 'schiedsrichter' && <RefereeView rows={referees} />}
         </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Der Reiter „Verlauf" trägt zwei Darstellungen derselben Frage „wie ist es
+ * gelaufen": oben für die Staffel (Platzierung je Spieltag), darunter für die
+ * eigene Mannschaft (Spieler je Begegnung). Ein eigener Reiter dafür hätte die
+ * Leiste auf zehn getrieben, und bestehende Verweise auf ?tab=verlauf bleiben
+ * so gültig (design.md §12).
+ */
+function VerlaufView({ days, ownTeams, matrices, ownPlayers }: {
+  days: ProgressionDay[]
+  ownTeams: string[]
+  matrices: TeamMatrix[]
+  ownPlayers: number[]
+}) {
+  return (
+    <div className="space-y-6">
+      <StandingsChart days={days} ownTeams={ownTeams} />
+      {matrices.length === 0 ? (
+        <Empty
+          text={
+            'Für die Spielmatrix fehlt noch die Verbindung zur eigenen Mannschaft: sie wird ' +
+            'aus der Verknüpfung zwischen Verbands-Begegnung und eigenem Spieltermin ' +
+            'abgeleitet, nicht über Namen geraten. Sobald ein eigenes Spiel dieser Staffel ' +
+            'importiert ist, erscheint sie hier.'
+          }
+        />
+      ) : (
+        matrices.map((m) => <Spielmatrix key={m.team} matrix={m} ownPlayers={ownPlayers} />)
       )}
     </div>
   )

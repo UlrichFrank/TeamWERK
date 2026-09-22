@@ -168,6 +168,57 @@ export interface Affiliation {
   playerIds: number[]
 }
 
+/** Werte eines Spielers in einer Begegnung — und, in den Summen, die einer
+ * ganzen Mannschaft. Ohne "Blau": der Parser liest keine blauen Karten, und
+ * eine Spalte, die immer leer ist, behauptet eine Messung. */
+export interface MatrixCell {
+  goals: number
+  sevenMAttempts: number
+  sevenMGoals: number
+  twoMin: number
+  warnings: number
+  disq: number
+}
+
+/** Eine Spalte der Spielmatrix: eine gespielte Begegnung. */
+export interface MatrixGame {
+  bwhvGameId: number
+  date: string
+  homeTeam: string
+  guestTeam: string
+  isHome: boolean
+  homeGoals: number | null
+  guestGoals: number | null
+  /** Ohne ausgewerteten Bericht bleibt die Spalte leer — der Endstand steht
+   * trotzdem im Kopf, damit die fehlende Auswertung sichtbar ist. */
+  hasReport: boolean
+}
+
+/** Eine Zeile der Spielmatrix. `cells` läuft parallel zu `TeamMatrix.games`;
+ * `null` heißt "stand in der Mannschaftsliste nicht" und ist etwas anderes als
+ * eine Zelle mit lauter Nullen. */
+export interface MatrixPlayer {
+  playerId: number
+  memberId: number | null
+  name: string
+  cells: (MatrixCell | null)[]
+  total: MatrixCell
+  games: number
+}
+
+/** Die Spielmatrix einer Mannschaft. */
+export interface TeamMatrix {
+  team: string
+  /** Gepflegte Halbzeitdauer der Altersklasse; `null` heißt "keine Regel" —
+   * die Achse des Torverlaufs wird dann aus dem Verlauf abgeleitet. */
+  halfDurationMinutes: number | null
+  games: MatrixGame[]
+  players: MatrixPlayer[]
+  gameTotals: MatrixCell[]
+  total: MatrixCell
+  reportGames: number
+}
+
 export interface PlayerLine {
   playerId: number
   memberId: number | null
@@ -239,6 +290,8 @@ export const fetchRefereeStats = (id: number) =>
   api.get<RefereeStat[]>(`/staffeln/${id}/schiedsrichter`).then((r) => r.data)
 export const fetchAffiliation = (id: number) =>
   api.get<Affiliation>(`/staffeln/${id}/affiliation`).then((r) => r.data)
+export const fetchPlayerGames = (id: number) =>
+  api.get<{ teams: TeamMatrix[] }>(`/staffeln/${id}/player-games`).then((r) => r.data.teams)
 export const fetchReport = (bwhvGameId: number) =>
   api.get<ReportDetail>(`/bwhv-games/${bwhvGameId}/report`).then((r) => r.data)
 
