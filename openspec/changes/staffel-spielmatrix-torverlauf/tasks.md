@@ -16,11 +16,11 @@
 
 ## 3. Ableitung des Torverlaufs (Frontend-Logik)
 
-- [ ] 3.1 `web/src/lib/torverlauf.ts`: `torereihe(events)` filtert `goal`/`seven_m_goal` mit gesetzter Seite, zählt den Spielstand mit und liefert je Tor `{ seq, gameSecond, side, scorer, sevenMeter, scoreHome, scoreGuest, lauf, situation }`. Verifikation: Vitest belegt Laufzählung (1,2,3 und Rücksetzung) und Situation aus Sicht des Schützen.
-- [ ] 3.2 `halbzeitGrenze(tore, homeGoalsHt, guestGoalsHt)`: Index des Tores, mit dem der Halbzeitstand erstmals erreicht ist; `null`, wenn kein Halbzeitstand vorliegt. Verifikation: Vitest belegt die Trennung am Halbzeitstand und die durchgehende Achse ohne ihn (design.md §6).
-- [ ] 3.3 `halbzeitMinuten(tore, grenze, konfiguriert)` nach design.md §7: konfigurierte Dauer übernehmen, wenn `letzteSekundeHZ1 <= konfiguriert*60` **und** `ersteSekundeHZ2 >= konfiguriert*60`; sonst aus dem Verlauf ableiten. Verifikation: Vitest deckt vier Fälle ab — passende Regel, zu lange Regel (30 bei der 2×25-Begegnung der Fixture `905272`), zu kurze Regel, keine Regel.
-- [ ] 3.4 `achsen(tore, grenze, halbzeitMinuten)`: Rückgabe je Halbzeit `{ vonMinute, bisMinute, tore }`. Verifikation: Vitest prüft die Invariante „kein Tor liegt jenseits von `bisMinute` oder vor `vonMinute`" über alle vier Fälle aus 3.3 und belegt, dass dieselbe Torreihe mit drei verschiedenen Spieldauern dieselbe Halbzeitaufteilung ergibt (design.md §6).
-- [ ] 3.5 Auszeiten, Strafen und verworfene Siebenmeter erzeugen keinen Eintrag. Verifikation: Vitest mit einem Verlauf, der alle vier Ereignisarten enthält.
+- [x] 3.1 `web/src/lib/torverlauf.ts`: `torereihe(events)` filtert `goal`/`seven_m_goal` mit gesetzter Seite, zählt den Spielstand mit und liefert je Tor `{ seq, gameSecond, side, scorer, sevenMeter, scoreHome, scoreGuest, lauf, situation }`. Verifikation: Vitest belegt Laufzählung (1,2,3 und Rücksetzung) und Situation aus Sicht des Schützen.
+- [x] 3.2 `halbzeitGrenze(tore, homeGoalsHt, guestGoalsHt)`: Index des Tores, mit dem der Halbzeitstand erstmals erreicht ist; `null`, wenn kein Halbzeitstand vorliegt. Verifikation: Vitest belegt die Trennung am Halbzeitstand und die durchgehende Achse ohne ihn (design.md §6).
+- [x] 3.3 `halbzeitMinuten(tore, grenze, konfiguriert)` nach design.md §7: konfigurierte Dauer übernehmen, wenn `letzteSekundeHZ1 <= konfiguriert*60` **und** `ersteSekundeHZ2 >= konfiguriert*60`; sonst aus dem Verlauf ableiten. Verifikation: Vitest deckt vier Fälle ab — passende Regel, zu lange Regel (30 bei der 2×25-Begegnung der Fixture `905272`), zu kurze Regel, keine Regel.
+- [x] 3.4 `achsen(tore, grenze, halbzeitMinuten)`: Rückgabe je Halbzeit `{ vonMinute, bisMinute, tore }`. Verifikation: Vitest prüft die Invariante „kein Tor liegt jenseits von `bisMinute` oder vor `vonMinute`" über alle vier Fälle aus 3.3 und belegt, dass dieselbe Torreihe mit drei verschiedenen Spieldauern dieselbe Halbzeitaufteilung ergibt (design.md §6).
+- [x] 3.5 Auszeiten, Strafen und verworfene Siebenmeter erzeugen keinen Eintrag. Verifikation: Vitest mit einem Verlauf, der alle vier Ereignisarten enthält.
 
 ## 4. Darstellung
 
