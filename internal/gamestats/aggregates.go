@@ -2,6 +2,7 @@ package gamestats
 
 import (
 	"context"
+	"database/sql"
 	"sort"
 )
 
@@ -689,35 +690,18 @@ type Affiliation struct {
 func (s *Store) Affiliation(ctx context.Context, staffelID, userID int) (*Affiliation, error) {
 	out := &Affiliation{TeamNames: []string{}, PlayerIDs: []int{}}
 
-	// user_accessible_teams fasst Stammkader, erweiterten Kader, Trainer und
-	// Eltern schon zusammen — genau die Menge, die die Anforderung nennt. Die
+	// Die Herleitung selbst steht in ownTeams — eine Kopie, zwei Nutzer
+	// (diese Route und die Spielmatrix). user_accessible_teams fasst dort
+	// Stammkader, erweiterten Kader, Trainer und Eltern schon zusammen, und die
 	// Saison kommt aus der Staffel, nicht aus der aktiven: beide sind hier
 	// dieselbe (staffelOfRequest lässt nur Staffeln der aktiven Saison durch),
 	// und der Bezug auf die Staffel macht das unabhängig davon richtig.
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT DISTINCT CASE WHEN own.is_home = 1 THEN bg.home_team ELSE bg.guest_team END
-		  FROM bwhv_games bg
-		  JOIN bwhv_staffeln st ON st.id = bg.staffel_id
-		  JOIN games own ON own.id = bg.game_id
-		  JOIN game_teams gt ON gt.game_id = own.id
-		  JOIN user_accessible_teams uat
-		    ON uat.team_id = gt.team_id AND uat.season_id = st.season_id
-		 WHERE bg.staffel_id = ? AND uat.user_id = ?`, staffelID, userID)
+	teams, err := s.ownTeams(ctx, staffelID, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		if name != "" {
-			out.TeamNames = append(out.TeamNames, name)
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
+	for _, t := range teams {
+		out.TeamNames = append(out.TeamNames, t.Name)
 	}
 	sort.Strings(out.TeamNames)
 
@@ -745,4 +729,292 @@ func (s *Store) Affiliation(ctx context.Context, staffelID, userID int) (*Affili
 		out.PlayerIDs = append(out.PlayerIDs, id)
 	}
 	return out, prows.Err()
+}
+
+// --- Spielmatrix einer Mannschaft -----------------------------------------
+
+// MatrixCell sind die Werte eines Spielers in einer Begegnung — und, in der
+// Summenzeile, die einer ganzen Mannschaft.
+//
+// Ohne Spalte "Blau": bwhv_player_games.blue wird von SaveReport konstant als 0
+// geschrieben, der Parser liest keine blauen Karten. Eine Spalte, die immer
+// leer ist, behauptet eine Messung, die nicht stattfindet (design.md §10).
+type MatrixCell struct {
+	Goals       int `json:"goals"`
+	SevenMAtt   int `json:"sevenMAttempts"`
+	SevenMGoals int `json:"sevenMGoals"`
+	TwoMin      int `json:"twoMin"`
+	Warnings    int `json:"warnings"`
+	Disq        int `json:"disq"`
+}
+
+func (c *MatrixCell) add(o MatrixCell) {
+	c.Goals += o.Goals
+	c.SevenMAtt += o.SevenMAtt
+	c.SevenMGoals += o.SevenMGoals
+	c.TwoMin += o.TwoMin
+	c.Warnings += o.Warnings
+	c.Disq += o.Disq
+}
+
+// MatrixGame ist eine Spalte der Matrix: eine gespielte Begegnung.
+//
+// HasReport ist kein Detail, sondern die zweite Abdeckung: eine Begegnung ohne
+// ausgewerteten Bericht bleibt eine Spalte mit Endstand, aber ohne Zellen.
+// Sie wegzulassen hieße, die Saisonsumme über eine unsichtbare Teilmenge zu
+// bilden (design.md §3).
+type MatrixGame struct {
+	BwhvGameID int    `json:"bwhvGameId"`
+	Date       string `json:"date"`
+	HomeTeam   string `json:"homeTeam"`
+	GuestTeam  string `json:"guestTeam"`
+	IsHome     bool   `json:"isHome"`
+	HomeGoals  *int   `json:"homeGoals"`
+	GuestGoals *int   `json:"guestGoals"`
+	HasReport  bool   `json:"hasReport"`
+}
+
+// MatrixPlayer ist eine Zeile der Matrix.
+//
+// Cells läuft parallel zu TeamMatrix.Games. Ein NIL-Eintrag heißt "stand in der
+// Mannschaftsliste dieser Begegnung nicht" und ist ausdrücklich etwas anderes
+// als eine Zelle mit lauter Nullen (design.md §4).
+type MatrixPlayer struct {
+	PlayerID int           `json:"playerId"`
+	MemberID *int          `json:"memberId"`
+	Name     string        `json:"name"`
+	Cells    []*MatrixCell `json:"cells"`
+	Total    MatrixCell    `json:"total"`
+	Games    int           `json:"games"`
+}
+
+// TeamMatrix ist die Spielmatrix einer Mannschaft.
+type TeamMatrix struct {
+	Team string `json:"team"`
+	// HalfDurationMinutes ist die für die Altersklasse gepflegte Halbzeitdauer
+	// (age_class_game_rules). NIL heißt "keine Regel gepflegt" — bewusst kein
+	// Standardwert, denn eine erfundene Zahl sähe aus wie eine gemessene
+	// (design.md §7).
+	HalfDurationMinutes *int           `json:"halfDurationMinutes"`
+	Games               []MatrixGame   `json:"games"`
+	Players             []MatrixPlayer `json:"players"`
+	GameTotals          []MatrixCell   `json:"gameTotals"`
+	Total               MatrixCell     `json:"total"`
+	ReportGames         int            `json:"reportGames"`
+}
+
+// ownTeam ist eine dem Nutzer zuzurechnende Mannschaft einer Staffel, benannt
+// in der Schreibweise des SPIELPLANS, mit der Halbzeitdauer ihrer Altersklasse.
+type ownTeam struct {
+	Name         string
+	HalfDuration *int
+}
+
+// ownTeams löst die eigenen Mannschaften einer Staffel auf.
+//
+// Die Herleitung steht ausführlich an Affiliation: die Mannschaft wird über die
+// Verknüpfung bwhv_games.game_id -> games -> game_teams gewonnen, NIE über
+// einen Namensvergleich. Diese Funktion ist die einzige Kopie davon; Affiliation
+// und PlayerGameMatrix greifen beide hierauf zu, damit die Regel nicht an zwei
+// Stellen gepflegt werden muss.
+//
+// Die Halbzeitdauer kommt über teams.age_class aus age_class_game_rules —
+// derselbe Weg, den die Dienst-Regeneration für die Spieldauer geht
+// (internal/games/regen.go). LEFT JOIN, weil die Tabelle nur A- bis D-Jugend
+// kennt und nicht vorbefüllt ist.
+func (s *Store) ownTeams(ctx context.Context, staffelID, userID int) ([]ownTeam, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT CASE WHEN own.is_home = 1 THEN bg.home_team ELSE bg.guest_team END AS bwhv_name,
+		       acr.half_duration_minutes
+		  FROM bwhv_games bg
+		  JOIN bwhv_staffeln st ON st.id = bg.staffel_id
+		  JOIN games own ON own.id = bg.game_id
+		  JOIN game_teams gt ON gt.game_id = own.id
+		  JOIN user_accessible_teams uat
+		    ON uat.team_id = gt.team_id AND uat.season_id = st.season_id
+		  JOIN teams tm ON tm.id = gt.team_id
+		  LEFT JOIN age_class_game_rules acr ON acr.age_class = tm.age_class
+		 WHERE bg.staffel_id = ? AND uat.user_id = ?
+		 ORDER BY bwhv_name, gt.team_id`, staffelID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ownTeam
+	seen := map[string]int{}
+	for rows.Next() {
+		var name string
+		var half sql.NullInt64
+		if err := rows.Scan(&name, &half); err != nil {
+			return nil, err
+		}
+		if name == "" {
+			continue
+		}
+		// Dieselbe Mannschaft kann über mehrere verknüpfte Begegnungen kommen.
+		// Die erste Zeile gewinnt; eine später auftauchende Halbzeitdauer füllt
+		// eine noch offene Angabe nach.
+		if i, ok := seen[name]; ok {
+			if out[i].HalfDuration == nil && half.Valid {
+				v := int(half.Int64)
+				out[i].HalfDuration = &v
+			}
+			continue
+		}
+		t := ownTeam{Name: name}
+		if half.Valid {
+			v := int(half.Int64)
+			t.HalfDuration = &v
+		}
+		seen[name] = len(out)
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// PlayerGameMatrix liefert je eigener Mannschaft der Staffel die Werte jedes
+// Spielers in jeder ihrer gespielten Begegnungen.
+//
+// Ohne zuzurechnende Mannschaft ist das Ergebnis leer und KEIN Fehler: zu
+// Saisonbeginn, bevor ein eigener Termin mit external_id importiert ist, gibt
+// es sie schlicht nicht (design.md §2).
+func (s *Store) PlayerGameMatrix(ctx context.Context, staffelID, userID int) ([]TeamMatrix, error) {
+	teams, err := s.ownTeams(ctx, staffelID, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TeamMatrix, 0, len(teams))
+	for _, t := range teams {
+		m, err := s.matrixForTeam(ctx, staffelID, t)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *m)
+	}
+	return out, nil
+}
+
+// matrixGames liefert die gespielten Begegnungen einer Mannschaft als Spalten.
+//
+// "Gespielt" heißt home_goals IS NOT NULL — dieselbe Regel wie in der
+// Kreuztabelle, damit ein torloses 0:0 nicht als "nicht gespielt" verschwindet.
+func (s *Store) matrixGames(ctx context.Context, staffelID int, team string) ([]MatrixGame, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT g.id, g.date, g.home_team, g.guest_team, g.home_goals, g.guest_goals,
+		       EXISTS (SELECT 1 FROM bwhv_reports r
+		                WHERE r.bwhv_game_id = g.id AND r.state = 'parsed')
+		  FROM bwhv_games g
+		 WHERE g.staffel_id = ?
+		   AND g.home_goals IS NOT NULL
+		   AND (g.home_team = ? OR g.guest_team = ?)
+		 ORDER BY g.date, g.game_no`, staffelID, team, team)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []MatrixGame
+	for rows.Next() {
+		var g MatrixGame
+		if err := rows.Scan(&g.BwhvGameID, &g.Date, &g.HomeTeam, &g.GuestTeam,
+			&g.HomeGoals, &g.GuestGoals, &g.HasReport); err != nil {
+			return nil, err
+		}
+		g.Date = trimDate(g.Date)
+		g.IsHome = g.HomeTeam == team
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
+// matrixForTeam setzt Spalten, Zeilen und Summen einer Mannschaft zusammen.
+func (s *Store) matrixForTeam(ctx context.Context, staffelID int, t ownTeam) (*TeamMatrix, error) {
+	games, err := s.matrixGames(ctx, staffelID, t.Name)
+	if err != nil {
+		return nil, err
+	}
+	m := &TeamMatrix{
+		Team:                t.Name,
+		HalfDurationMinutes: t.HalfDuration,
+		Games:               games,
+		Players:             []MatrixPlayer{},
+		GameTotals:          make([]MatrixCell, len(games)),
+	}
+	column := make(map[int]int, len(games))
+	for i, g := range games {
+		column[g.BwhvGameID] = i
+		if g.HasReport {
+			m.ReportGames++
+		}
+	}
+	if len(games) == 0 {
+		return m, nil
+	}
+	if err := s.fillMatrixCells(ctx, staffelID, t.Name, column, m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// fillMatrixCells trägt die Spielerzeilen ausgewerteter Berichte ein.
+//
+// Die Mannschaft wird über teamNameExpr an die Schreibweise des SPIELPLANS
+// gebunden, nicht über bwhv_players.team_name: die stammt aus der
+// Mannschaftsliste des PDF und kann abweichen. Ein Vergleich gegen den
+// Berichtsnamen lieferte eine leere Matrix — ohne Fehler, ohne Hinweis
+// (design.md §5).
+//
+// twoMinCounted/redCounted rechnen die dritte Zeitstrafe in eine Rote Karte um,
+// wie in jeder anderen Auswertung dieser Staffel.
+func (s *Store) fillMatrixCells(ctx context.Context, staffelID int, team string,
+	column map[int]int, m *TeamMatrix) error {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT g.id, p.id, p.member_id, p.name,
+		       pg.goals, pg.seven_m_attempts, pg.seven_m_goals,
+		       `+twoMinCounted+`, pg.yellow, `+redCounted+`
+		  FROM bwhv_player_games pg
+		  JOIN bwhv_reports r ON r.id = pg.report_id AND r.state = 'parsed'
+		  JOIN bwhv_games g ON g.id = r.bwhv_game_id
+		  JOIN bwhv_players p ON p.id = pg.player_id
+		 WHERE g.staffel_id = ? AND `+teamNameExpr+` = ?
+		 ORDER BY p.name, p.id`, staffelID, team)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	byPlayer := map[int]int{}
+	for rows.Next() {
+		var bwhvGameID, playerID int
+		var member sql.NullInt64
+		var name string
+		var c MatrixCell
+		if err := rows.Scan(&bwhvGameID, &playerID, &member, &name,
+			&c.Goals, &c.SevenMAtt, &c.SevenMGoals, &c.TwoMin, &c.Warnings, &c.Disq); err != nil {
+			return err
+		}
+		col, ok := column[bwhvGameID]
+		if !ok {
+			// Bericht zu einer Begegnung ohne erfasstes Ergebnis — keine Spalte.
+			continue
+		}
+		idx, ok := byPlayer[playerID]
+		if !ok {
+			p := MatrixPlayer{PlayerID: playerID, Name: name, Cells: make([]*MatrixCell, len(m.Games))}
+			if member.Valid {
+				v := int(member.Int64)
+				p.MemberID = &v
+			}
+			idx = len(m.Players)
+			byPlayer[playerID] = idx
+			m.Players = append(m.Players, p)
+		}
+		p := &m.Players[idx]
+		cell := c
+		p.Cells[col] = &cell
+		p.Total.add(c)
+		p.Games++
+		m.GameTotals[col].add(c)
+		m.Total.add(c)
+	}
+	return rows.Err()
 }
