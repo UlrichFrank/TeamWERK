@@ -260,6 +260,16 @@ export default function MatchReportFormPage() {
         }
     }
 
+    const deletePendingReview = async () => {
+        if (!confirm('Eingereichten Bericht endgültig löschen? Der Autor muss ggf. neu beginnen.')) return
+        try {
+            await api.delete(`/match-reports/${reportID}`)
+            navigate('/termine')
+        } catch (err) {
+            setError((err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Löschen fehlgeschlagen')
+        }
+    }
+
     return (
         <div className="space-y-4 sm:space-y-6">
             <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -396,6 +406,12 @@ export default function MatchReportFormPage() {
                             <button className={BTN_DANGER} onClick={deleteDraft}>
                                 <Trash2 className="inline-block w-4 h-4 mr-1" />
                                 Draft löschen
+                            </button>
+                        )}
+                        {isReviewer && report.state === 'pending_review' && (
+                            <button className={BTN_DANGER} onClick={deletePendingReview}>
+                                <Trash2 className="inline-block w-4 h-4 mr-1" />
+                                Bericht löschen
                             </button>
                         )}
                     </div>
