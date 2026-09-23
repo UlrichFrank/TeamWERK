@@ -8,9 +8,9 @@
 
 ## 2. Frontend
 
-- [ ] 2.1 `web/src/lib/terminMatrix.ts`: Typen + reine Funktionen (Spaltenfilter, Teilnahme-Quote) mit Vitest
-- [ ] 2.2 `web/src/components/TerminMatrix.tsx`: Tabelle (sticky Namensspalte, Symbole, Legende, Kopf-Links) mit Vitest
-- [ ] 2.3 `TerminePage.tsx`: Umschalter Liste/Tabelle (`view=tabelle`), Mannschafts-Einfachauswahl, Laden der Matrix, Live-Updates
+- [x] 2.1 `web/src/lib/terminMatrix.ts`: Typen + reine Funktionen (Spaltenfilter, Teilnahme-Quote) mit Vitest
+- [x] 2.2 `web/src/components/TerminMatrix.tsx`: Tabelle (sticky Namensspalte, Symbole, Legende, Kopf-Links) mit Vitest
+- [x] 2.3 `TerminePage.tsx`: Umschalter Liste/Tabelle (`view=tabelle`), Mannschafts-Einfachauswahl, Laden der Matrix, Live-Updates
 
 ## 3. Abschluss
 
