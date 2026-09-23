@@ -64,7 +64,7 @@ func (h *Handler) SetNow(now func() time.Time) { h.now = now }
 
 // GameRSVPCutoff: bis dahin (vor Spielbeginn) sind RSVP-Änderungen
 // für Spieler/Eltern erlaubt. Trainer/Vorstand/Admin können auch danach pflegen.
-const GameRSVPCutoff = 18 * time.Hour
+const GameRSVPCutoff = policy.GameRSVPCutoff
 
 var berlinTZ = mustLoadBerlin()
 

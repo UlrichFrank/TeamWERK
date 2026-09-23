@@ -499,6 +499,7 @@ var matrix = []endpointCase{
 	// Anwesenheits-Statistik (Authenticated; Handler-Authz)
 	{method: "GET", path: "/api/teams/{id}/attendance-stats", expected: exAuth},
 	{method: "GET", path: "/api/teams/{id}/attendance-open", expected: exAuth},
+	{method: "GET", path: "/api/teams/{id}/rsvp-matrix", expected: exAuth},
 	{method: "GET", path: "/api/members/{id}/attendance-stats", expected: exAuth},
 
 	// Trainingstagebuch (Authenticated; Handler-Authz).

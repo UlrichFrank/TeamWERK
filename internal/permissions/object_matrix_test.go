@@ -569,6 +569,9 @@ func objectFixtures() map[string]objFixture {
 	add("GET /api/teams/{id}/attendance-open", objFixture{
 		params: func(w *objWorld) map[string]string { return p("id", w.bTeamID) },
 	})
+	add("GET /api/teams/{id}/rsvp-matrix", objFixture{
+		params: func(w *objWorld) map[string]string { return p("id", w.bTeamID) },
+	})
 	add("GET /api/members/{id}/attendance-stats", objFixture{
 		params: func(w *objWorld) map[string]string { return p("id", w.bMemberID) },
 	})

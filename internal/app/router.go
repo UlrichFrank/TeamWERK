@@ -371,6 +371,9 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Get("/api/games/{id}/attendances", h.Games.GetAttendances)
 		r.Get("/api/teams/{id}/attendance-stats", h.Attendance.GetTeamStats)
 		r.Get("/api/teams/{id}/attendance-open", h.Attendance.GetTeamOpen)
+		// Rückmelde-Matrix (Tabellenansicht auf /termine, termin-matrix). Gate
+		// handler-inline: wer die Termine der Mannschaft sieht, sieht die Zeilen.
+		r.Get("/api/teams/{id}/rsvp-matrix", h.Attendance.GetTeamRSVPMatrix)
 		r.Get("/api/members/{id}/attendance-stats", h.Attendance.GetMemberStats)
 
 		// Trainingstagebuch (Eigentraining). Schreiben nur der Eigentümer,
