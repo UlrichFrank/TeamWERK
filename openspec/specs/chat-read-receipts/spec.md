@@ -6,7 +6,9 @@ Absender von Chat-Nachrichten sehen einen WhatsApp-artigen Lese-Zustand pro
 eigener Nachricht (gesendet/gelesen; in Gruppen ein `N/M gelesen`-Aggregat mit
 on-demand-Detail). Diese Capability deckt die **Absender-Sicht** ab (die
 Empfänger-/Unread-Sicht liegt in `chat-konversationen` bzw.
-`chat-unread-app-badge`) und schließt Broadcasts bewusst aus.
+`chat-unread-app-badge`). Die Lesebestätigung für Mitteilungen (Broadcasts) ist
+eine eigene Capability, `mitteilung-lesebestaetigung` — mit eingefrorenem
+Nenner statt live gezählter Mitglieder und ohne Häkchen-Zustand.
 
 ## Requirements
 
