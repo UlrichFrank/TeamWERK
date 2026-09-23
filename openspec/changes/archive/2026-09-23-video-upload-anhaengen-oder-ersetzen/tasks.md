@@ -23,7 +23,7 @@
 ## 4. Doku, CHANGELOG, Commit
 
 - [x] 4.1 `web/public/CHANGELOG.md`: Eintrag `[feat] video-encoder: Hinzufügen-oder-Ersetzen-Auswahl bei bereits vorhandenem Spielvideo` unter heutigem Datum ergänzt
-- [ ] 4.2 Conventional Commit `feat(video-encoder): Hinzufügen-oder-Ersetzen-Auswahl beim Upload`
+- [x] 4.2 Conventional Commit `feat(video-encoder): Hinzufügen-oder-Ersetzen-Auswahl beim Upload` (Commit `109d58dd`)
 - [x] 4.3 `go build`/`go vet`/`go test` für `tools/video-encoder/...` grün
 - [x] 4.4 `openspec validate` grün
 - [ ] 4.5 OpenSpec-Change `video-upload-anhaengen-oder-ersetzen` nach Verifikation durch den Nutzer archivieren (`openspec archive`)
