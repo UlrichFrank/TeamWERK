@@ -53,6 +53,10 @@ build-errors.log
 # macOS
 .DS_Store
 
+# Lokale Scratch-Artefakte (Tool-generiert im Repo-Root)
+/.abydos/
+/untitled
+
 # Claude Code
 .claude/settings.local.json
 .claude/worktrees/
