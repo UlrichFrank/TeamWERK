@@ -4,4 +4,4 @@
 
 ## 2. Abschluss
 
-- [ ] 2.1 `pnpm -C web build test lint` / `openspec validate` grün
+- [x] 2.1 `pnpm -C web build test lint` / `openspec validate` grün

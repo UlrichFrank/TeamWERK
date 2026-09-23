@@ -20,4 +20,4 @@
 
 ## 4. Abschluss
 
-- [ ] 4.1 `make test` / `pnpm -C web build test lint` / `openspec validate` grün
+- [x] 4.1 `make test` / `pnpm -C web build test lint` / `openspec validate` grün
