@@ -29,9 +29,8 @@ Die Sichtbarkeit der Gruppen wird wie folgt gefiltert:
 
 Die Audience-Filterung auf Slot-Ebene (`audiences`-JSON-Array mit `eltern`/Vereinsfunktionen) erfolgt nach folgender Regel:
 
-- System-Rolle `admin`: kein Audience-Filter (Bypass), unabhängig vom Query-Parameter.
-- Privilegierte Vereinsfunktionen `vorstand`, `vorstand_beisitzer`, `trainer`, `sportliche_leitung`: standardmäßig Audience-Filter aktiv (nur Slots mit NULL-Audience oder Audience-Match zur eigenen Funktion); per Query-Parameter `?audience=all` deaktivierbar.
-- Alle anderen Rollen: Audience-Filter immer aktiv, nicht abschaltbar (Query-Parameter `?audience=all` wird ignoriert).
+- System-Rolle `admin` und privilegierte Vereinsfunktionen `vorstand`, `vorstand_beisitzer`, `trainer`, `sportliche_leitung`: kein Audience-Filter (Bypass). Es gibt keinen Query-Parameter, der den Filter für sie einschaltet — der frühere Schalter „Nur Audience" (`?audience=all`) ist entfernt.
+- Alle anderen Rollen: Audience-Filter immer aktiv, nicht abschaltbar (ein Query-Parameter `?audience=all` wird ignoriert).
 
 Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden Elemente enthält:
 - eine der Vereinsfunktionen des Nutzers (`mcf.function`)
@@ -82,17 +81,12 @@ Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden
 - **WHEN** eine team-spezifische Gruppe in der Response erscheint
 - **THEN** enthält das Gruppen-Objekt ein numerisches `team_id`-Feld
 
-#### Scenario: Trainer sieht standardmäßig nur Audience-Match
-- **WHEN** ein Trainer ohne `?audience`-Query-Parameter `GET /api/duty-board` aufruft, und Team A enthält sowohl Slots mit `audiences=["trainer"]` als auch Slots mit `audiences=["spieler"]`
-- **THEN** enthält die Antwort nur die Slots mit `audiences=["trainer"]` (und Slots mit NULL-Audience)
-- **AND** enthält **nicht** die Slots mit `audiences=["spieler"]`
+#### Scenario: Trainer sieht alle Audiences seiner Teams
+- **WHEN** ein Trainer `GET /api/duty-board` aufruft, und Team A enthält Slots mit `audiences=["trainer"]`, `audiences=["spieler"]` und NULL-Audience
+- **THEN** enthält die Antwort **alle** diese Slots, unabhängig von ihrem Audience-Array
 
-#### Scenario: Trainer deaktiviert Audience-Filter
-- **WHEN** ein Trainer `GET /api/duty-board?audience=all` aufruft, und Team A enthält Slots mit verschiedenen Audiences
-- **THEN** enthält die Antwort **alle** Slots der sichtbaren Gruppen, unabhängig von ihrem Audience-Array
-
-#### Scenario: Vorstand deaktiviert Audience-Filter
-- **WHEN** ein Nutzer mit Vereinsfunktion `vorstand` `GET /api/duty-board?audience=all` aufruft
+#### Scenario: Vorstand sieht alle Dienste
+- **WHEN** ein Nutzer mit Vereinsfunktion `vorstand` `GET /api/duty-board` ohne Query-Parameter aufruft
 - **THEN** enthält die Antwort alle Slots aller Teams ohne Audience-Filterung
 
 #### Scenario: Spieler kann Audience-Filter nicht deaktivieren
@@ -100,15 +94,12 @@ Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden
 - **THEN** wird der Query-Parameter ignoriert und der Audience-Filter bleibt aktiv (nur Slots mit Match zur Spieler-Audience oder NULL)
 
 #### Scenario: Eltern-Audience ist team-gescoped
-- **WHEN** ein Trainer (gleichzeitig Elternteil eines Kindes in Team B) `GET /api/duty-board` ohne `?audience=all` aufruft, und Team A hat einen Slot mit `audiences=["eltern"]`
+- **WHEN** ein Spieler aus Team A (gleichzeitig Elternteil eines Kindes in Team B, ohne privilegierte Funktion) `GET /api/duty-board` aufruft, und Team A hat einen Slot mit `audiences=["eltern"]`
 - **THEN** ist der Slot **nicht** in der Antwort enthalten — der Eltern-Match greift nur, wenn ein Kind im Slot-Team spielt
-- **WHEN** der gleiche Nutzer `GET /api/duty-board?audience=all` aufruft
-- **THEN** ist der Slot in der Antwort sichtbar (über die Trainer-Team-Quelle, Audience-Filter deaktiviert)
 
 #### Scenario: Admin sieht immer alle Audiences
 - **WHEN** ein Admin `GET /api/duty-board` (ohne Query-Param) aufruft
 - **THEN** enthält die Antwort alle Slots ohne Audience-Filterung
-- **AND** das Ergebnis ist identisch mit `GET /api/duty-board?audience=all`
 
 #### Scenario: Claim a duty slot — kein Familienmitglied vorhanden
 - **WHEN** a user without linked children with proxy accounts claims an open slot
@@ -144,37 +135,6 @@ Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden
 - **WHEN** der `/duty-board`-Endpoint einen Slot mit Assignees zurückgibt
 - **THEN** enthält jeder Assignee-Eintrag: `name` (immer), `photo_url` (nur wenn `photo_visible=1`), `phones` (nur wenn `phones_visible=1`, sonst leeres Array), `address` (nur wenn `address_visible=1`, sonst null)
 - **THEN** haben Proxy-Account-Assignees keine `phones` und keine `address` (da Proxy-Accounts diese Daten nicht haben)
-
-### Requirement: Audience-Filter-Pille auf Dienste-Seite
-Die Dienstbörse-UI (`/dienste`, `web/src/pages/DutyPage.tsx`) SHALL eine zusätzliche Filter-Pille „Nur meine Audience" mit `Filter`-Icon enthalten, die ausschließlich für Nutzer mit mindestens einer der Vereinsfunktionen `vorstand`, `vorstand_beisitzer`, `trainer`, `sportliche_leitung` sichtbar ist. Die Pille SHALL standardmäßig aktiv sein und ihren Zustand in den URL-Search-Params persistieren: aktiv = kein Param (Default), inaktiv = `?audience=all`. Beim Aufruf von `/api/duty-board` SHALL der Query-Parameter `?audience=all` exakt dann angehängt werden, wenn die Pille deaktiviert ist.
-
-#### Scenario: Pille für Trainer sichtbar
-- **WHEN** ein Nutzer mit Vereinsfunktion `trainer` die Seite `/dienste` öffnet
-- **THEN** ist die „Nur meine Audience"-Pille in der Filter-Leiste sichtbar
-- **AND** ist sie standardmäßig im aktiven Zustand (gelb hinterlegt)
-
-#### Scenario: Pille für Vorstand sichtbar
-- **WHEN** ein Nutzer mit Vereinsfunktion `vorstand` die Seite `/dienste` öffnet
-- **THEN** ist die „Nur meine Audience"-Pille in der Filter-Leiste sichtbar
-
-#### Scenario: Pille für Spieler nicht sichtbar
-- **WHEN** ein Nutzer ohne privilegierte Vereinsfunktion (nur Spieler oder Elternteil) die Seite `/dienste` öffnet
-- **THEN** ist die „Nur meine Audience"-Pille **nicht** sichtbar
-
-#### Scenario: Default-Zustand erzeugt keine URL-Params
-- **WHEN** ein Trainer die Seite ohne Filter-Änderung lädt
-- **THEN** enthält die URL keinen `audience`-Parameter
-- **AND** wird `GET /api/duty-board` ohne `audience`-Query aufgerufen
-
-#### Scenario: Deaktivierte Pille schreibt audience=all in URL
-- **WHEN** ein Trainer die „Nur meine Audience"-Pille deaktiviert
-- **THEN** enthält die URL `?audience=all`
-- **AND** wird `GET /api/duty-board?audience=all` aufgerufen
-
-#### Scenario: Deep-Link mit audience=all
-- **WHEN** ein Trainer eine URL `/dienste?audience=all` öffnet
-- **THEN** ist die Audience-Pille im inaktiven Zustand dargestellt
-- **AND** zeigt die Liste alle Slots seiner Teams unabhängig vom Audience-Array
 
 ### Requirement: Spielbericht-Slot wird auto-regeneriert
 Das System SHALL bei jedem Anlegen oder Update eines Spiels mit `event_type IN ('heim','auswärts')` und gesetztem `template_id` automatisch einen Duty-Slot vom Typ „Spielbericht" erzeugen, wenn noch keiner existiert. Slot-`due_at` wird als `game.end_time + 24h` gesetzt (oder `game.date 23:59 + 24h` falls kein end_time). Custom-editierte Slots (`is_custom=1`) werden nicht überschrieben.

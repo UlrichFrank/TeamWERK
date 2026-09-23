@@ -143,10 +143,9 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
     }
   }
 
-  const loadBoard = async (mayEdit: boolean) => {
+  const loadBoard = async () => {
     try {
-      const params = mayEdit ? `game_id=${gameId}&audience=all` : `game_id=${gameId}`
-      const r = await api.get(`/duty-board?${params}`)
+      const r = await api.get(`/duty-board?game_id=${gameId}`)
       const groups: Array<{ slots?: BoardSlot[] }> = r.data ?? []
       setBoardSlots(groups.length > 0 ? groups[0].slots ?? [] : [])
     } catch {
@@ -159,7 +158,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
       const g = await loadGame()
       const mayEdit = g?.can?.edit === true
       await Promise.all([
-        loadBoard(mayEdit),
+        loadBoard(),
         mayEdit ? api.get('/duty-types').then(r => setDutyTypes(r.data ?? [])) : Promise.resolve(),
       ])
       setLoading(false)
@@ -168,10 +167,10 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId])
 
-  useLiveUpdates((event) => { if (event === 'duties') loadBoard(canEdit) })
+  useLiveUpdates((event) => { if (event === 'duties') loadBoard() })
 
   const reloadAfterMutation = async () => {
-    await Promise.all([loadGame(), loadBoard(canEdit)])
+    await Promise.all([loadGame(), loadBoard()])
     onChanged?.()
   }
 

@@ -830,7 +830,8 @@ func TestBoard_AudienceElternHidden(t *testing.T) {
 // TestBoard_AudienceElternTeamScoped verifies that a parent does NOT match
 // the 'eltern' audience on slots of a team where their child does not play —
 // even if the parent themselves is visible on the board through another
-// channel (here: as trainer of the slot's team).
+// channel (here: as player of the slot's team — bewusst kein Trainer, der
+// umgeht den Audience-Filter).
 func TestBoard_AudienceElternTeamScoped(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -840,12 +841,10 @@ func TestBoard_AudienceElternTeamScoped(t *testing.T) {
 	slotA := createDutySlot(t, db, dtID, seasonID, teamA, 0, "2026-06-14")
 	db.Exec(`UPDATE duty_slots SET audiences='["eltern"]' WHERE id=?`, slotA)
 
-	// Parent is trainer of team A (so the slot is visible via team source)
+	// Parent plays in team A (so the slot is visible via team source)
 	parentUserID := testutil.CreateUser(t, db, "standard")
 	parentMemberID := testutil.CreateMember(t, db, parentUserID)
-	kaderA := testutil.CreateKader(t, db, teamA, seasonID)
-	testutil.AddKaderTrainer(t, db, kaderA, parentMemberID)
-	db.Exec(`INSERT INTO member_club_functions (member_id, function) VALUES (?, 'trainer')`, parentMemberID)
+	addPlayerMembership(t, db, parentMemberID, teamA, seasonID)
 
 	// Parent's child plays in team B, not in team A
 	childMemberID := testutil.CreateMember(t, db, 0)
@@ -855,15 +854,11 @@ func TestBoard_AudienceElternTeamScoped(t *testing.T) {
 	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	srv := testServer(t, h)
 
-	// Default (audience filter active): trainer audience does NOT match ['eltern'],
-	// and the eltern audience does NOT match because the child plays in team B not A.
-	token := testutil.Token(t, parentUserID, "standard", []string{"trainer"})
+	// Audience filter active: spieler does NOT match ['eltern'], and the eltern
+	// audience does NOT match because the child plays in team B not A.
+	token := testutil.Token(t, parentUserID, "standard", []string{"spieler"})
 	if n := boardSlotCount(t, srv, "", token); n != 0 {
 		t.Errorf("eltern slot should be hidden when child does not play in slot's team, got %d", n)
-	}
-	// audience=all reveals the slot via the team source
-	if n := boardSlotCount(t, srv, "?audience=all", token); n != 1 {
-		t.Errorf("with audience=all the slot should be visible via trainer team source, got %d", n)
 	}
 }
 
@@ -907,8 +902,7 @@ func TestDutyBoard_TrainerSeesOwnTeam(t *testing.T) {
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
-	// audience=all so the audience filter does not hide the slot
-	if n := boardSlotCount(t, srv, "?audience=all", token); n != 1 {
+	if n := boardSlotCount(t, srv, "", token); n != 1 {
 		t.Errorf("trainer should see 1 slot of own team, got %d", n)
 	}
 }
@@ -933,26 +927,26 @@ func TestDutyBoard_TrainerDoesNotSeeOtherTeams(t *testing.T) {
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
-	if n := boardSlotCount(t, srv, "?audience=all", token); n != 1 {
+	if n := boardSlotCount(t, srv, "", token); n != 1 {
 		t.Errorf("trainer should see only Team A slot (1), got %d", n)
 	}
 }
 
-// TestDutyBoard_TrainerAudienceFilterDefault verifies that without
-// ?audience=all, a trainer only sees slots whose audience matches their
-// function (or is NULL), and NOT slots restricted to other audiences.
-func TestDutyBoard_TrainerAudienceFilterDefault(t *testing.T) {
+// TestDutyBoard_TrainerSeesAllAudiences verifies that a trainer sees every
+// slot of their teams regardless of audience — seit der Schalter „Nur
+// Audience" entfernt ist, gibt es keinen Weg mehr, einen Default-Filter
+// abzuschalten.
+func TestDutyBoard_TrainerSeesAllAudiences(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
 	dtID := createDutyType(t, db, "Dienst", 1.0)
 	matchSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
 	otherSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
-	nullSlot := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
+	createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14") // audiences=NULL
 
 	db.Exec(`UPDATE duty_slots SET audiences='["trainer"]' WHERE id=?`, matchSlot)
 	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, otherSlot)
-	// nullSlot keeps audiences=NULL
 
 	trainerUserID := testutil.CreateUser(t, db, "standard")
 	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
@@ -964,44 +958,16 @@ func TestDutyBoard_TrainerAudienceFilterDefault(t *testing.T) {
 	srv := testServer(t, h)
 
 	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
-	// No ?audience param → filter active, trainer sees matchSlot + nullSlot but not otherSlot
-	if n := boardSlotCount(t, srv, "", token); n != 2 {
-		t.Errorf("trainer should see 2 slots (audience=trainer + NULL), got %d", n)
-	}
-	_ = nullSlot
-}
-
-// TestDutyBoard_TrainerAudienceAll verifies that ?audience=all reveals all
-// slots of the trainer's teams regardless of audience.
-func TestDutyBoard_TrainerAudienceAll(t *testing.T) {
-	db := testutil.NewDB(t)
-	seasonID := testutil.CreateSeason(t, db, "2025/26")
-	teamID := testutil.CreateTeam(t, db, "Team A")
-	dtID := createDutyType(t, db, "Dienst", 1.0)
-	a := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
-	b := createDutySlot(t, db, dtID, seasonID, teamID, 0, "2026-06-14")
-
-	db.Exec(`UPDATE duty_slots SET audiences='["trainer"]' WHERE id=?`, a)
-	db.Exec(`UPDATE duty_slots SET audiences='["spieler"]' WHERE id=?`, b)
-
-	trainerUserID := testutil.CreateUser(t, db, "standard")
-	trainerMemberID := testutil.CreateMember(t, db, trainerUserID)
-	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
-	testutil.AddKaderTrainer(t, db, kaderID, trainerMemberID)
-
-	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
-
-	token := testutil.Token(t, trainerUserID, "standard", []string{"trainer"})
-	if n := boardSlotCount(t, srv, "?audience=all", token); n != 2 {
-		t.Errorf("trainer with audience=all should see 2 slots, got %d", n)
+	if n := boardSlotCount(t, srv, "", token); n != 3 {
+		t.Errorf("trainer should see all 3 slots of own team regardless of audience, got %d", n)
 	}
 }
 
-// TestDutyBoard_VorstandAudienceFilterDefault verifies that a vorstand
-// (Vereinsfunktion vorstand) sees only audience-matching slots by default
-// and all slots with ?audience=all.
-func TestDutyBoard_VorstandAudienceFilterDefault(t *testing.T) {
+// TestDutyBoard_VorstandSeesAllAudiences verifies that a vorstand
+// (Vereinsfunktion vorstand) sees every slot regardless of audience, without
+// any query parameter. Regression: nach Entfernen des Schalters „Nur Audience"
+// sah der Vorstand dauerhaft nur die Dienste seiner eigenen Zielgruppe.
+func TestDutyBoard_VorstandSeesAllAudiences(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
@@ -1021,16 +987,14 @@ func TestDutyBoard_VorstandAudienceFilterDefault(t *testing.T) {
 
 	token := testutil.Token(t, vorstandUserID, "standard", []string{"vorstand"})
 
-	if n := boardSlotCount(t, srv, "", token); n != 1 {
-		t.Errorf("vorstand default should see 1 audience-matching slot, got %d", n)
-	}
-	if n := boardSlotCount(t, srv, "?audience=all", token); n != 2 {
-		t.Errorf("vorstand with audience=all should see 2 slots, got %d", n)
+	if n := boardSlotCount(t, srv, "", token); n != 2 {
+		t.Errorf("vorstand should see all 2 slots regardless of audience, got %d", n)
 	}
 }
 
 // TestDutyBoard_SpielerAudienceAllIgnored verifies that a non-privileged
-// player cannot disable the audience filter via ?audience=all.
+// player cannot disable the audience filter, not even via the former
+// ?audience=all parameter.
 func TestDutyBoard_SpielerAudienceAllIgnored(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -1076,10 +1040,7 @@ func TestDutyBoard_AdminAudienceBypass(t *testing.T) {
 
 	token := testutil.Token(t, adminUserID, "admin", nil)
 	if n := boardSlotCount(t, srv, "", token); n != 2 {
-		t.Errorf("admin should see all slots without param, got %d", n)
-	}
-	if n := boardSlotCount(t, srv, "?audience=all", token); n != 2 {
-		t.Errorf("admin should see all slots with audience=all, got %d", n)
+		t.Errorf("admin should see all slots, got %d", n)
 	}
 }
 

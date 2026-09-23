@@ -99,7 +99,7 @@ func (h *Handler) slotTeamScope(ctx context.Context, teamID, gameID *int) []int 
 }
 
 // eligibleDutyRecipients returns the user IDs to notify about a newly created duty slot.
-// Die Menge ist bewusst dieselbe, der die Dienstbörse den Slot ohne `?audience=all` zeigt:
+// Die Menge ist bewusst dieselbe, der die Dienstbörse den Slot mit aktivem Audience-Filter zeigt:
 // eine Push für einen Dienst, den der Empfänger auf /dienste anschließend gar nicht findet,
 // ist Rauschen mit Sackgasse. Zwei Filter greifen ineinander:
 //
@@ -111,7 +111,7 @@ func (h *Handler) slotTeamScope(ctx context.Context, teamID, gameID *int) []int 
 //     Treffer über eine Vereinsfunktion des Empfängers oder — beim Eintrag 'eltern' — über
 //     ein Kind innerhalb desselben Team-Scopes.
 //
-// Der Audience-Bypass privilegierter Leser (admin, ?audience=all) wird bewusst **nicht**
+// Der Audience-Bypass privilegierter Leser (admin, Vorstand, Trainer, …) wird bewusst **nicht**
 // übernommen: alles sehen zu dürfen ist keine Betroffenheit.
 func (h *Handler) eligibleDutyRecipients(ctx context.Context, teamIDs []int, audiences []string) []int {
 	teamIn := placeholders(len(teamIDs))
@@ -919,12 +919,14 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	userID := claims.UserID
 
 	// Audience filter rules:
-	//   - System role admin: always bypass (sees all audiences).
-	//   - Privileged functions (vorstand, vorstand_beisitzer, trainer, sportliche_leitung):
-	//     audience filter is active by default, but ?audience=all disables it.
-	//   - Everyone else: audience filter always active; ?audience=all is ignored.
-	isPrivileged := claims.HasAnyFunction("vorstand", "vorstand_beisitzer", "trainer", "sportliche_leitung")
-	audienceBypass := claims.Role == "admin" || (isPrivileged && r.URL.Query().Get("audience") == "all")
+	//   - System role admin and the privileged functions (vorstand, vorstand_beisitzer,
+	//     trainer, sportliche_leitung): always bypass — sie überblicken mehr als ihre
+	//     eigene Zielgruppe. Früher war das der Schalter „Nur Audience" (Default an,
+	//     ?audience=all schaltete ab); seit dessen Entfernung gibt es keinen Weg mehr
+	//     zum Abschalten, ein Default „gefiltert" versteckte also Dienste dauerhaft.
+	//   - Everyone else: audience filter always active.
+	audienceBypass := claims.Role == "admin" ||
+		claims.HasAnyFunction("vorstand", "vorstand_beisitzer", "trainer", "sportliche_leitung")
 
 	args := []any{userID} // first ? is for the da LEFT JOIN
 	var whereParts string

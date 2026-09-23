@@ -26,7 +26,7 @@ Sichtbarkeit in der Dienstbörse folgen und dazu **beide** Filter anlegen, die
    wer die Zielgruppe trifft: über eine eigene Vereinsfunktion aus dem Array, oder — beim
    Eintrag `eltern` — als Elternteil eines Spielers innerhalb desselben Team-Scopes.
 
-Der Audience-Bypass privilegierter Leser (`admin`, `?audience=all` für
+Der Audience-Bypass privilegierter Leser (`admin`,
 `vorstand`/`vorstand_beisitzer`/`trainer`/`sportliche_leitung`) SHALL **nicht** auf die
 Benachrichtigung durchschlagen: das Recht, alle Dienste zu sehen, begründet keine
 Benachrichtigung über jeden neuen Dienst.

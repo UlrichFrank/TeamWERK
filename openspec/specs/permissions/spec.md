@@ -321,7 +321,6 @@ Drei Gates folgen bewusst dem Teilnehmer- statt dem Verwaltungsmodell und lesen 
 
 - **KalenderPage · „Abwesenheit eintragen“** = `spieler` ∨ `trainer` ∨ `is_parent` — Admin ist kein Sonderfall; `vorstand`, `vorstand_beisitzer`, `kassierer`, `sportliche_leitung`, `medien` bleiben ausgenommen, weil sie keine automatische Termin-Teilnahme haben.
 - **MatchReportFormPage · Prüfen/Veröffentlichen** = `admin` ∨ `medien` ∨ `vorstand` — `medien` ist keine Capability (siehe `me-capabilities`), das Gate liest `clubFunctions`.
-- **DutyPage · Audience-Pille „alle Zielgruppen“** = `vorstand` ∨ `vorstand_beisitzer` ∨ `trainer` ∨ `sportliche_leitung` — spiegelt den `?audience=all`-Bypass des Dienst-Boards.
 
 #### Scenario: spieler sieht keine Slot-Mutation-Actions auf DutyPage
 - **WHEN** Persona `spieler` rendert die DutyPage
@@ -366,7 +365,7 @@ Das System SHALL die folgenden Inkonsistenzen als bekannten Status quo führen. 
 
 #### Scenario: vorstand_beisitzer hat heute keinen Sondereffekt
 - **WHEN** Persona `vorstand_beisitzer` einen Endpoint aufruft, der nicht öffentlich, Self-Service oder Dienst-Board ist
-- **THEN** antwortet der Server wie für Persona `spieler`: die Funktion trägt kein eigenes Router-Tier, keine Capability und keinen Verwaltungs-Nav-Eintrag; ihre einzigen Mehrrechte sind der Audience-Bypass im Dienst-Board (`?audience=all`) und der Zugang zum Chat-Trainer-Zirkel
+- **THEN** antwortet der Server wie für Persona `spieler`: die Funktion trägt kein eigenes Router-Tier, keine Capability und keinen Verwaltungs-Nav-Eintrag; ihre einzigen Mehrrechte sind der Audience-Bypass im Dienst-Board und der Zugang zum Chat-Trainer-Zirkel
 
 #### Scenario: Offener Punkt bleibt sichtbar, bis er entschieden ist
 - **WHEN** einer der Punkte 1–8 im Code behoben oder in der Domänen-Spec legitimiert wird
