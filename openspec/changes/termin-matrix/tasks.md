@@ -2,9 +2,9 @@
 
 ## 1. Backend
 
-- [ ] 1.1 `internal/attendance/matrix.go`: Handler `GetTeamRSVPMatrix` (Parameter-Validierung, 404/403, Spalten, Zeilen, Zellen inkl. Voreinstellung, Serien-Abmeldung, `present` nur für `canSeeTeamStats`)
-- [ ] 1.2 Route `GET /api/teams/{id}/rsvp-matrix` in `internal/app/router.go` (Authenticated-Tier), Tier- und Objektrechte-Matrix nachziehen
-- [ ] 1.3 Tests `internal/attendance/matrix_test.go` gemäß Test-Anforderungen
+- [x] 1.1 `internal/attendance/matrix.go`: Handler `GetTeamRSVPMatrix` (Parameter-Validierung, 404/403, Spalten, Zeilen, Zellen inkl. Voreinstellung, Serien-Abmeldung, `present` nur für `canSeeTeamStats`)
+- [x] 1.2 Route `GET /api/teams/{id}/rsvp-matrix` in `internal/app/router.go` (Authenticated-Tier), Tier- und Objektrechte-Matrix nachziehen
+- [x] 1.3 Tests `internal/attendance/matrix_test.go` gemäß Test-Anforderungen
 
 ## 2. Frontend
 
