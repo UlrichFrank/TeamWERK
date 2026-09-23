@@ -334,6 +334,7 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/chat/messages/{id}/poll/close", expected: exPublic},
 	// Broadcast-Mutations: Sender-Check → 403 für alle (kein Fixture)
 	{method: "POST", path: "/api/chat/broadcasts/{id}/read", expected: exPublic},
+	{method: "GET", path: "/api/chat/broadcasts/{id}/reads", expected: exPublic},
 	{method: "PUT", path: "/api/chat/broadcasts/{id}", expected: exPublic},
 	{method: "DELETE", path: "/api/chat/broadcasts/{id}", expected: exPublic},
 	// Team-Standard-Gruppen (Picker im "Neues Gespräch"-Modal):

@@ -327,6 +327,7 @@ func objectFixtures() map[string]objFixture {
 	// ── Chat: Mitteilungen (Broadcasts) ──────────────────────────────────────
 	bcFixture := func(w *objWorld) map[string]string { return p("id", w.newBroadcast()) }
 	add("POST /api/chat/broadcasts/{id}/read", objFixture{params: bcFixture, noOwnerProbe: true})
+	add("GET /api/chat/broadcasts/{id}/reads", objFixture{params: bcFixture})
 	add("PUT /api/chat/broadcasts/{id}", objFixture{params: bcFixture, body: map[string]any{"body": "Geändert"}})
 	add("DELETE /api/chat/broadcasts/{id}", objFixture{params: bcFixture})
 

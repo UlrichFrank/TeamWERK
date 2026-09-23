@@ -1380,20 +1380,38 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 		MediaURL    *string `json:"mediaUrl"`
 		MediaWidth  *int    `json:"mediaWidth,omitempty"`
 		MediaHeight *int    `json:"mediaHeight,omitempty"`
+		// Lese-Aggregat nur für eigene Mitteilungen; Zeiger + omitempty, damit der
+		// Lese-Zustand Dritter bei fremden Mitteilungen gar nicht erst im JSON steht.
+		ReadCount *int `json:"readCount,omitempty"`
+		ReadTotal *int `json:"readTotal,omitempty"`
 	}
 
+	// Das Aggregat hängt als abgeleitete Tabelle am PK-Index (broadcast_id führend).
+	// readTotal ist die beim Fan-out geschriebene Zeilenzahl — ein eingefrorener
+	// Snapshot, anders als der live zählende Chat-Nenner. Ausgeblendete Zeilen
+	// (hidden_at) bleiben bewusst drin: Wegwischen ist kein Lesen.
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT b.id, u.first_name || ' ' || u.last_name, b.body, b.sent_at,
 		       CASE WHEN br.read_at IS NOT NULL THEN 1 ELSE 0 END AS is_read,
 		       CASE WHEN b.sender_id = ? THEN 1 ELSE 0 END AS is_sent,
-		       b.edited_at, b.media_id, med.width, med.height
+		       b.edited_at, b.media_id, med.width, med.height,
+		       COALESCE(agg.read_count, 0), COALESCE(agg.read_total, 0)
 		FROM broadcasts b
 		JOIN users u ON u.id = b.sender_id
 		JOIN broadcast_reads br ON br.broadcast_id = b.id AND br.user_id = ?
 		LEFT JOIN media med ON med.id = b.media_id
+		LEFT JOIN (
+			SELECT r.broadcast_id,
+			       SUM(CASE WHEN r.read_at IS NOT NULL THEN 1 ELSE 0 END) AS read_count,
+			       COUNT(*) AS read_total
+			FROM broadcast_reads r
+			JOIN broadcasts bs ON bs.id = r.broadcast_id
+			WHERE r.user_id != bs.sender_id AND bs.sender_id = ?
+			GROUP BY r.broadcast_id
+		) agg ON agg.broadcast_id = b.id
 		WHERE br.hidden_at IS NULL
 		ORDER BY b.sent_at DESC
-		LIMIT 100`, claims.UserID, claims.UserID)
+		LIMIT 100`, claims.UserID, claims.UserID, claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -1406,9 +1424,14 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 		var isRead, isSent int
 		var editedAt sql.NullString
 		var mediaID, mediaWidth, mediaHeight sql.NullInt64
-		rows.Scan(&b.ID, &b.SenderName, &b.Body, &b.SentAt, &isRead, &isSent, &editedAt, &mediaID, &mediaWidth, &mediaHeight)
+		var readCount, readTotal int
+		rows.Scan(&b.ID, &b.SenderName, &b.Body, &b.SentAt, &isRead, &isSent, &editedAt, &mediaID, &mediaWidth, &mediaHeight, &readCount, &readTotal)
 		b.IsRead = isRead == 1
 		b.IsSent = isSent == 1
+		if b.IsSent {
+			b.ReadCount = &readCount
+			b.ReadTotal = &readTotal
+		}
 		if editedAt.Valid {
 			b.EditedAt = &editedAt.String
 		}
@@ -1616,10 +1639,27 @@ func (h *Handler) MarkBroadcastRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.db.ExecContext(r.Context(), `
+	res, err := h.db.ExecContext(r.Context(), `
 		UPDATE broadcast_reads SET read_at = CURRENT_TIMESTAMP
 		WHERE broadcast_id = ? AND user_id = ? AND read_at IS NULL`,
 		broadcastID, claims.UserID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Nur ein tatsächlich neu gesetztes read_at meldet sich beim Absender. Ohne
+	// die RowsAffected-Prüfung zählte jedes erneute Öffnen clientseitig +1, und
+	// readCount überholte mit der Zeit readTotal, ohne dass ein Request scheitert.
+	// Das Event trägt bewusst keinen Leser (plain colon-string wie alle Chat-Events).
+	if n, _ := res.RowsAffected(); n == 1 {
+		var senderID int
+		if err := h.db.QueryRowContext(r.Context(),
+			`SELECT sender_id FROM broadcasts WHERE id = ?`, broadcastID).Scan(&senderID); err == nil &&
+			senderID != claims.UserID {
+			h.hub.BroadcastToUser(senderID, fmt.Sprintf("chat:broadcast-read:%d", broadcastID))
+		}
+	}
 
 	h.hub.BroadcastToUser(claims.UserID, "chat:conversation-read")
 	w.WriteHeader(http.StatusNoContent)

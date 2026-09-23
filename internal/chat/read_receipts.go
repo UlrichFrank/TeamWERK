@@ -99,3 +99,51 @@ func (h *Handler) MessageReads(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(readers)
 }
+
+// GET /api/chat/broadcasts/{id}/reads
+// Spiegel von MessageReads für Mitteilungen: Leserliste ohne den Absender,
+// nach read_at aufsteigend. Nur der Absender darf sie sehen — auch Empfänger
+// derselben Mitteilung bekommen 403; unbekannte ID → 404.
+func (h *Handler) BroadcastReads(w http.ResponseWriter, r *http.Request) {
+	claims := auth.ClaimsFromCtx(r.Context())
+	broadcastID, err := strconv.Atoi(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var senderID int
+	if err := h.db.QueryRowContext(r.Context(),
+		`SELECT sender_id FROM broadcasts WHERE id = ?`, broadcastID).Scan(&senderID); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if senderID != claims.UserID {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	rows, err := h.db.QueryContext(r.Context(), `
+		SELECT u.id, u.first_name || ' ' || u.last_name, br.read_at
+		FROM broadcast_reads br
+		JOIN users u ON u.id = br.user_id
+		WHERE br.broadcast_id = ? AND br.user_id != ? AND br.read_at IS NOT NULL
+		ORDER BY br.read_at ASC`, broadcastID, senderID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	readers := []messageReader{}
+	for rows.Next() {
+		var mr messageReader
+		if err := rows.Scan(&mr.UserID, &mr.Name, &mr.ReadAt); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		readers = append(readers, mr)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(readers)
+}
