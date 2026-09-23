@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strconv"
@@ -2768,10 +2769,14 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Der vorherige Status kommt aus demselben Lookup wie der Absence-Lock; er
+	// entscheidet nach dem Upsert, ob die Trainer eine Umentscheidung gemeldet
+	// bekommen. Keine Zeile = erste Antwort (prevStatus bleibt leer).
 	var existingAbsenceID sql.NullInt64
+	var prevStatus string
 	h.db.QueryRowContext(r.Context(),
-		`SELECT absence_id FROM game_responses WHERE game_id = ? AND member_id = ?`,
-		gameID, memberID).Scan(&existingAbsenceID)
+		`SELECT absence_id, status FROM game_responses WHERE game_id = ? AND member_id = ?`,
+		gameID, memberID).Scan(&existingAbsenceID, &prevStatus)
 	if existingAbsenceID.Valid {
 		httpx.WriteError(w, r, http.StatusForbidden, "rsvp_locked_absence", nil)
 		return
@@ -2810,7 +2815,61 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.broadcastGame(r.Context(), gameID, "games")
+	h.notifyRSVPChange(r.Context(), gameID, memberID, claims.UserID, prevStatus, req.Status, req.Reason)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// notifyRSVPChange meldet den Trainern eine kurzfristige Umentscheidung
+// (rsvp-aenderung-trainer-push). Betroffene Kader sind die der Mannschaften des
+// Spiels in der Saison DES SPIELS, nicht der aktiven — gefragt ist „wer trainiert
+// für diesen Termin?". Ob überhaupt gemeldet wird, entscheidet
+// notify.RSVPChangeRecipients; jeder Fehler hier endet still in „keine Meldung",
+// die RSVP ist zu diesem Zeitpunkt bereits gespeichert.
+func (h *Handler) notifyRSVPChange(ctx context.Context, gameID, memberID, actorUserID int, prevStatus, newStatus, reason string) {
+	if prevStatus == "" || prevStatus == newStatus {
+		return
+	}
+	var opponent, date, evTime, eventType string
+	if err := h.db.QueryRowContext(ctx,
+		`SELECT COALESCE(opponent,''), date, COALESCE(time,''), event_type FROM games WHERE id=?`, gameID).
+		Scan(&opponent, &date, &evTime, &eventType); err != nil {
+		return
+	}
+	locksAt, err := gameLocksAt(date, evTime)
+	if err != nil {
+		return
+	}
+	rows, err := h.db.QueryContext(ctx, `
+		SELECT k.id FROM kader k
+		JOIN game_teams gt ON gt.team_id = k.team_id
+		JOIN games g ON g.id = gt.game_id AND g.season_id = k.season_id
+		WHERE gt.game_id = ?`, gameID)
+	if err != nil {
+		slog.Error("games.notifyRSVPChange kader", "game_id", gameID, "error", err)
+		return
+	}
+	var kaderIDs []int
+	for rows.Next() {
+		var id int
+		if rows.Scan(&id) == nil {
+			kaderIDs = append(kaderIDs, id)
+		}
+	}
+	rows.Close()
+
+	notify.SendRSVPChange(h.db, h.cfg, notify.RSVPChange{
+		KaderIDs:    kaderIDs,
+		MemberID:    memberID,
+		ActorUserID: actorUserID,
+		PrevStatus:  prevStatus,
+		NewStatus:   newStatus,
+		Reason:      reason,
+		Start:       locksAt.Add(GameRSVPCutoff),
+		Now:         h.now(),
+		Subject:     gameEventName(eventType, opponent),
+		When:        notify.EventWhen(date, evTime),
+		URL:         fmt.Sprintf("/termine?focus=game-%d", gameID),
+	})
 }
 
 type gameResponse struct {
