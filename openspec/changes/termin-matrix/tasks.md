@@ -14,7 +14,7 @@
 
 ## 3. Zu-/Absage und geteilte Teilnahme
 
-- [ ] 3.1 RSVP-Fristen nach `internal/policy`, Matrix liefert `rsvp_locks_at`, `rsvp_require_reason`, `is_self`, `can_respond`, `locked`, eigene Gründe (+ Tests)
+- [x] 3.1 RSVP-Fristen nach `internal/policy`, Matrix liefert `rsvp_locks_at`, `rsvp_require_reason`, `is_self`, `can_respond`, `locked`, eigene Gründe (+ Tests)
 - [ ] 3.2 `terminMatrix.ts`: Teilnahme getrennt nach Bisher/Geplant (+ Vitest)
 - [ ] 3.3 `TerminMatrix` + `TerminePage`: antippbare Zellen, Dialog mit den Listen-Funktionen (+ Vitest)
 

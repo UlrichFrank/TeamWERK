@@ -11,6 +11,8 @@ import (
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/httpx"
+	"github.com/teamstuttgart/teamwerk/internal/policy"
+	"github.com/teamstuttgart/teamwerk/internal/timez"
 )
 
 // matrixMaxDays deckelt den Zeitraum der Rückmelde-Matrix: eine Saison plus
@@ -26,6 +28,10 @@ type matrixEvent struct {
 	EventType string `json:"event_type"` // training | heim | auswärts | generisch
 	Title     string `json:"title"`
 	Cancelled bool   `json:"cancelled"`
+	// Ab hier dürfen Spieler/Eltern nicht mehr umsagen (policy.*RSVPCutoff
+	// vor Beginn) — dieselbe Frist, die die Liste als rsvp_locks_at bekommt.
+	RsvpLocksAt       string `json:"rsvp_locks_at,omitempty"`
+	RsvpRequireReason bool   `json:"rsvp_require_reason"`
 
 	defPlayers  string
 	defExtended string
@@ -38,13 +44,23 @@ type matrixCell struct {
 	IsDefault   bool    `json:"is_default"`
 	Unavailable bool    `json:"unavailable,omitempty"`
 	Present     *bool   `json:"present,omitempty"`
+	// Locked: Antwort stammt aus einer erfassten Abwesenheit und ist nur über
+	// die Abwesenheit änderbar (Respond antwortet sonst rsvp_locked_absence).
+	Locked bool `json:"locked,omitempty"`
+	// Reason nur in Zeilen mit CanRespond (eigene, Kinder) — design.md §2.
+	Reason *string `json:"reason,omitempty"`
 }
 
 type matrixMember struct {
-	MemberID int          `json:"member_id"`
-	Name     string       `json:"name"`
-	Extended bool         `json:"extended"`
-	Cells    []matrixCell `json:"cells"`
+	MemberID int    `json:"member_id"`
+	Name     string `json:"name"`
+	Extended bool   `json:"extended"`
+	// IsSelf: Mitglied des Aufrufers. CanRespond: der Aufrufer bietet für diese
+	// Zeile Zu-/Absage an — eigenes Mitglied oder Kind (family_links), genau
+	// die Zeilen, die die Liste als „Ich" bzw. Kindername zeigt.
+	IsSelf     bool         `json:"is_self"`
+	CanRespond bool         `json:"can_respond"`
+	Cells      []matrixCell `json:"cells"`
 }
 
 type matrixResponse struct {
@@ -150,7 +166,7 @@ func (h *Handler) GetTeamRSVPMatrix(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
-	members, err := h.loadMatrixMembers(r.Context(), teamID)
+	members, err := h.loadMatrixMembers(r.Context(), teamID, claims.UserID)
 	if err != nil {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
@@ -165,7 +181,7 @@ func (h *Handler) GetTeamRSVPMatrix(w http.ResponseWriter, r *http.Request) {
 		m := &members[i]
 		m.Cells = make([]matrixCell, len(resp.Events))
 		for j, ev := range resp.Events {
-			m.Cells[j] = facts.cell(ev, m.MemberID, m.Extended)
+			m.Cells[j] = facts.cell(ev, m.MemberID, m.Extended, m.CanRespond)
 		}
 	}
 	resp.Members = members
@@ -181,7 +197,8 @@ func (h *Handler) loadMatrixEvents(ctx context.Context, teamID int, from, to str
 		SELECT ts.id, date(ts.date), ts.start_time,
 		       COALESCE(NULLIF(ts.title, ''), 'Training'),
 		       ts.status = 'cancelled',
-		       ts.rsvp_default_players, ts.rsvp_default_extended
+		       ts.rsvp_default_players, ts.rsvp_default_extended,
+		       ts.rsvp_require_reason
 		FROM training_sessions ts
 		WHERE ts.team_id = ?
 		  AND date(ts.date) BETWEEN date(?) AND date(?)`,
@@ -192,7 +209,7 @@ func (h *Handler) loadMatrixEvents(ctx context.Context, teamID int, from, to str
 	for rows.Next() {
 		ev := matrixEvent{Kind: "training", EventType: "training"}
 		if err := rows.Scan(&ev.ID, &ev.Date, &ev.Time, &ev.Title, &ev.Cancelled,
-			&ev.defPlayers, &ev.defExtended); err != nil {
+			&ev.defPlayers, &ev.defExtended, &ev.RsvpRequireReason); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("matrix trainings scan: %w", err)
 		}
@@ -205,7 +222,8 @@ func (h *Handler) loadMatrixEvents(ctx context.Context, teamID int, from, to str
 
 	rows, err = h.db.QueryContext(ctx, `
 		SELECT g.id, date(g.date), g.time, g.opponent, g.event_type,
-		       g.rsvp_default_players, g.rsvp_default_extended
+		       g.rsvp_default_players, g.rsvp_default_extended,
+		       g.rsvp_require_reason
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id AND gt.team_id = ?
 		WHERE date(g.date) BETWEEN date(?) AND date(?)`,
@@ -216,7 +234,7 @@ func (h *Handler) loadMatrixEvents(ctx context.Context, teamID int, from, to str
 	for rows.Next() {
 		ev := matrixEvent{Kind: "game"}
 		if err := rows.Scan(&ev.ID, &ev.Date, &ev.Time, &ev.Title, &ev.EventType,
-			&ev.defPlayers, &ev.defExtended); err != nil {
+			&ev.defPlayers, &ev.defExtended, &ev.RsvpRequireReason); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("matrix games scan: %w", err)
 		}
@@ -225,6 +243,14 @@ func (h *Handler) loadMatrixEvents(ctx context.Context, teamID int, from, to str
 	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("matrix games rows: %w", err)
+	}
+
+	for i := range events {
+		cutoff := policy.GameRSVPCutoff
+		if events[i].Kind == "training" {
+			cutoff = policy.TrainingRSVPCutoff
+		}
+		events[i].RsvpLocksAt = rsvpLocksAt(events[i].Date, events[i].Time, cutoff)
 	}
 
 	sort.SliceStable(events, func(i, j int) bool {
@@ -242,17 +268,36 @@ func (h *Handler) loadMatrixEvents(ctx context.Context, teamID int, from, to str
 	return events, nil
 }
 
+// rsvpLocksAt rechnet Beginn (Europe/Berlin) minus Frist als RFC3339 in UTC —
+// dieselbe Rechnung wie games.gameLocksAt/trainings.trainingLocksAt. Leer bei
+// unlesbarem Datum/Zeit, dann greift nur die serverseitige Prüfung.
+func rsvpLocksAt(date, hhmm string, cutoff time.Duration) string {
+	if len(hhmm) > 5 {
+		hhmm = hhmm[:5]
+	}
+	t, err := time.ParseInLocation("2006-01-02 15:04", date+" "+hhmm, timez.Berlin())
+	if err != nil {
+		return ""
+	}
+	return t.Add(-cutoff).UTC().Format(time.RFC3339)
+}
+
 // loadMatrixMembers liefert Stammkader, dann erweiterten Kader (ohne Doppelte)
 // der aktiven Saison, jeweils nach Name sortiert. Ohne aktive Saison leer.
-func (h *Handler) loadMatrixMembers(ctx context.Context, teamID int) ([]matrixMember, error) {
+func (h *Handler) loadMatrixMembers(ctx context.Context, teamID, callerUserID int) ([]matrixMember, error) {
 	rows, err := h.db.QueryContext(ctx, `
-		SELECT m.id, m.first_name || ' ' || m.last_name, 0 AS extended
+		SELECT roster.id, roster.name, roster.extended,
+		       COALESCE(roster.user_id, 0) = ? AS is_self,
+		       EXISTS (SELECT 1 FROM family_links fl
+		               WHERE fl.member_id = roster.id AND fl.parent_user_id = ?) AS is_child
+		FROM (
+		SELECT m.id, m.first_name || ' ' || m.last_name AS name, 0 AS extended, m.user_id
 		FROM members m
 		JOIN kader_members km ON km.member_id = m.id
 		JOIN kader k ON k.id = km.kader_id AND k.team_id = ?
 		JOIN seasons s ON s.id = k.season_id AND s.is_active = 1
 		UNION
-		SELECT m.id, m.first_name || ' ' || m.last_name, 1 AS extended
+		SELECT m.id, m.first_name || ' ' || m.last_name, 1 AS extended, m.user_id
 		FROM members m
 		JOIN kader_extended_members kem ON kem.member_id = m.id
 		JOIN kader k ON k.id = kem.kader_id AND k.team_id = ?
@@ -261,8 +306,9 @@ func (h *Handler) loadMatrixMembers(ctx context.Context, teamID int) ([]matrixMe
 			SELECT 1 FROM kader_members km2
 			WHERE km2.member_id = m.id AND km2.kader_id = k.id
 		)
-		ORDER BY extended, 2`,
-		teamID, teamID)
+		) AS roster
+		ORDER BY roster.extended, roster.name`,
+		callerUserID, callerUserID, teamID, teamID)
 	if err != nil {
 		return nil, fmt.Errorf("matrix members: %w", err)
 	}
@@ -270,9 +316,11 @@ func (h *Handler) loadMatrixMembers(ctx context.Context, teamID int) ([]matrixMe
 	members := []matrixMember{}
 	for rows.Next() {
 		var m matrixMember
-		if err := rows.Scan(&m.MemberID, &m.Name, &m.Extended); err != nil {
+		var isChild bool
+		if err := rows.Scan(&m.MemberID, &m.Name, &m.Extended, &m.IsSelf, &isChild); err != nil {
 			return nil, fmt.Errorf("matrix members scan: %w", err)
 		}
+		m.CanRespond = m.IsSelf || isChild
 		members = append(members, m)
 	}
 	return members, rows.Err()
@@ -281,19 +329,24 @@ func (h *Handler) loadMatrixMembers(ctx context.Context, teamID int) ([]matrixMe
 // matrixFacts sammelt Antworten, Anwesenheit und Serien-Abmeldungen aller
 // Termine im Zeitraum — je Tabelle eine Abfrage, unabhängig von der Spaltenzahl.
 type matrixFacts struct {
-	responses   map[memberEventKey]string
+	responses   map[memberEventKey]matrixResponseRow
 	present     map[memberEventKey]bool
 	unavailable map[memberEventKey]bool
 }
 
 // cell leitet den Zellwert ab — dieselbe Regel wie GetParticipants bzw.
 // trainings.GetAttendances: Antwort vor Rollen-Voreinstellung, 'none' bleibt leer.
-func (f matrixFacts) cell(ev matrixEvent, memberID int, extended bool) matrixCell {
+func (f matrixFacts) cell(ev matrixEvent, memberID int, extended, withReason bool) matrixCell {
 	k := memberEventKey{eventKey{ev.Kind, ev.ID}, memberID}
 	var c matrixCell
-	if st, ok := f.responses[k]; ok {
-		s := st
-		c.Status = &s
+	if resp, ok := f.responses[k]; ok {
+		st := resp.status
+		c.Status = &st
+		c.Locked = resp.fromAbsence
+		if withReason && resp.reason != "" {
+			reason := resp.reason
+			c.Reason = &reason
+		}
 	} else {
 		def := ev.defPlayers
 		if extended {
@@ -312,9 +365,16 @@ func (f matrixFacts) cell(ev matrixEvent, memberID int, extended bool) matrixCel
 	return c
 }
 
+// matrixResponseRow ist eine gespeicherte Rückmeldung.
+type matrixResponseRow struct {
+	status      string
+	reason      string
+	fromAbsence bool
+}
+
 func (h *Handler) loadMatrixFacts(ctx context.Context, teamID int, from, to string, withPresence bool) (matrixFacts, error) {
 	f := matrixFacts{
-		responses:   map[memberEventKey]string{},
+		responses:   map[memberEventKey]matrixResponseRow{},
 		present:     map[memberEventKey]bool{},
 		unavailable: map[memberEventKey]bool{},
 	}
@@ -327,19 +387,6 @@ func (h *Handler) loadMatrixFacts(ctx context.Context, teamID int, from, to stri
 		into func(k memberEventKey, v string)
 	}
 	queries := []query{
-		{"training", `
-			SELECT tr.training_id, tr.member_id, tr.status
-			FROM training_responses tr
-			JOIN training_sessions ts ON ts.id = tr.training_id
-			WHERE ts.team_id = ? AND date(ts.date) BETWEEN date(?) AND date(?)`,
-			func(k memberEventKey, v string) { f.responses[k] = v }},
-		{"game", `
-			SELECT gr.game_id, gr.member_id, gr.status
-			FROM game_responses gr
-			JOIN game_teams gt ON gt.game_id = gr.game_id AND gt.team_id = ?
-			JOIN games g ON g.id = gr.game_id
-			WHERE date(g.date) BETWEEN date(?) AND date(?)`,
-			func(k memberEventKey, v string) { f.responses[k] = v }},
 		{"training", `
 			SELECT DISTINCT ts.id, msu.member_id, ''
 			FROM training_sessions ts
@@ -366,6 +413,39 @@ func (h *Handler) loadMatrixFacts(ctx context.Context, teamID int, from, to stri
 				WHERE date(g.date) BETWEEN date(?) AND date(?)`,
 				func(k memberEventKey, v string) { f.present[k] = v == "1" }},
 		)
+	}
+
+	responseQueries := []struct{ kind, sql string }{
+		{"training", `
+			SELECT tr.training_id, tr.member_id, tr.status, tr.reason, tr.absence_id IS NOT NULL
+			FROM training_responses tr
+			JOIN training_sessions ts ON ts.id = tr.training_id
+			WHERE ts.team_id = ? AND date(ts.date) BETWEEN date(?) AND date(?)`},
+		{"game", `
+			SELECT gr.game_id, gr.member_id, gr.status, gr.reason, gr.absence_id IS NOT NULL
+			FROM game_responses gr
+			JOIN game_teams gt ON gt.game_id = gr.game_id AND gt.team_id = ?
+			JOIN games g ON g.id = gr.game_id
+			WHERE date(g.date) BETWEEN date(?) AND date(?)`},
+	}
+	for _, q := range responseQueries {
+		rows, err := h.db.QueryContext(ctx, q.sql, teamID, from, to)
+		if err != nil {
+			return f, fmt.Errorf("matrix responses (%s): %w", q.kind, err)
+		}
+		for rows.Next() {
+			var evID, memberID int
+			var row matrixResponseRow
+			if err := rows.Scan(&evID, &memberID, &row.status, &row.reason, &row.fromAbsence); err != nil {
+				rows.Close()
+				return f, fmt.Errorf("matrix responses scan (%s): %w", q.kind, err)
+			}
+			f.responses[memberEventKey{eventKey{q.kind, evID}, memberID}] = row
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return f, fmt.Errorf("matrix responses rows (%s): %w", q.kind, err)
+		}
 	}
 
 	for _, q := range queries {
