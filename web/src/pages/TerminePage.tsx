@@ -4,7 +4,7 @@ import { Check, X, HelpCircle, Dumbbell, Home, Plane, Calendar, History, Message
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import TeamFilter from '../components/TeamFilter'
 import TerminMatrix from '../components/TerminMatrix'
-import { matrixLoadWindow, visibleColumns, type RsvpMatrix } from '../lib/terminMatrix'
+import { cutoffLocked as isCutoffLocked, formatColumnDate, matrixLoadWindow, nextConfirmStatus, visibleColumns, type RsvpMatrix } from '../lib/terminMatrix'
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
@@ -205,6 +205,8 @@ function RsvpButton({ label, icon, active, activeClass, disabled, onClick }: {
     <button
       disabled={disabled}
       onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
       className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 sm:py-1 text-xs font-medium border transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
         active
           ? activeClass
@@ -248,6 +250,8 @@ export default function TerminePage() {
   const [matrix, setMatrix] = useState<RsvpMatrix | null>(null)
   const [matrixLoading, setMatrixLoading] = useState(false)
   const [matrixError, setMatrixError] = useState(false)
+  // Offener Zu-/Absage-Dialog einer Tabellenzelle (Zeilen-/Spaltenindex in `matrix`).
+  const [matrixEdit, setMatrixEdit] = useState<{ row: number; col: number } | null>(null)
   const [rsvpLoading, setRsvpLoading] = useState<string | null>(null)
   const [rsvpErrors, setRsvpErrors] = useState<Record<string, string>>({})
   const [pendingRSVP, setPendingRSVP] = useState<{ kind: 'training' | 'game'; id: number; status: 'declined' | 'maybe'; memberId?: number } | null>(null)
@@ -504,8 +508,12 @@ export default function TerminePage() {
         }
         return { ...t, data: { ...t.data, my_rsvp: status } }
       }))
+      // Tabellenansicht: Zelle sofort aktualisieren statt auf den SSE-Echo zu warten.
+      if (tableView) loadMatrix(true)
+      return true
     } catch (err) {
       setRsvpErrors(prev => ({ ...prev, [`t-${sessionId}`]: extractRsvpError(err) }))
+      return false
     } finally {
       setRsvpLoading(null)
     }
@@ -524,8 +532,12 @@ export default function TerminePage() {
         }
         return { ...t, data: { ...t.data, my_rsvp: status } }
       }))
+      // Tabellenansicht: Zelle sofort aktualisieren statt auf den SSE-Echo zu warten.
+      if (tableView) loadMatrix(true)
+      return true
     } catch (err) {
       setRsvpErrors(prev => ({ ...prev, [`g-${gameId}`]: extractRsvpError(err) }))
+      return false
     } finally {
       setRsvpLoading(null)
     }
@@ -536,16 +548,17 @@ export default function TerminePage() {
     setPendingRSVP({ kind, id, status, memberId })
   }
 
-  const confirmModal = () => {
+  const confirmModal = async () => {
     if (!pendingRSVP) return
     const { kind, id, status, memberId } = pendingRSVP
     setPendingRSVP(null)
-    if (kind === 'training') {
-      respondTraining(id, status, modalReason, memberId)
-    } else {
-      respondGame(id, status, modalReason, memberId)
-    }
     setModalReason('')
+    const ok = kind === 'training'
+      ? await respondTraining(id, status, modalReason, memberId)
+      : await respondGame(id, status, modalReason, memberId)
+    // Aus der Tabelle heraus: bei Erfolg schließt auch der Zellen-Dialog, bei
+    // einem Fehler erscheint er wieder und zeigt den Fehlertext.
+    if (ok) setMatrixEdit(null)
   }
 
   const cancelModal = () => {
@@ -555,6 +568,7 @@ export default function TerminePage() {
 
   const pendingChildName = (() => {
     if (!pendingRSVP?.memberId) return null
+    if (tableView) return matrix?.members.find(m => m.member_id === pendingRSVP.memberId)?.name ?? null
     const termin = termine.find(t => t.kind === pendingRSVP.kind && t.data.id === pendingRSVP.id)
     if (!termin) return null
     return (termin.data.children_rsvp ?? []).find(c => c.member_id === pendingRSVP.memberId)?.name ?? null
@@ -639,7 +653,7 @@ export default function TerminePage() {
             Die Übersicht konnte nicht geladen werden.
           </div>
         ) : (
-          <TerminMatrix matrix={matrix} columns={matrixColumns} />
+          <TerminMatrix matrix={matrix} columns={matrixColumns} today={today} onCellClick={(row, col) => setMatrixEdit({ row, col })} />
         )
       ) : (<>
       {focusNotFound && (
@@ -927,6 +941,71 @@ export default function TerminePage() {
         </div>
       )}
       </>)}
+
+      {tableView && matrix && matrixEdit && !pendingRSVP && (() => {
+        const m = matrix.members[matrixEdit.row]
+        const ev = matrix.events[matrixEdit.col]
+        const cell = m?.cells[matrixEdit.col]
+        if (!m || !ev || !cell) return null
+        // Dieselbe Semantik wie die Karten der Liste: Kind-Antworten tragen die
+        // member_id, die eigene nicht; Frist- und Abwesenheits-Sperre wie dort.
+        const memberId = m.is_self ? undefined : m.member_id
+        const kind = ev.kind
+        const errKey = `${kind === 'training' ? 't' : 'g'}-${ev.id}`
+        const loadKey = memberId ? `${errKey}-${memberId}` : errKey
+        const cutoff = isCutoffLocked(ev, canOverrideRsvpCutoff)
+        const disabled = cutoff || cell.locked === true || rsvpLoading === loadKey
+        const respond = (status: string) => (kind === 'training'
+          ? respondTraining(ev.id, status, '', memberId)
+          : respondGame(ev.id, status, '', memberId)
+        ).then(ok => { if (ok) setMatrixEdit(null) })
+        const decline = (status: 'declined' | 'maybe') => ev.rsvp_require_reason
+          ? openReasonModal(kind, ev.id, status, memberId)
+          : respond(status)
+        const typeLabel = ev.event_type === 'training' ? 'Training' : ev.event_type === 'heim' ? 'Heimspiel' : ev.event_type === 'auswärts' ? 'Auswärtsspiel' : 'Termin'
+        const status = cell.status
+        return (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setMatrixEdit(null)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="matrix-rsvp-title"
+              className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md space-y-3"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h2 id="matrix-rsvp-title" className="text-base font-semibold text-brand-text">{m.is_self ? 'Ich' : m.name}</h2>
+                  <p className="text-sm text-brand-text-muted">
+                    {typeLabel} {formatColumnDate(ev.date)} {ev.time}{ev.title && ev.event_type !== 'training' ? ` – ${ev.title}` : ''}
+                  </p>
+                </div>
+                <button onClick={() => setMatrixEdit(null)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={status === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={disabled} onClick={() => respond(nextConfirmStatus(cell, m.is_self))} />
+                <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={status === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={disabled} onClick={() => decline('maybe')} />
+                <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={status === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={disabled} onClick={() => decline('declined')} />
+              </div>
+              {cell.locked && (
+                <p className="text-xs text-brand-text-muted">Durch Abwesenheit gesperrt — Urlaub bearbeiten</p>
+              )}
+              {cell.reason && (cell.status === 'declined' || cell.status === 'maybe') && (
+                <p className="text-xs text-brand-text-muted flex items-start gap-1">
+                  <MessageCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                  <span>{cell.reason}</span>
+                </p>
+              )}
+              {!canOverrideRsvpCutoff && <RsvpLockNotice locksAt={ev.rsvp_locks_at} locked={cutoff} />}
+              {rsvpErrors[errKey] && (
+                <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{rsvpErrors[errKey]}</p>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {pendingRSVP && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">

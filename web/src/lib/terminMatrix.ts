@@ -14,6 +14,9 @@ export interface MatrixEvent {
   event_type: 'training' | 'heim' | 'auswärts' | 'generisch'
   title: string
   cancelled: boolean
+  /** Ab hier sperrt der Server Zu-/Absagen für Spieler/Eltern (RFC3339). */
+  rsvp_locks_at?: string
+  rsvp_require_reason: boolean
 }
 
 export interface MatrixCell {
@@ -22,12 +25,20 @@ export interface MatrixCell {
   unavailable?: boolean
   /** Nur in der Trainer-Sicht gesetzt (erfasste Anwesenheit). */
   present?: boolean
+  /** Antwort stammt aus einer erfassten Abwesenheit — nur dort änderbar. */
+  locked?: boolean
+  /** Nur in antwortbaren Zeilen (eigene, Kinder). */
+  reason?: string
 }
 
 export interface MatrixMember {
   member_id: number
   name: string
   extended: boolean
+  /** Mitglied des Aufrufers. */
+  is_self: boolean
+  /** Eigene Zeile oder Kind — hier bietet die Tabelle Zu-/Absage an. */
+  can_respond: boolean
   /** Parallel zu `events` — `cells[i]` gehört zu `events[i]`. */
   cells: MatrixCell[]
 }
@@ -52,30 +63,41 @@ export function visibleColumns(events: MatrixEvent[], types: Set<string>): numbe
   return out
 }
 
+export interface Tally {
+  count: number
+  total: number
+}
+
 /**
- * Teilnahme eines Spielers über die sichtbaren Spalten. Zähler: erfasste
- * Anwesenheit, wo vorhanden, sonst Zusage (auch per Voreinstellung). Nenner:
- * sichtbare Termine, die weder abgesagt noch per Serie abgemeldet sind.
+ * Teilnahme eines Spielers über die sichtbaren Spalten, getrennt am heutigen
+ * Datum (heutige Termine zählen zu „geplant", design.md §7).
+ *
+ * - `past` (tatsächlich): erfasste Anwesenheit, wo vorhanden, sonst Zusage.
+ * - `future` (geplant): Zusagen, auch per Voreinstellung.
+ *
+ * Nenner beider: Termine, die weder abgesagt noch per Serie abgemeldet sind.
  */
 export function participation(
   member: MatrixMember,
   events: MatrixEvent[],
   columns: number[],
-): { count: number; total: number } {
-  let count = 0
-  let total = 0
+  today: string,
+): { past: Tally; future: Tally } {
+  const past = { count: 0, total: 0 }
+  const future = { count: 0, total: 0 }
   for (const i of columns) {
     const cell = member.cells[i]
     if (!cell || events[i].cancelled || cell.unavailable) continue
-    total++
+    const bucket = events[i].date.slice(0, 10) < today ? past : future
+    bucket.total++
     const attended = cell.present !== undefined ? cell.present : cell.status === 'confirmed'
-    if (attended) count++
+    if (attended) bucket.count++
   }
-  return { count, total }
+  return { past, future }
 }
 
 /** „2 (100 %)" — ohne zählbare Termine ein Gedankenstrich. */
-export function formatParticipation({ count, total }: { count: number; total: number }): string {
+export function formatParticipation({ count, total }: Tally): string {
   if (total === 0) return '–'
   return `${count} (${Math.round((count / total) * 100)} %)`
 }
@@ -110,4 +132,25 @@ export function matrixLoadWindow(
   const cap = addDays(from, MATRIX_MAX_DAYS)
   if (to > cap) to = cap
   return { from, to }
+}
+
+/**
+ * Nächster Status für „Zusagen" — dieselbe Regel wie die Karten der Liste:
+ * in der eigenen Zeile schaltet eine aktive Zusage auf „Vielleicht" um, eine
+ * Voreinstellung wird zur echten Zusage; für Kinder ist „Zusagen" immer eine Zusage.
+ */
+export function nextConfirmStatus(cell: MatrixCell, isSelf: boolean): RsvpStatus {
+  if (!isSelf) return 'confirmed'
+  if (cell.is_default) return 'confirmed'
+  return cell.status === 'confirmed' ? 'maybe' : 'confirmed'
+}
+
+/** Rückmeldefrist verstrichen (ohne Override-Recht). */
+export function cutoffLocked(ev: MatrixEvent, canOverride: boolean, now: number = Date.now()): boolean {
+  return !canOverride && !!ev.rsvp_locks_at && now >= new Date(ev.rsvp_locks_at).getTime()
+}
+
+/** Ob eine Zelle antippbar ist (Dialog öffnet sich). */
+export function isCellRespondable(member: MatrixMember, ev: MatrixEvent, cell: MatrixCell): boolean {
+  return member.can_respond && !ev.cancelled && !cell.unavailable
 }
