@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change uebungsgruppen. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Übungsgruppe als Kader-Variante ohne Team
 
 Das System SHALL eine **Übungsgruppe** als Zeile in `kader` mit `kind = 'practice'`
@@ -15,8 +17,15 @@ sein.
 
 Eine Übungsgruppe SHALL **niemals** eine `teams`-Zeile besitzen. Diese Abwesenheit ist der
 Mechanismus, über den alle team-gebundenen Flächen (Spiele, Dienste, Mannschaftskasse,
-Strafen, Aufgaben, Videos, Ordner-Principals, Statistiken, Kalender-Feed) für
-Übungsgruppen unerreichbar bleiben — ohne dass eine dieser Flächen etwas prüfen muss.
+Strafen, Aufgaben, Videos, Ordner-Principals, Statistiken) für Übungsgruppen unerreichbar
+bleiben — ohne dass eine dieser Flächen etwas prüfen muss.
+
+Der **iCal-Feed gehört nicht mehr dazu**: er löst Trainingstermine über
+`training_sessions.kader_id` statt über `team_id` auf und gibt Übungsgruppen-Termine aus,
+gesteuert über den eigenen Toggle `calendar_tokens.include_practice_groups` (Capability
+`ical-feed`). Eine Fläche verlässt diesen Ausschluss ausschließlich auf diesem Weg — durch
+den Wechsel des Ankers auf `kader_id` und einen expliziten Schalter, **niemals** durch das
+Füllen von `training_sessions.team_id`.
 
 Namen SHALL innerhalb einer Saison eindeutig sein (Partial-Unique-Index auf
 `(season_id, name) WHERE kind='practice'`).
@@ -132,4 +141,3 @@ brauchen deshalb keine Prüfung.
 - **WHEN** eine beliebige Route unter `/api/teams/{id}/…` (Strafen, Kasse, Aufgaben,
   Warte, Statistiken) mit einer ID aufgerufen wird, hinter der eine Übungsgruppe steht
 - **THEN** existiert keine solche `teams.id` und die Route liefert kein 2xx für die Gruppe
-
