@@ -40,7 +40,7 @@ const categoryDescriptions: Record<Category, string> = {
   duties: 'Neue offene Dienste in der Dienstbörse sowie Benachrichtigung bei einer direkten Dienstzuweisung.',
   carpooling: 'Anfragen und Zusagen in Fahrgemeinschaften zu Spielen und Terminen.',
   chat: 'Neue Nachrichten in Mannschafts- und Direktchats.',
-  operativ: 'Erinnerungen an deine Vereinsaufgaben, z. B. Anwesenheiten nachtragen oder Spielberichte freigeben.',
+  operativ: 'Meldungen zu deinen Vereinsaufgaben, z. B. Anwesenheiten nachtragen, Spielberichte freigeben oder kurzfristige Umentscheidungen deiner Spieler.',
   sonstiges: 'Technische Ereignisse rund um Vereinsinhalte, z. B. wenn ein hochgeladenes Video fertig verarbeitet ist oder ein Video bald gelöscht wird.',
 }
 
