@@ -1396,9 +1396,6 @@ func (h *Handler) UpdateGame(w http.ResponseWriter, r *http.Request) {
 // DELETE /api/games/{id}
 // Deletes a game (incl. generic events) together with all duty_slots and
 // duty_assignments referencing it (via ON DELETE CASCADE since migration 027).
-// For each fulfilled assignment that gets cascade-deleted, the corresponding
-// duty_accounts.ist is recomputed in the same transaction so no orphan hours
-// remain on user accounts.
 func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 	// Der optionale {reason, silent}-Body wird als Allererstes gelesen — danach
 	// ist er verbraucht. Fehlt er (alte PWA aus dem Service-Worker-Cache) oder
@@ -1483,27 +1480,6 @@ func (h *Handler) DeleteGame(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM pending_event_notes_push WHERE ref_type='game' AND ref_id=?`, id); err != nil {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
-	}
-
-	// Re-aggregate duty_accounts.ist for users whose fulfilled assignments just disappeared.
-	for _, uid := range fulfilledUIDs {
-		if _, err = tx.ExecContext(r.Context(), `
-			UPDATE duty_accounts SET ist = (
-				-- Quelle ist der Slot, nicht der Diensttyp (dienst-dauer,
-				-- Decision 4): seit ein Slot seine Dauer überschreiben darf und
-				-- die Dauer die Gutschrift IST, ignorierte eine Aggregation über
-				-- dt.hours_value genau die Korrektur des Vorstands. Der
-				-- Slot-Wert trägt zugleich die Varianten-Auflösung schon in sich.
-				SELECT COALESCE(SUM(ds.hours_value), 0)
-				FROM duty_assignments da
-				JOIN duty_slots ds ON ds.id = da.duty_slot_id
-				WHERE da.user_id = ? AND ds.season_id = ? AND da.status = 'fulfilled'
-			)
-			WHERE user_id = ? AND season_id = ?`,
-			uid, seasonID, uid, seasonID); err != nil {
-			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
-			return
-		}
 	}
 
 	// Regen adjacent days — the deleted date itself has no slots anymore.

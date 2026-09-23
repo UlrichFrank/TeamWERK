@@ -107,7 +107,6 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 		r.Get("/api/duty-board", h.Board)
 		r.Post("/api/duty-board/{slotId}/claim", h.Claim)
 		r.Delete("/api/duty-board/{slotId}/claim", h.Unclaim)
-		r.Get("/api/duty-accounts", h.Accounts)
 		r.Post("/api/duty-slots", h.CreateSlot)
 		r.Put("/api/duty-slots/{id}", h.UpdateSlot)
 		r.Delete("/api/duty-slots/{id}", h.DeleteSlot)
@@ -136,8 +135,7 @@ func testServer(t *testing.T, h *duties.Handler) *httptest.Server {
 // ── TC-D01 ────────────────────────────────────────────────────────────────────
 
 // TestClaim_FreeSlot verifies that claiming an open slot succeeds with 204,
-// increments slots_filled to 1, creates a duty_assignment with status=assigned,
-// and ensures a duty_accounts row exists for the user.
+// increments slots_filled to 1 and creates a duty_assignment with status=assigned.
 func TestClaim_FreeSlot(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -162,10 +160,6 @@ func TestClaim_FreeSlot(t *testing.T) {
 	if got := countRows(t, db, "duty_assignments",
 		"duty_slot_id=? AND user_id=? AND status='assigned'", slotID, userID); got != 1 {
 		t.Errorf("expected 1 duty_assignment with status=assigned, got %d", got)
-	}
-	if got := countRows(t, db, "duty_accounts",
-		"user_id=? AND season_id=?", userID, seasonID); got != 1 {
-		t.Errorf("expected duty_accounts row, got %d", got)
 	}
 }
 
@@ -1134,83 +1128,6 @@ func TestBoard_ViewMine(t *testing.T) {
 	}
 }
 
-// ── TC-D15a ───────────────────────────────────────────────────────────────────
-
-// TestAccounts_AdminSeesAll verifies that an admin receives all duty accounts,
-// each with a correctly computed balance (soll - ist).
-func TestAccounts_AdminSeesAll(t *testing.T) {
-	db := testutil.NewDB(t)
-	seasonID := testutil.CreateSeason(t, db, "2025/26")
-
-	user1 := testutil.CreateUser(t, db, "standard")
-	user2 := testutil.CreateUser(t, db, "standard")
-	user3 := testutil.CreateUser(t, db, "standard")
-	adminID := testutil.CreateUser(t, db, "admin")
-
-	db.Exec(`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?, ?, 10, 4)`, user1, seasonID)
-	db.Exec(`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?, ?, 8, 8)`, user2, seasonID)
-	db.Exec(`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?, ?, 6, 2)`, user3, seasonID)
-
-	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
-
-	token := testutil.Token(t, adminID, "admin", nil)
-	res := testutil.Get(t, srv, "/api/duty-accounts", token)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", res.StatusCode)
-	}
-
-	var accounts []map[string]any
-	json.NewDecoder(res.Body).Decode(&accounts)
-	res.Body.Close()
-
-	if len(accounts) != 3 {
-		t.Fatalf("admin: expected 3 accounts, got %d", len(accounts))
-	}
-	for _, a := range accounts {
-		soll := a["soll"].(float64)
-		ist := a["ist"].(float64)
-		balance := a["balance"].(float64)
-		if balance != soll-ist {
-			t.Errorf("balance mismatch: soll=%.1f, ist=%.1f, balance=%.1f", soll, ist, balance)
-		}
-	}
-}
-
-// ── TC-D15b ───────────────────────────────────────────────────────────────────
-
-// TestAccounts_UserSeesOwn verifies that a non-admin user only receives their own account.
-func TestAccounts_UserSeesOwn(t *testing.T) {
-	db := testutil.NewDB(t)
-	seasonID := testutil.CreateSeason(t, db, "2025/26")
-
-	userID := testutil.CreateUser(t, db, "standard")
-	otherID := testutil.CreateUser(t, db, "standard")
-
-	db.Exec(`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?, ?, 10, 4)`, userID, seasonID)
-	db.Exec(`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?, ?, 8, 3)`, otherID, seasonID)
-
-	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
-	srv := testServer(t, h)
-
-	token := testutil.Token(t, userID, "spieler", nil)
-	res := testutil.Get(t, srv, "/api/duty-accounts", token)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", res.StatusCode)
-	}
-
-	var accounts []map[string]any
-	json.NewDecoder(res.Body).Decode(&accounts)
-	res.Body.Close()
-
-	if len(accounts) != 1 {
-		t.Fatalf("expected 1 account (own), got %d", len(accounts))
-	}
-	if int(accounts[0]["user_id"].(float64)) != userID {
-		t.Errorf("expected own user_id=%d, got %v", userID, accounts[0]["user_id"])
-	}
-}
-
 // ── TC-D16 ────────────────────────────────────────────────────────────────────
 
 // TestCreateSlot_IsCustom verifies that POSTing to /api/duty-slots creates a
@@ -1861,7 +1778,7 @@ func TestUpdateType_UnmoeglicheSpanneWirdAbgewiesen(t *testing.T) {
 
 // ── Fulfill / CashSubstitute / ListAssignments ────────────────────────────────
 
-// TC: Fulfill setzt status='fulfilled'; duty_accounts.ist bleibt unverändert.
+// TC: Fulfill setzt status='fulfilled'.
 func TestFulfill_SetsStatusFulfilled(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -1872,9 +1789,6 @@ func TestFulfill_SetsStatusFulfilled(t *testing.T) {
 	insertDutyAssignment(t, db, slotID, userID, "assigned")
 	var assignmentID int
 	db.QueryRow(`SELECT id FROM duty_assignments WHERE duty_slot_id=? AND user_id=?`, slotID, userID).Scan(&assignmentID)
-
-	// Seed duty_accounts so we can verify ist stays unchanged.
-	db.Exec(`INSERT INTO duty_accounts (user_id, season_id, soll, ist) VALUES (?, ?, 10, 0)`, userID, seasonID)
 
 	h := duties.NewHandler(db, testutil.TestConfig(), hub.NewHub())
 	srv := testServer(t, h)
@@ -1892,12 +1806,6 @@ func TestFulfill_SetsStatusFulfilled(t *testing.T) {
 	db.QueryRow(`SELECT status FROM duty_assignments WHERE id=?`, assignmentID).Scan(&status)
 	if status != "fulfilled" {
 		t.Errorf("expected status='fulfilled', got %q", status)
-	}
-	// Invariante: Fulfill aktualisiert duty_accounts.ist NICHT direkt.
-	var ist float64
-	db.QueryRow(`SELECT ist FROM duty_accounts WHERE user_id=? AND season_id=?`, userID, seasonID).Scan(&ist)
-	if ist != 0 {
-		t.Errorf("duty_accounts.ist must remain 0 after Fulfill (updated separately); got %v", ist)
 	}
 }
 

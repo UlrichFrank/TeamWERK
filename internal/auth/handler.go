@@ -1270,7 +1270,6 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		`DELETE FROM broadcast_reads WHERE user_id = ?`,
 		`DELETE FROM family_links WHERE parent_user_id = ?`,
 		`DELETE FROM duty_assignments WHERE user_id = ?`,
-		`DELETE FROM duty_accounts WHERE user_id = ?`,
 		`DELETE FROM member_change_drafts WHERE created_by_user_id = ?`,
 		`DELETE FROM users WHERE id = ?`,
 	} {

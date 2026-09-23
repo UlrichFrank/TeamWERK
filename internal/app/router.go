@@ -303,7 +303,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		// Eingeloggten auf die Anleitungs-Seite; die Typen-Liste liefert nur
 		// has_instruction (Change efficient-data-loading-quickwins).
 		r.Get("/api/duty-types/{id}/instruction", h.Duties.GetInstruction)
-		r.Get("/api/duty-accounts", h.Duties.Accounts)
 		r.Get("/api/duty-slots", h.Duties.ListSlots)
 		r.Get("/api/duty-slots/{id}/assignments", h.Duties.ListAssignments)
 		// Dienst-Kommentare (dienst-kommentare): Schreiben/Löschen prüft der
@@ -720,7 +719,6 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 				r.Put("/api/ausrichter/{id}", h.Settings.UpdateAusrichter)
 				r.Delete("/api/ausrichter/{id}", h.Settings.DeleteAusrichter)
 			}
-			r.Get("/api/duty-accounts/export", h.Duties.ExportAccounts)
 			r.Post("/api/duty-templates", h.Games.CreateTemplate)
 			r.Put("/api/duty-templates/{id}", h.Games.UpdateTemplate)
 			r.Delete("/api/duty-templates/{id}", h.Games.DeleteTemplate)

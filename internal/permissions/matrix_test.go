@@ -428,7 +428,6 @@ var matrix = []endpointCase{
 	// Anleitung-Volltext (Detail-Pfad): das Board verlinkt für alle Eingeloggten
 	// darauf; die Typen-Liste liefert nur has_instruction.
 	{method: "GET", path: "/api/duty-types/{id}/instruction", expected: exAuth},
-	{method: "GET", path: "/api/duty-accounts", expected: exAuth},
 	{method: "GET", path: "/api/duty-slots", expected: exAuth},
 	{method: "GET", path: "/api/duty-slots/{id}/assignments", expected: exAuth},
 	// Dienst-Kommentare (dienst-kommentare): Lesen universell, Schreiben/Löschen
@@ -782,7 +781,6 @@ var matrix = []endpointCase{
 	{method: "PUT", path: "/api/duty-types/{id}", expected: exVorstand},
 	{method: "PUT", path: "/api/duty-types/{id}/instruction", expected: exVorstand},
 	{method: "DELETE", path: "/api/duty-types/{id}", expected: exVorstand},
-	{method: "GET", path: "/api/duty-accounts/export", expected: exVorstand},
 	// Bewirtungsrotation: Spiele-zu-Kuchen-Verhältnis ändern.
 	{method: "PUT", path: "/api/settings/bewirtung", expected: exVorstand},
 	// Ausrichter-Liste pflegen.

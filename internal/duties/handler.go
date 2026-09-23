@@ -3,7 +3,6 @@ package duties
 import (
 	"context"
 	"database/sql"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -1364,11 +1363,6 @@ func (h *Handler) Claim(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "already claimed", http.StatusConflict)
 		return
 	}
-	// Ensure a duty_accounts row exists for the target user in the active season
-	h.db.ExecContext(r.Context(),
-		`INSERT OR IGNORE INTO duty_accounts (user_id, season_id, soll, ist)
-		 SELECT ?, id, 0, 0 FROM seasons WHERE is_active = 1`,
-		targetUserID)
 	h.broadcastDutySlot(r.Context(), slotID, claims.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -1565,7 +1559,7 @@ func (h *Handler) Fulfill(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Betrifft die (staff-weite) Dienst-Konten-Ansicht; Adressat schwer eng
+	// Betrifft Dienst-Bilanz und Rangliste (staff-weit); Adressat schwer eng
 	// einzugrenzen → bewusst global (niederfrequente Kassierer-/Vorstand-Aktion).
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
@@ -1606,69 +1600,9 @@ func (h *Handler) CashSubstitute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Betrifft die (staff-weite) Dienst-Konten-Ansicht → bewusst global.
+	// Betrifft Dienst-Bilanz und Rangliste (staff-weit) → bewusst global.
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// GET /api/duty-accounts
-func (h *Handler) Accounts(w http.ResponseWriter, r *http.Request) {
-	claims := auth.ClaimsFromCtx(r.Context())
-	var rows *sql.Rows
-	if claims.Role == "admin" {
-		rows, _ = h.db.QueryContext(r.Context(),
-			`SELECT da.user_id, u.first_name || ' ' || u.last_name, da.season_id, da.soll, da.ist
-			 FROM duty_accounts da JOIN users u ON u.id = da.user_id
-			 ORDER BY u.last_name, u.first_name`)
-	} else {
-		rows, _ = h.db.QueryContext(r.Context(),
-			`SELECT da.user_id, u.first_name || ' ' || u.last_name, da.season_id, da.soll, da.ist
-			 FROM duty_accounts da JOIN users u ON u.id = da.user_id
-			 WHERE da.user_id=?`, claims.UserID)
-	}
-	defer rows.Close()
-	type account struct {
-		UserID   int     `json:"user_id"`
-		Name     string  `json:"name"`
-		SeasonID int     `json:"season_id"`
-		Soll     float64 `json:"soll"`
-		Ist      float64 `json:"ist"`
-		Balance  float64 `json:"balance"`
-	}
-	result := []account{}
-	for rows.Next() {
-		var a account
-		rows.Scan(&a.UserID, &a.Name, &a.SeasonID, &a.Soll, &a.Ist)
-		a.Balance = a.Soll - a.Ist
-		result = append(result, a)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// GET /api/admin/duty-accounts/export
-func (h *Handler) ExportAccounts(w http.ResponseWriter, r *http.Request) {
-	rows, _ := h.db.QueryContext(r.Context(),
-		`SELECT u.first_name || ' ' || u.last_name, da.soll, da.ist, da.soll - da.ist as balance,
-		        COALESCE(SUM(CASE WHEN dassign.status='cash_substitute' THEN dassign.cash_amount ELSE 0 END), 0)
-		 FROM duty_accounts da
-		 JOIN users u ON u.id = da.user_id
-		 LEFT JOIN duty_assignments dassign ON dassign.user_id = da.user_id
-		 GROUP BY da.user_id, da.season_id
-		 ORDER BY u.last_name, u.first_name`)
-	defer rows.Close()
-	w.Header().Set("Content-Type", "text/csv")
-	w.Header().Set("Content-Disposition", `attachment; filename="dienstkonten.csv"`)
-	cw := csv.NewWriter(w)
-	cw.Write([]string{"Name", "Soll", "Ist", "Saldo", "Geldersatz"})
-	for rows.Next() {
-		var name string
-		var soll, ist, balance, cash float64
-		rows.Scan(&name, &soll, &ist, &balance, &cash)
-		cw.Write([]string{name,
-			fmtFloat(soll), fmtFloat(ist), fmtFloat(balance), fmtFloat(cash)})
-	}
-	cw.Flush()
 }
 
 func audiencesFromDB(ns sql.NullString) []string {
@@ -1707,11 +1641,7 @@ func (h *Handler) SetSeasonTargets(w http.ResponseWriter, r *http.Request) {
 			seasonID, t.DutyTypeID, t.TargetHours)
 	}
 	// Season-weite Ziel-Änderung ohne slot-spezifisches Team → globaler
-	// duties-Broadcast, damit alle Dienst-Konten-Ansichten neu laden.
+	// duties-Broadcast, damit alle Dienst-Ansichten neu laden.
 	h.hub.Broadcast("duties")
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func fmtFloat(f float64) string {
-	return fmt.Sprintf("%.2f", f)
 }

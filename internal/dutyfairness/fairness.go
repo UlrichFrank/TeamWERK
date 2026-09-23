@@ -2,9 +2,9 @@
 // wie viele Dienste bereits geleistet bzw. eingeplant sind, und welcher faire
 // Anteil aus den tatsächlich bekannten Dienst-Slots des Kaders folgt.
 //
-// Alles wird live aus duty_slots/duty_assignments gerechnet — bewusst ohne
-// duty_accounts, dessen ist-Wert nur beim Löschen eines Termins nachgezogen
-// wird (offener Change dienstkonto-ist-buchung). Ein Codepfad bedient drei
+// Alles wird live aus duty_slots/duty_assignments gerechnet; ein gespeichertes
+// Stundenkonto gibt es nicht (das frühere duty_accounts ist mit dem Change
+// dienstkonto-entfernen stillgelegt). Ein Codepfad bedient drei
 // Sichten: Dashboard-Kachel, anonymisierte Rangliste, Vorstands-Rangliste.
 //
 // Foundation statt Domain, weil internal/dashboard (Domain) dieselbe Berechnung
