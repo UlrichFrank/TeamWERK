@@ -12,6 +12,12 @@
 - [x] 2.2 `web/src/components/TerminMatrix.tsx`: Tabelle (sticky Namensspalte, Symbole, Legende, Kopf-Links) mit Vitest
 - [x] 2.3 `TerminePage.tsx`: Umschalter Liste/Tabelle (`view=tabelle`), Mannschafts-Einfachauswahl, Laden der Matrix, Live-Updates
 
-## 3. Abschluss
+## 3. Zu-/Absage und geteilte Teilnahme
 
-- [x] 3.1 `make test` / `pnpm -C web build test lint` / `openspec validate` grün
+- [ ] 3.1 RSVP-Fristen nach `internal/policy`, Matrix liefert `rsvp_locks_at`, `rsvp_require_reason`, `is_self`, `can_respond`, `locked`, eigene Gründe (+ Tests)
+- [ ] 3.2 `terminMatrix.ts`: Teilnahme getrennt nach Bisher/Geplant (+ Vitest)
+- [ ] 3.3 `TerminMatrix` + `TerminePage`: antippbare Zellen, Dialog mit den Listen-Funktionen (+ Vitest)
+
+## 4. Abschluss
+
+- [ ] 4.1 `make test` / `pnpm -C web build test lint` / `openspec validate` grün

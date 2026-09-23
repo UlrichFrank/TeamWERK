@@ -7,6 +7,12 @@ die Termine einer Mannschaft im Zeitraum als Spalten (`events`) und die Spieler 
 Kaders der aktiven Saison als Zeilen (`members`) liefern. Jede Zeile SHALL ein Array
 `cells` tragen, dessen i-ter Eintrag zum i-ten Termin in `events` gehört.
 
+Jede Spalte SHALL zusätzlich `rsvp_locks_at` (RFC3339; Trainingsbeginn − 2 h, Spielbeginn
+− 18 h) und `rsvp_require_reason` tragen. Jede Zeile SHALL `is_self` (Mitglied des
+Aufrufers) und `can_respond` (eigenes Mitglied oder Kind über `family_links`) tragen. Eine
+Zelle, deren Antwort aus einer erfassten Abwesenheit stammt (`absence_id` gesetzt), SHALL
+`locked=true` tragen.
+
 Spalten SHALL alle Trainings der Mannschaft (auch abgesagte, mit `cancelled=true`) und
 alle Spiele/Events, an denen die Mannschaft über `game_teams` beteiligt ist, mit Datum
 im Zeitraum umfassen, sortiert nach Datum und Uhrzeit. Jede Spalte SHALL `kind`
@@ -47,7 +53,7 @@ Vereinsfunktion `trainer` abrufbar sein, sonst nur für Nutzer, denen
 `user_accessible_teams` die Mannschaft in der aktiven Saison zuordnet. Andernfalls SHALL
 die Route 403 liefern, bei unbekannter Mannschaft 404.
 
-Die Matrix SHALL **keine** Absagegründe enthalten. Die erfasste Anwesenheit (`present`)
+Die Matrix SHALL Absagegründe nur in Zeilen mit `can_respond=true` enthalten. Die erfasste Anwesenheit (`present`)
 SHALL nur für Admin, sportliche Leitung und Trainer der Mannschaft in der aktiven
 Saison enthalten sein; für alle anderen SHALL das Feld fehlen.
 
@@ -68,9 +74,10 @@ stehen. In der Tabellenansicht SHALL genau eine Mannschaft gewählt sein (`team=
 Einfachauswahl über die Mannschaften des Nutzers); Übungsgruppen SHALL nicht zur
 Auswahl stehen. Typ-Filter und „Vergangene" SHALL auf die Spalten wirken.
 
-Die Tabelle SHALL je Spieler eine Spalte „Teilnahme" zeigen: Anzahl der Zusagen (bzw.
-der erfassten Anwesenheiten, wo vorhanden) und deren Anteil an den sichtbaren, nicht
-abgesagten und nicht per Serie abgemeldeten Terminen. Die Namensspalte SHALL beim
+Die Tabelle SHALL je Spieler zwei Teilnahme-Spalten zeigen, jeweils als Anzahl und Anteil
+an den sichtbaren, nicht abgesagten und nicht per Serie abgemeldeten Terminen:
+„Bisher" über die Termine vor heute (erfasste Anwesenheit, wo vorhanden, sonst Zusage)
+und „Geplant" über die Termine ab heute (Zusagen, auch per Voreinstellung). Die Namensspalte SHALL beim
 horizontalen Scrollen stehen bleiben; ein Spaltenkopf SHALL zur Termin-Detailseite
 führen. Die Ansicht SHALL sich bei `trainings`/`games`-Events live aktualisieren.
 
@@ -83,3 +90,36 @@ führen. Die Ansicht SHALL sich bei `trainings`/`games`-Events live aktualisiere
 - **WHEN** in der Tabellenansicht nur „Training" aktiv ist
 - **THEN** zeigt die Tabelle nur Trainingsspalten
 - **AND** die Teilnahme-Quote rechnet nur über diese Spalten
+
+#### Scenario: Teilnahme nach Vergangenheit und Zukunft getrennt
+- **WHEN** ein Spieler zwei vergangenen Trainings zugesagt und eines davon laut Erfassung verpasst hat und einem künftigen Training zugesagt hat
+- **THEN** zeigt die Trainer-Sicht „Bisher" `1 (50 %)` und „Geplant" `1 (100 %)`
+
+### Requirement: Zu-/Absage aus der Tabelle
+
+Die Tabellenansicht SHALL Zu-/Absagen mit derselben Semantik wie die Listenansicht
+erlauben: Eine Zelle SHALL antippbar sein, wenn ihre Zeile `can_respond=true` trägt, der
+Termin nicht abgesagt ist und keine Serien-Abmeldung vorliegt. Sie öffnet einen Dialog mit
+„Zusagen", „Vielleicht" und „Absagen", der über dieselben Routen
+(`POST /api/training-sessions/{id}/respond`, `POST /api/games/{id}/respond`, für Kinder
+mit `member_id`) antwortet.
+
+Die Schaltflächen SHALL gesperrt sein, wenn die Rückmeldefrist (`rsvp_locks_at`)
+verstrichen ist und der Nutzer die Frist nicht übergehen darf (Capability
+`manage_games`), oder wenn die Zelle `locked=true` trägt. Verlangt der Termin eine
+Begründung, SHALL „Vielleicht" und „Absagen" zuerst den Begründungs-Dialog der Liste
+öffnen. „Zusagen" in der eigenen Zeile SHALL wie in der Liste umschalten (aktive Zusage
+→ Vielleicht, Voreinstellung → echte Zusage).
+
+#### Scenario: Eigene Absage mit Begründung
+- **WHEN** ein Spieler in seiner Zeile ein künftiges Training antippt, das eine Begründung verlangt, und „Absagen" wählt
+- **THEN** erscheint der Begründungs-Dialog
+- **AND** nach dem Speichern zeigt die Zelle „abgesagt"
+
+#### Scenario: Fremde Zeile ist nicht antippbar
+- **WHEN** ein Spieler die Zeile eines Mitspielers betrachtet
+- **THEN** sind deren Zellen keine Schaltflächen
+
+#### Scenario: Frist verstrichen
+- **WHEN** die Rückmeldefrist eines Termins verstrichen ist und der Nutzer kein Trainer/Vorstand/Admin ist
+- **THEN** sind die Schaltflächen im Dialog deaktiviert und ein Hinweis nennt die Sperre

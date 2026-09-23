@@ -27,21 +27,30 @@ für **eine** Mannschaft und **viele** Termine auf einmal liefert, und eine Dars
     Kader als Zeilenmenge braucht.
   - Typ-Filter (Heim / Auswärts / Sonstiges / Training) und „Vergangene" wirken wie in
     der Liste — auf die Spalten.
-  - Spalte „Teilnahme" je Spieler: Zusagen (bzw. erfasste Anwesenheit) / sichtbare,
-    nicht abgesagte Termine, als `N (P %)` — rechnet über die **gefilterten** Spalten.
+  - Teilnahme je Spieler in zwei Spalten, jeweils über die **gefilterten** Spalten:
+    **„Bisher"** (vergangene Termine — erfasste Anwesenheit, wo vorhanden, sonst Zusage)
+    und **„Geplant"** (heute und künftig — Zusagen), jeweils als `N (P %)`.
+  - **Zu-/Absagen aus der Tabelle** mit derselben Semantik wie in der Liste: für die
+    eigene Zeile und die Zeilen der eigenen Kinder, gesperrt ab Rückmeldefrist (außer
+    Trainer/Vorstand/Admin), bei Abwesenheits-Sperre und Serien-Abmeldung; Begründungs-
+    Dialog bei Vielleicht/Absage, wenn der Termin eine Begründung verlangt.
   - Spaltenkopf verlinkt auf die Termin-Detailseite.
-- Keine Migration, keine Mutation (→ kein Broadcast nötig); die Ansicht abonniert
+- Keine Migration. Die Route selbst mutiert nicht; Zu-/Absagen laufen über die
+  bestehenden `POST …/respond`-Routen (die broadcasten bereits). Die Ansicht abonniert
   `trainings`/`games` über `useLiveUpdates`.
+- Die RSVP-Sperrfristen (Training 2 h, Spiel 18 h vor Beginn) wandern als Konstanten nach
+  `internal/policy`, damit `attendance` sie ohne Import einer anderen Domäne kennt.
 
 ## Nicht-Ziele
 
 - **Übungsgruppen** (Kader ohne `teams`-Zeile) bekommen keine Matrix — die Route hängt
   an `teams.id`, dieselbe Grenze wie die Anwesenheits-Statistik. In der Tabellenansicht
   stehen sie nicht zur Auswahl.
-- **Keine Absagegründe** in der Matrix. Die Sichtbarkeitsregeln der Gründe
-  (`rsvp-reason-visibility`) bleiben der Detailseite vorbehalten.
-- **Kein Antworten aus der Tabelle heraus.** Die Zelle ist Anzeige; RSVP geht weiter
-  über Liste und Detailseite.
+- **Keine fremden Absagegründe** in der Matrix. Nur Zeilen, für die der Aufrufer
+  antworten darf (eigene, Kinder), tragen ihren Grund — dieselbe Teilmenge, die
+  `rsvp-reason-visibility` Spielern und Eltern zeigt.
+- **Kein Antworten für Dritte.** Trainer/Vorstand dürfen serverseitig zwar für jedes
+  Kadermitglied antworten, die Liste bietet das aber nicht an — die Tabelle auch nicht.
 - **Trainer** erscheinen nicht als Zeile (sie sind bei Spielen per Definition zugesagt
   und haben keine Anwesenheitserfassung).
 
@@ -70,6 +79,10 @@ für **eine** Mannschaft und **viele** Termine auf einmal liefert, und eine Dars
 | | Serien-Abmeldung auf das Training | Zelle `unavailable=true` |
 | | Spieler (kein Trainer) bei erfasster Anwesenheit | `present` fehlt im JSON |
 | | Trainer der Mannschaft bei erfasster Anwesenheit | `present` gesetzt |
+| | Spieler: eigene Zeile `is_self`/`can_respond`, fremde Zeile nicht; eigener Grund sichtbar, fremder nicht | wie beschrieben |
+| | Elternteil: Zeile des Kindes `can_respond` | `can_respond=true` |
+| | Antwort mit `absence_id` | Zelle `locked=true` |
+| | Spalte trägt `rsvp_locks_at` (Training −2 h, Spiel −18 h) und `rsvp_require_reason` | wie beschrieben |
 | | Nutzer ohne Bezug zur Mannschaft | 403 |
 | | unbekannte Mannschaft | 404 |
 | | `from` ungültig / `from > to` / Zeitraum > 400 Tage | 400 |

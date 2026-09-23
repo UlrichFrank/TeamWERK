@@ -36,9 +36,11 @@ sie bündelt es. Berechtigt sind deshalb:
 Sonst **403**; unbekannte Mannschaft **404** (vor der Rechteprüfung — die Existenz einer
 Mannschaft ist über `/api/teams/names` ohnehin öffentlich).
 
-**Enger** als die Detailseite: **keine Gründe** (die Regel „Gründe nur für Trainer,
-sich selbst und die eigenen Kinder" bräuchte je Zelle eine Fallunterscheidung und
-gehört an die Stelle, an der man den Grund auch lesen will). **Anwesenheit (`present`)**
+**Enger** als die Detailseite: **keine fremden Gründe**. Ein Grund steht nur in Zeilen,
+für die der Aufrufer antworten darf (eigene Zeile, eigene Kinder) — das ist die Teilmenge
+der Regel „Gründe nur für Trainer, sich selbst und die eigenen Kinder", die ohne
+Fallunterscheidung je Zelle auskommt; Trainer lesen fremde Gründe weiter auf der
+Detailseite. **Anwesenheit (`present`)**
 nur für die, die die Anwesenheits-Statistik sehen dürfen (`canSeeTeamStats`: Admin,
 sportliche Leitung, Trainer dieser Mannschaft) — gleiche Grenze wie bei den Summen.
 
@@ -99,6 +101,32 @@ sinnvolle Card-Form — genau das ist ihr Zweck).
 subtle; Voreinstellung = dasselbe Symbol mit reduzierter Deckkraft. Anwesenheit (nur
 Trainer-Sicht) ersetzt das RSVP-Symbol durch `UserCheck`/`UserX`. Eine Legende unter der
 Tabelle erklärt die Symbole.
+
+### 6. Zu-/Absagen aus der Tabelle: dieselben Funktionen wie die Liste
+
+Die Tabelle bekommt keinen eigenen RSVP-Pfad. Ein Tipp auf eine eigene Zelle öffnet einen
+Dialog, dessen Schaltflächen **dieselben** Seitenfunktionen aufrufen wie die Karten der
+Liste (`respondTraining`/`respondGame`/`openReasonModal`) — inklusive Begründungs-Dialog,
+Fehlertext bei `rsvp_locked` und der Umschalt-Eigenheit von „Zusagen" in der eigenen Zeile.
+Nach einer erfolgreichen Antwort lädt die Matrix still nach (der SSE-Echo tut das
+ohnehin; das explizite Nachladen macht die Zelle ohne Verzögerung aktuell).
+
+Welche Zeilen antippbar sind, entscheidet der Server (`can_respond`), nicht der Client:
+eigenes Mitglied (`members.user_id`) oder Kind über `family_links` — genau die Zeilen, die
+die Liste als „Ich" bzw. Kindername anbietet. Die Sperrinformation (Frist, Abwesenheit,
+Begründungspflicht) liefert die Matrix mit, damit der Dialog ohne Zusatz-Request
+entscheidet. Die Fristen standen bisher als Konstanten in `games` und `trainings`;
+`attendance` darf keine der beiden Domänen importieren, deshalb liegen sie jetzt in
+`internal/policy` und die beiden Domänen verweisen darauf.
+
+### 7. „Bisher" und „Geplant"
+
+Eine einzige Quote über Vergangenheit und Zukunft vermischt zwei Fragen: „wie zuverlässig
+war der Spieler?" und „wer kommt?". Die Tabelle trennt sie am heutigen Datum (heutige
+Termine zählen zu „Geplant", sie haben noch nicht stattgefunden). „Bisher" zählt die
+erfasste Anwesenheit, wo es eine gibt, sonst die Zusage — für Spieler und Eltern, die die
+Anwesenheit nicht sehen (§2), ist das die bestmögliche Näherung, und in der Trainer-Sicht
+ist eine nicht erfasste Einheit ebenso auf die Zusage angewiesen.
 
 ## Risiken
 
