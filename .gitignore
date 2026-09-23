@@ -15,7 +15,7 @@ cmd/teamwerk/web/dist/
 teamwerk-backup.db
 backup/
 backup.*/
-storage/
+/storage/
 *.db-shm
 *.db-wal
 # Alles mit Suffix hinter der Endung: .db.bak, .db.pre-medien-backup, …
@@ -85,7 +85,7 @@ web/test-results/
 
 # Schulungsfolien: Demo-DB/Binary und generierte Screenshots (make schulung)
 docs/schulung/.build/
-docs/schulung/folien/img/
+#docs/schulung/folien/img/
 
 # Python-Bytecode (docs/schulung/tools, scripts/)
 __pycache__/
