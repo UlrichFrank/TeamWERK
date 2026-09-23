@@ -1736,10 +1736,14 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Der vorherige Status kommt aus demselben Lookup wie der Absence-Lock; er
+	// entscheidet nach dem Upsert, ob die Trainer eine Umentscheidung gemeldet
+	// bekommen. Keine Zeile = erste Antwort (prevStatus bleibt leer).
 	var existingAbsenceID sql.NullInt64
+	var prevStatus string
 	h.db.QueryRowContext(r.Context(),
-		`SELECT absence_id FROM training_responses WHERE training_id = ? AND member_id = ?`,
-		sessionID, memberID).Scan(&existingAbsenceID)
+		`SELECT absence_id, status FROM training_responses WHERE training_id = ? AND member_id = ?`,
+		sessionID, memberID).Scan(&existingAbsenceID, &prevStatus)
 	if existingAbsenceID.Valid {
 		httpx.WriteError(w, r, http.StatusForbidden, "rsvp_locked_absence", nil)
 		return
@@ -1788,7 +1792,42 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.broadcastSession(r.Context(), sessionID, "trainings")
+	h.notifyRSVPChange(r.Context(), sessionID, ownerKaderID, memberID, claims.UserID, prevStatus, req.Status, req.Reason)
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// notifyRSVPChange meldet den Trainern eine kurzfristige Umentscheidung
+// (rsvp-aenderung-trainer-push). Der Kader ist der der Einheit — damit sind
+// Übungsgruppen ohne `teams`-Zeile eingeschlossen. Ob überhaupt gemeldet wird,
+// entscheidet notify.RSVPChangeRecipients; jeder Fehler hier endet still in
+// „keine Meldung", die RSVP ist zu diesem Zeitpunkt bereits gespeichert.
+func (h *Handler) notifyRSVPChange(ctx context.Context, sessionID, kaderID, memberID, actorUserID int, prevStatus, newStatus, reason string) {
+	if prevStatus == "" || prevStatus == newStatus {
+		return
+	}
+	var title, date, start string
+	if err := h.db.QueryRowContext(ctx,
+		`SELECT COALESCE(title,''), date, start_time FROM training_sessions WHERE id=?`, sessionID).
+		Scan(&title, &date, &start); err != nil {
+		return
+	}
+	startAt, err := parseBerlinDateTime(date, start)
+	if err != nil {
+		return
+	}
+	notify.SendRSVPChange(h.db, h.cfg, notify.RSVPChange{
+		KaderIDs:    []int{kaderID},
+		MemberID:    memberID,
+		ActorUserID: actorUserID,
+		PrevStatus:  prevStatus,
+		NewStatus:   newStatus,
+		Reason:      reason,
+		Start:       startAt,
+		Now:         h.now(),
+		Subject:     sessionSubject(title),
+		When:        notify.EventWhen(date, start),
+		URL:         fmt.Sprintf("/termine?focus=training-%d", sessionID),
+	})
 }
 
 func writeRSVPLocked(w http.ResponseWriter, message string, locksAt time.Time) {
