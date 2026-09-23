@@ -39,10 +39,12 @@ function fmtDate(iso: string) {
   return d.length === 3 ? `${d[2]}.${d[1]}.${d[0]}` : iso
 }
 
-function quote(present: number, missed: number): string {
-  const denom = present + missed
-  if (denom === 0) return '–'
-  return `${Math.round((present / denom) * 100)}%`
+// Anteil am Gesamt der gezählten Termine. Bewusst keine einzelne Quote mehr:
+// die frühere `anwesend / (anwesend + fehlt)` nahm Entschuldigungen aus dem
+// Nenner und bewertete sie damit wie Anwesenheit (anwesenheit-quote-aufteilen).
+function share(n: number, total: number): string | null {
+  if (total === 0) return null
+  return `${Math.round((n / total) * 100)} %`
 }
 
 // Horizontaler Stacked-Bar grün/gelb/rot für die drei Säulen.
@@ -62,23 +64,31 @@ function StackedBar({ present, excused, missed }: { present: number; excused: nu
 }
 
 function PillarBlock({ title, present, excused, missed }: { title: string; present: number; excused: number; missed: number }) {
+  const total = present + excused + missed
+  const pillars = [
+    { key: 'present', n: present, label: 'anwesend', icon: <Check className="w-4 h-4 text-brand-green" /> },
+    { key: 'excused', n: excused, label: 'entschuldigt', icon: <MinusCircle className="w-4 h-4 text-brand-yellow" /> },
+    { key: 'missed', n: missed, label: 'fehlt', icon: <X className="w-4 h-4 text-brand-danger" /> },
+  ]
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
       <div className="flex items-baseline justify-between mb-3">
         <h3 className="font-semibold text-brand-text">{title}</h3>
-        <span className="text-sm text-brand-text-muted">Quote {quote(present, missed)}</span>
+        <span className="text-sm text-brand-text-muted">{total} {total === 1 ? 'Termin' : 'Termine'}</span>
       </div>
       <StackedBar present={present} excused={excused} missed={missed} />
-      <div className="mt-3 flex flex-wrap gap-3 text-sm">
-        <span className="inline-flex items-center gap-1 text-brand-text">
-          <Check className="w-4 h-4 text-brand-green" /> {present} anwesend
-        </span>
-        <span className="inline-flex items-center gap-1 text-brand-text">
-          <MinusCircle className="w-4 h-4 text-brand-yellow" /> {excused} entschuldigt
-        </span>
-        <span className="inline-flex items-center gap-1 text-brand-text">
-          <X className="w-4 h-4 text-brand-danger" /> {missed} fehlt
-        </span>
+      <div className="mt-3 grid grid-cols-3 gap-2 text-sm">
+        {pillars.map(p => (
+          <div key={p.key} data-testid={`pillar-${p.key}`} className="flex flex-col">
+            <span className="inline-flex items-center gap-1 text-brand-text">
+              {p.icon} {p.label}
+            </span>
+            <span className="text-brand-text">
+              <span className="font-semibold">{share(p.n, total) ?? '–'}</span>
+              <span className="text-brand-text-muted"> ({p.n})</span>
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
