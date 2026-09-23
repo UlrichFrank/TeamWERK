@@ -55,7 +55,6 @@ Gilt für alle Nutzer mit Systemrolle `standard` oder `admin`.
 | **Dienstbörse** | `GET /api/duty-board` | Offene Dienst-Slots |
 | | `POST /api/duty-board/{slotId}/claim` | Dienst übernehmen |
 | | `DELETE /api/duty-board/{slotId}/claim` | Dienst zurückgeben |
-| | `GET /api/duty-accounts` | Dienst-Kontostand |
 | | `GET /api/duty-slots` | Slot-Liste |
 | | `GET /api/duty-slots/{id}/assignments` | Slot-Belegungen |
 | **Mitfahrgelegenheiten** | `GET /api/mitfahrgelegenheiten` | Angebote anzeigen |
@@ -152,7 +151,6 @@ Gilt für alle Nutzer mit Systemrolle `standard` oder `admin`.
 | | `POST /api/admin/duty-types` | Diensttyp anlegen |
 | | `PUT /api/admin/duty-types/{id}` | Diensttyp bearbeiten |
 | | `DELETE /api/admin/duty-types/{id}` | Diensttyp löschen |
-| **Dienst-Konten** | `GET /api/admin/duty-accounts/export` | Konten exportieren |
 | **Dienst-Templates** | `GET /api/admin/duty-templates` | Templates auflisten |
 | | `POST /api/admin/duty-templates` | Template anlegen |
 | | `GET /api/admin/duty-templates/{id}` | Template lesen |
