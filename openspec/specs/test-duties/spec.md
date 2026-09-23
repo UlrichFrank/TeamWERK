@@ -1,7 +1,7 @@
 # test-duties Specification
 
 ## Purpose
-Fachliche Testabdeckung für die Dienstbörse: Slot-Kapazität bei Claim/Unclaim, Proxy-Kind-Claim durch Elternteil, Board-Sichtbarkeit nach Rolle/Team, Audience-Filterung, Dienstkonten-Sichtbarkeit sowie das `is_custom`-Flag bei Slot-Mutationen.
+Fachliche Testabdeckung für die Dienstbörse: Slot-Kapazität bei Claim/Unclaim, Proxy-Kind-Claim durch Elternteil, Board-Sichtbarkeit nach Rolle/Team, Audience-Filterung sowie das `is_custom`-Flag bei Slot-Mutationen.
 
 ## Requirements
 
@@ -10,7 +10,7 @@ Das System SHALL `slots_filled` beim Claim erhöhen und beim Unclaim verringern.
 
 #### Scenario: Freien Slot claimen
 - **WHEN** User POST /api/duty-board/{slotId}/claim auf Slot mit slots_total=2, slots_filled=0
-- **THEN** HTTP 204, `duty_assignments` mit status=pending angelegt, `duty_slots.slots_filled=1`, `duty_accounts`-Eintrag für aktive Saison existiert
+- **THEN** HTTP 204, `duty_assignments` mit status=pending angelegt, `duty_slots.slots_filled=1`
 
 #### Scenario: Vollen Slot claimen
 - **WHEN** User POST auf Slot mit slots_total=1, slots_filled=1
@@ -72,17 +72,6 @@ Das System SHALL Slots mit definiertem `audiences`-Array nur für passende Nutze
 #### Scenario: view=mine filtert auf eigene Slots
 - **WHEN** User GET /api/duty-board?view=mine, User hat 2 von 5 Slots geclaimt
 - **THEN** Genau 2 Slots
-
-### Requirement: Dienstkonten-Sichtbarkeit
-Das System SHALL Admins alle Dienstkonten zeigen, anderen Nutzern nur das eigene. Balance wird als soll−ist berechnet.
-
-#### Scenario: Admin sieht alle Konten
-- **WHEN** Admin GET /api/duty-accounts mit 3 Einträgen für verschiedene User
-- **THEN** Alle 3 Einträge, jeder mit balance=soll-ist
-
-#### Scenario: Standard-User sieht nur eigenes Konto
-- **WHEN** Standard-User GET /api/duty-accounts
-- **THEN** Nur eigener Eintrag
 
 ### Requirement: is_custom-Flag bei Slot-Mutations
 Das System SHALL jeden manuell angelegten oder bearbeiteten Slot mit `is_custom=1` markieren. Beim Löschen eines Slots werden eingetragene Nutzer benachrichtigt.

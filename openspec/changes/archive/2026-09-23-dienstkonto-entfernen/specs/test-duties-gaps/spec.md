@@ -1,10 +1,6 @@
-# test-duties-gaps Specification
+# Spec Delta
 
-## Purpose
-
-Diese Spezifikation beschreibt die Capability `test-duties-gaps`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Diensterfüllung und Geldersatz
 Das System SHALL einen Trainer in die Lage versetzen, eine Dienstzuweisung als erfüllt zu markieren oder einen Geldersatz zu vermerken.
@@ -16,10 +12,3 @@ Das System SHALL einen Trainer in die Lage versetzen, eine Dienstzuweisung als e
 #### Scenario: Geldersatz vermerken
 - **WHEN** Trainer POST /api/duty-assignments/{id}/cash-substitute mit `{ amount: 15.0 }`
 - **THEN** HTTP 204, `duty_assignments.status='cash_substitute'`, `cash_amount=15.0`
-
-### Requirement: Zuweisungen eines Slots auflisten
-Das System SHALL einem Trainer die Möglichkeit geben, alle Zuweisungen eines Dienst-Slots einzusehen.
-
-#### Scenario: Assignments eines Slots lesen
-- **WHEN** GET /api/duty-slots/{id}/assignments für Slot mit 2 Assignments
-- **THEN** HTTP 200, Liste mit 2 Einträgen, jeder mit user_name, status, cash_amount

@@ -1,9 +1,6 @@
-# dienst-fuer-familienmitglied Specification
+# Spec Delta
 
-## Purpose
-Ein Elternteil kann auf der Dienstbörse einen Dienst stellvertretend für ein verknüpftes Kind mit aktivem Proxy-Account (`can_login = 0`) beanspruchen. Der Dienst wird dem `user_id` des Kindes zugebucht, nicht dem Elternteil.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Elternteil beansprucht Dienst stellvertretend für ein Kind
 Das System SHALL es einem Elternteil ermöglichen, auf der Dienstbörse einen Dienst für ein verknüpftes Kind mit aktivem Proxy-Account zu beanspruchen. Der Dienst wird dem `user_id` des Kindes zugebucht.
@@ -30,11 +27,3 @@ Das System SHALL es einem Elternteil ermöglichen, auf der Dienstbörse einen Di
 #### Scenario: Kind hat Dienst bereits belegt
 - **WHEN** ein Elternteil versucht, denselben Slot erneut für dasselbe Kind zu beanspruchen
 - **THEN** antwortet der Server mit HTTP 409 (UNIQUE-Constraint auf `duty_assignments`)
-
-### Requirement: Dienstbörse zeigt Proxy-Account-Namen korrekt an
-Das System SHALL Proxy-Account-Inhaber (Kinder) in der Assignee-Liste eines Slots mit ihrem Namen anzeigen, ohne Kontaktdaten (E-Mail, Telefon).
-
-#### Scenario: Kind als Assignee in der Dienstbörse
-- **WHEN** ein Kind mit Proxy-Account einen Dienst übernommen hat
-- **THEN** erscheint sein Name in der Assignee-Liste des Slots
-- **THEN** sind keine Telefonnummern oder E-Mail-Adresse sichtbar (Proxy-Account hat keine)

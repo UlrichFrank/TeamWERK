@@ -7,7 +7,7 @@ Diese Spezifikation beschreibt die Capability `mobile-table-cards`. (Automatisch
 ## Requirements
 
 ### Requirement: Tabellen-Seiten zeigen Card-Layout auf Mobile
-Alle 6 Tabellen-Seiten (AdminUsersPage, AdminTeamsPage, MembersPage, AdminDutyTypesPage, DutyAccountsPage, DutySlotsPage) SHALL auf Viewports unter 640px anstelle der `<table>`-Struktur ein Card-basiertes Layout anzeigen. Jede Tabellenzeile MUSS als eigenständige Card erscheinen.
+Alle 5 Tabellen-Seiten (AdminUsersPage, AdminTeamsPage, MembersPage, AdminDutyTypesPage, DutySlotsPage) SHALL auf Viewports unter 640px anstelle der `<table>`-Struktur ein Card-basiertes Layout anzeigen. Jede Tabellenzeile MUSS als eigenständige Card erscheinen.
 
 #### Scenario: Card-Layout auf Mobile
 - **WHEN** der Viewport unter 640px ist
@@ -26,7 +26,6 @@ Jede Card SHALL den Namen / Primärwert des Datensatzes als Hauptzeile und die w
 - **AdminTeamsPage**: Teamname (groß) + Altersklasse · Status-Badge
 - **MembersPage**: Nachname, Vorname (groß) + Position · Status-Badge
 - **AdminDutyTypesPage**: Name (groß) + Stundenwert · Geldersatz (wenn vorhanden)
-- **DutyAccountsPage**: Name (groß) + Soll/Ist-Werte · Differenz-Badge
 - **DutySlotsPage**: Event-Name (groß) + Datum · Diensttyp · Belegungs-Anzeige
 
 #### Scenario: Primärfeld immer sichtbar

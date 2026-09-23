@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change dienste-kaskadiert-loeschen. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Dienste werden beim Löschen eines Termins automatisch mitgelöscht
 Wenn ein Spiel oder Sonstiger Termin gelöscht wird, MUST alle verknüpften `duty_slots` (und deren `duty_assignments` via vorhandenem CASCADE) automatisch gelöscht werden. Es gibt keinen opt-out.
 
@@ -32,14 +34,3 @@ Das Frontend DARF keine Möglichkeit anbieten, Dienste beim Löschen eines Termi
 - **WHEN** ein Admin die Löschen-Bestätigung für einen Termin mit Diensten öffnet
 - **THEN** gibt es keine Checkbox "Verknüpfte Dienste ebenfalls löschen"
 - **THEN** zeigt der Dialog an, wie viele Dienste mitgelöscht werden
-
-### Requirement: Konto-Konsistenz bei Cascade-Delete
-
-Wenn beim Cascade-Delete `fulfilled`-Assignments entfernt werden, SHALL das System `duty_accounts.ist` für die betroffenen `(user, season)`-Paare in derselben Transaktion neu berechnen, damit keine „Geister-Stunden" für nicht mehr existierende Dienste im Konto stehen bleiben.
-
-#### Scenario: Fulfilled-Dienst wird mit dem Event gelöscht
-
-- **WHEN** ein Event mit einem `fulfilled`-Dienst (z.B. 2h) gelöscht wird
-- **THEN** ist nach dem Delete `duty_accounts.ist` für den Zugewiesenen um die Stunden dieses Dienstes geringer
-- **AND** spiegelt die Summe der verbliebenen `fulfilled`-Assignments der Saison wider
-

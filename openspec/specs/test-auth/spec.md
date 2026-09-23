@@ -103,4 +103,4 @@ Das System SHALL beim Löschen eines Nutzers alle abhängigen Daten in einer Tra
 
 #### Scenario: Cascade-Löschung
 - **WHEN** Admin DELETE /api/admin/users/{andere_id}
-- **THEN** HTTP 204; `refresh_tokens`, `duty_assignments`, `duty_accounts`, `family_links` des Nutzers sind entfernt
+- **THEN** HTTP 204; `refresh_tokens`, `duty_assignments`, `family_links` des Nutzers sind entfernt

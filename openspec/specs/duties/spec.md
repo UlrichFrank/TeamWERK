@@ -3,7 +3,9 @@
 ## Purpose
 
 Diese Spezifikation beschreibt die Capability `duties`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
 ## Requirements
+
 ### Requirement: Duty board (Dienstbörse)
 Das System SHALL eine Dienstbörse mit allen Duty-Slots anzeigen. Jeder Slot enthält neben den bisherigen Informationen (event name, date, duty type, vacancies) auch die Liste der eingetragenen Personen mit privacy-gefiltertem Kontaktdaten-Payload. Beim Beanspruchen eines Slots MUSS für Elternteile mit verknüpften Kindern mit Proxy-Account ein „Für wen?"-Selektor erscheinen. Das Beanspruchen eines Slots MUSS race-frei implementiert sein: die Prüfung auf verfügbare Kapazität, das Eintragen des Nutzers und das Aktualisieren des Zählers MÜSSEN als eine atomare Operation erfolgen, die auch bei gleichzeitigen Anfragen korrekt funktioniert.
 
@@ -328,14 +330,14 @@ Der Wert SHALL beim Erzeugen des Slots **materialisiert** werden, wie `event_tim
 `slots_total` und `audiences` es bereits werden. Ein Slot SHALL zur Laufzeit weder die
 Vorlage noch den Diensttyp nach seiner Dauer befragen.
 
-`duty_accounts.ist` SHALL aus `SUM(duty_slots.hours_value)` der `fulfilled`-Zuweisungen
-aggregiert werden, nicht aus `duty_types.hours_value`.
+Jede Auswertung geleisteter Dienststunden (Dienst-Bilanz, Rangliste) SHALL die Dauer aus
+`duty_slots.hours_value` lesen, nicht aus `duty_types.hours_value`.
 
 #### Scenario: Dauer eines Slots weicht vom Diensttyp ab
 
 - **WHEN** ein Vorstand die Dauer eines Slots von 1,0 auf 2,0 Stunden ändert
 - **THEN** zeigt die Dienstbörse für diesen Slot die längere Spanne
-- **AND** rechnet eine Neuberechnung von `duty_accounts.ist` mit 2,0 Stunden für diesen Slot
+- **AND** zählt eine Auswertung geleisteter Stunden diesen Slot mit 2,0 Stunden
 - **AND** bleibt die Dauer des zugrundeliegenden Diensttyps unverändert
 
 #### Scenario: Spätere Änderung am Diensttyp erreicht bestehende Slots nicht
@@ -716,4 +718,3 @@ Team und ohne Spiel bleibt nur für Vorstand/Admin sichtbar.
 #### Scenario: Slot ohne Spiel behält seinen Team-Geltungsbereich
 - **WHEN** ein Dienst-Slot ohne `game_id`, aber mit `team_id = A` angelegt wird
 - **THEN** sehen ihn nur Mitglieder von Team A und deren Eltern
-

@@ -7,7 +7,9 @@ Definiert die verbindliche Autorisierungs-Matrix von TeamWERK: welche Persona
 Backend-Routen erreichen darf und welche Frontend-Routen, Navigations-Items und
 Page-internen Aktionen sichtbar sind. Dient als Quelle der Wahrheit für die
 mechanischen Drift-Tests (`TestPermissionMatrix_Backend`, Vitest-Smoke-Tests).
+
 ## Requirements
+
 ### Requirement: Persona-Definition
 
 Das System SHALL die folgenden 12 Personas als Test-Fixtures bereitstellen. Sie decken alle praktisch relevanten Kombinationen aus System-Rolle, Vereinsfunktion(en) und Eltern-Status ab, mit besonderem Fokus auf den im Verein häufigen Fall, dass funktionsführende Mitglieder gleichzeitig Eltern sind.
@@ -65,7 +67,7 @@ Betroffene Endpoint-Gruppen (Auswahl, vollständige Liste im Matrix-Test):
 - **Profil-Self:** `GET/PUT /api/profile/me`, `/vehicle`, `/account`, `/phones`, `/visibility`, `/reminder-preference`, `/absence-visibility`, `/notification-preferences`, `POST /api/profile/password`, `POST /api/profile/email`
 - **Kind-Profil:** `GET/PUT /api/profile/kind/{memberId}/...`, `POST/DELETE /api/profile/kind/{memberId}/photo|phones`
 - **Dashboard:** `GET /api/dashboard`
-- **Dienste (Self-Service):** `GET /api/duty-board`, `POST/DELETE /api/duty-board/{slotId}/claim`, `GET /api/duty-types/{id}/instruction`, `GET /api/duty-accounts`, `GET /api/duty-slots`, `GET /api/duty-slots/{id}/assignments`, `GET /api/duty-fairness/rangliste`
+- **Dienste (Self-Service):** `GET /api/duty-board`, `POST/DELETE /api/duty-board/{slotId}/claim`, `GET /api/duty-types/{id}/instruction`, `GET /api/duty-slots`, `GET /api/duty-slots/{id}/assignments`, `GET /api/duty-fairness/rangliste`
 - **Mitfahrgelegenheiten:** `GET/POST /api/mitfahrgelegenheiten`, `DELETE /api/mitfahrgelegenheiten/{id}`, `POST /api/mitfahrt-paarungen` (+ confirm/reject)
 - **Push:** `GET /api/push/vapid-public-key`, `POST/DELETE /api/push/subscribe`
 - **Dokumente:** `GET /api/folders`, `POST /api/folders`, `GET /api/folders/{id}/contents`, … (Pro-Folder-Permission filtert auf Inhaltsebene)
@@ -163,7 +165,7 @@ Betroffene Endpoints:
 - **Nutzer:** `GET/POST /api/users`, `PUT/DELETE /api/users/{id}`, `PUT /api/users/{id}/role`, `PUT /api/users/{id}/recovery-email`
 - **Einladungen und Beitrittsanfragen:** `POST /api/auth/invite`, `GET /api/invitations`, `DELETE /api/invitations/{id}`, `POST /api/invitations/{id}/send`, `PUT /api/invitations/{id}/member`, `POST /api/invitations/import-csv`, `GET /api/membership-requests`, `POST /api/membership-requests/{id}/approve|reject`, `DELETE /api/membership-requests/{id}`
 - **Saisons und Teams:** `POST /api/seasons`, `PUT/DELETE /api/seasons/{id}`, `PUT /api/seasons/{id}/activate`, `PUT /api/seasons/{id}/duty-targets`, `POST /api/teams`, `PUT /api/teams/{id}`
-- **Dienste:** `POST /api/duty-types`, `PUT/DELETE /api/duty-types/{id}`, `PUT /api/duty-types/{id}/instruction`, `POST /api/duty-templates`, `PUT/DELETE /api/duty-templates/{id}`, `GET /api/duty-accounts/export`, `POST /api/duty-slots/bulk-regen/preview|apply`
+- **Dienste:** `POST /api/duty-types`, `PUT/DELETE /api/duty-types/{id}`, `PUT /api/duty-types/{id}/instruction`, `POST /api/duty-templates`, `PUT/DELETE /api/duty-templates/{id}`, `POST /api/duty-slots/bulk-regen/preview|apply`
 - **Heimspieltage:** `POST /api/ausrichter`, `PUT/DELETE /api/ausrichter/{id}`, `PUT /api/settings/bewirtung`
 - **Spielimport:** `POST /api/games/import/h4a/preview|apply`
 - **Stammdaten:** `PUT /api/age-class-rules/{ageClass}`, `POST /api/training-group-categories`, `DELETE /api/training-group-categories/{name}`, `POST /api/stammvereine`, `PUT/DELETE /api/stammvereine/{id}`
