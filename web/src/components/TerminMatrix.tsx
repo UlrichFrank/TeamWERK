@@ -54,10 +54,13 @@ interface Props {
 export default function TerminMatrix({ matrix, columns }: Props) {
   const { events, members } = matrix
   const withPresence = members.some(m => m.cells.some(c => c.present !== undefined))
+  // Abgesagte Termine stehen als durchgestrichene Spalte in der Tabelle, zählen
+  // hier aber nicht mit — wie im Nenner der Teilnahme-Quote.
+  const held = columns.filter(i => !events[i].cancelled)
   const counts = {
-    training: columns.filter(i => events[i].event_type === 'training').length,
-    spiele: columns.filter(i => events[i].event_type === 'heim' || events[i].event_type === 'auswärts').length,
-    sonstige: columns.filter(i => events[i].event_type === 'generisch').length,
+    training: held.filter(i => events[i].event_type === 'training').length,
+    spiele: held.filter(i => events[i].event_type === 'heim' || events[i].event_type === 'auswärts').length,
+    sonstige: held.filter(i => events[i].event_type === 'generisch').length,
   }
 
   if (members.length === 0) {

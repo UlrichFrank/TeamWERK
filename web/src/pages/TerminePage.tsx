@@ -573,7 +573,7 @@ export default function TerminePage() {
               value={matrixTeamId ?? ''}
               onChange={e => updateFilter({ matrixTeam: parseInt(e.target.value) })}
               aria-label="Mannschaft"
-              className={`${HEADER_FIELD} min-w-0 max-w-[12rem]`}
+              className={`${HEADER_FIELD} pr-8 min-w-0 max-w-[12rem]`}
             >
               {buildTeamOptions(teams).map(o => (
                 <option key={o.id} value={o.id}>{o.label}</option>
