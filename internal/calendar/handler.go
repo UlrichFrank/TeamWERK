@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	_ "time/tzdata"
+	"unicode/utf8"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/timez"
@@ -330,6 +332,45 @@ type calEvent struct {
 	Start       time.Time
 	End         time.Time
 	HasEnd      bool
+	// Stamp wird zum DTSTAMP. Er stammt aus created_at des Termins, damit
+	// derselbe Datenstand bei jedem Abruf denselben Body liefert.
+	Stamp time.Time
+	// AllDay schreibt DTSTART/DTEND als VALUE=DATE statt mit TZID — für
+	// Dienste ohne event_time, die sonst als Termin um Mitternacht erschienen.
+	AllDay bool
+}
+
+// venueLocation bildet die LOCATION-Zeile „Name, Straße, PLZ Ort". Ohne Namen
+// bleibt sie leer — eine Adresse ohne Hallennamen wäre nicht wiedererkennbar.
+func venueLocation(name, street, postal, city string) string {
+	if name == "" {
+		return ""
+	}
+	parts := []string{name}
+	if street != "" {
+		parts = append(parts, street)
+	}
+	if postal != "" || city != "" {
+		parts = append(parts, strings.TrimSpace(postal+" "+city))
+	}
+	return strings.Join(parts, ", ")
+}
+
+// parseStamp liest ein created_at als UTC. Die Spalte trägt je nach Treiberweg
+// RFC3339 oder die zonenlose SQLite-Form „2006-01-02 15:04:05"; letztere ist
+// UTC ohne Kennung und darf nicht als Ortszeit gelesen werden (Gotcha
+// „SQLite DATETIME-Felder"). Nicht parsebar → jetzt, ein VEVENT ohne DTSTAMP
+// darf nicht entstehen.
+func parseStamp(s string) time.Time {
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t.UTC()
+	}
+	for _, layout := range []string{"2006-01-02 15:04:05", "2006-01-02T15:04:05"} {
+		if t, err := time.ParseInLocation(layout, s, time.UTC); err == nil {
+			return t
+		}
+	}
+	return time.Now().UTC()
 }
 
 // kaderMembership vereint die drei Arten, auf die ein Nutzer an einem Kader
@@ -361,7 +402,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		    g.id, g.date, g.time, g.end_time, g.end_date,
 		    g.opponent, g.event_type, g.is_home, g.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
-		    t.name, mem.is_extended,
+		    t.name, mem.is_extended, g.created_at,
 		    EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id = g.id) AS lineup_exists,
 		    EXISTS(SELECT 1 FROM game_lineup gl2
 		           WHERE gl2.game_id = g.id AND gl2.member_id = mem.member_id) AS in_lineup
@@ -394,9 +435,10 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		var note string
 		var vName, vStreet, vPostal, vCity, teamName string
 		var lineupExists, inLineup bool
+		var createdAt string
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &endDate,
 			&opponent, &eventType, &isHome, &note,
-			&vName, &vStreet, &vPostal, &vCity, &teamName, &isExtended,
+			&vName, &vStreet, &vPostal, &vCity, &teamName, &isExtended, &createdAt,
 			&lineupExists, &inLineup); err != nil {
 			continue
 		}
@@ -408,18 +450,6 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		state := resolveLineupState(isExtended, eventType, lineupExists, inLineup)
 		summary := gameTitle(eventType, isHome, opponent,
 			kaderLabel(teamName, isExtended, state))
-
-		var location string
-		if vName != "" {
-			parts := []string{vName}
-			if vStreet != "" {
-				parts = append(parts, vStreet)
-			}
-			if vPostal != "" || vCity != "" {
-				parts = append(parts, strings.TrimSpace(vPostal+" "+vCity))
-			}
-			location = strings.Join(parts, ", ")
-		}
 
 		startDT := timez.ParseDT(date, startTime, loc)
 
@@ -440,11 +470,12 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		events = append(events, calEvent{
 			UID:         fmt.Sprintf("game-%d@teamwerk", id),
 			Summary:     summary,
-			Location:    location,
+			Location:    venueLocation(vName, vStreet, vPostal, vCity),
 			Description: joinDescription(note, state.sentence()),
 			Start:       startDT,
 			End:         endDT,
 			HasEnd:      hasEnd,
+			Stamp:       parseStamp(createdAt),
 		})
 	}
 	return events, rows.Err()
@@ -476,7 +507,7 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int, includeTeams, incl
 		    ts.id, ts.date, ts.start_time, ts.end_time,
 		    COALESCE(t.name, k.name, ''), ts.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
-		    mem.is_extended
+		    mem.is_extended, ts.created_at
 		FROM training_sessions ts
 		JOIN kader k ON k.id = ts.kader_id
 		LEFT JOIN teams t ON t.id = ts.team_id
@@ -504,8 +535,9 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int, includeTeams, incl
 		var date, startTime, endTime, groupName, note string
 		var vName, vStreet, vPostal, vCity string
 		var isExtended bool
+		var createdAt string
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &groupName, &note,
-			&vName, &vStreet, &vPostal, &vCity, &isExtended); err != nil {
+			&vName, &vStreet, &vPostal, &vCity, &isExtended, &createdAt); err != nil {
 			continue
 		}
 		if seen[id] {
@@ -516,38 +548,35 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int, includeTeams, incl
 		if groupName != "" {
 			summary = "Training: " + kaderLabel(groupName, isExtended, lineupNone)
 		}
-		var location string
-		if vName != "" {
-			parts := []string{vName}
-			if vStreet != "" {
-				parts = append(parts, vStreet)
-			}
-			if vPostal != "" || vCity != "" {
-				parts = append(parts, strings.TrimSpace(vPostal+" "+vCity))
-			}
-			location = strings.Join(parts, ", ")
-		}
 		start := timez.ParseDT(date, startTime, loc)
 		end := timez.ParseDT(date, endTime, loc)
 		events = append(events, calEvent{
 			UID:         fmt.Sprintf("training-%d@teamwerk", id),
 			Summary:     summary,
-			Location:    location,
+			Location:    venueLocation(vName, vStreet, vPostal, vCity),
 			Description: note,
 			Start:       start,
 			End:         end,
 			HasEnd:      true,
+			Stamp:       parseStamp(createdAt),
 		})
 	}
 	return events, rows.Err()
 }
 
 func (h *Handler) fetchDuties(r *http.Request, userID int) ([]calEvent, error) {
+	// Der Ort kommt über den Spielbezug des Slots; beide Joins sind LEFT, damit
+	// Dienste ohne Spiel (team_id statt game_id) und Spiele ohne Venue ohne
+	// LOCATION im Feed bleiben statt herauszufallen.
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT ds.id, ds.event_name, ds.event_date, COALESCE(ds.event_time,''), dt.name
+		SELECT ds.id, ds.event_name, ds.event_date, COALESCE(ds.event_time,''), dt.name,
+		       ds.hours_value, COALESCE(ds.role_desc,''), ds.created_at,
+		       COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,'')
 		FROM duty_slots ds
 		JOIN duty_assignments da ON da.duty_slot_id = ds.id
 		JOIN duty_types dt ON dt.id = ds.duty_type_id
+		LEFT JOIN games g ON g.id = ds.game_id
+		LEFT JOIN venues v ON v.id = g.venue_id
 		WHERE da.user_id = ? AND da.status IN ('assigned','fulfilled')
 		ORDER BY ds.event_date, ds.event_time`, userID)
 	if err != nil {
@@ -559,23 +588,47 @@ func (h *Handler) fetchDuties(r *http.Request, userID int) ([]calEvent, error) {
 	var events []calEvent
 	for rows.Next() {
 		var id int
-		var eventName, eventDate, eventTime, dutyTypeName string
-		if err := rows.Scan(&id, &eventName, &eventDate, &eventTime, &dutyTypeName); err != nil {
+		var eventName, eventDate, eventTime, dutyTypeName, roleDesc, createdAt string
+		var hours float64
+		var vName, vStreet, vPostal, vCity string
+		if err := rows.Scan(&id, &eventName, &eventDate, &eventTime, &dutyTypeName,
+			&hours, &roleDesc, &createdAt,
+			&vName, &vStreet, &vPostal, &vCity); err != nil {
 			continue
 		}
-		if eventTime == "" {
-			eventTime = "00:00"
+		e := calEvent{
+			UID:         fmt.Sprintf("duty-%d@teamwerk", id),
+			Summary:     "Dienst: " + dutyTypeName + " – " + eventName,
+			Location:    venueLocation(vName, vStreet, vPostal, vCity),
+			Description: roleDesc,
+			HasEnd:      true,
+			Stamp:       parseStamp(createdAt),
 		}
-		start := timez.ParseDT(eventDate, eventTime, loc)
-		events = append(events, calEvent{
-			UID:     fmt.Sprintf("duty-%d@teamwerk", id),
-			Summary: "Dienst: " + dutyTypeName + " – " + eventName,
-			Start:   start,
-			End:     start.Add(time.Hour),
-			HasEnd:  true,
-		})
+		if eventTime == "" {
+			// Ohne Uhrzeit ist die Aussage „irgendwann an diesem Tag" — ein
+			// Termin ab Mitternacht über hours_value wäre erfunden.
+			e.AllDay = true
+			e.Start = timez.ParseDT(eventDate, "", loc)
+			e.End = e.Start.AddDate(0, 0, 1)
+		} else {
+			e.Start = timez.ParseDT(eventDate, eventTime, loc)
+			e.End = e.Start.Add(dutyDuration(hours))
+		}
+		events = append(events, e)
 	}
 	return events, rows.Err()
+}
+
+// dutyDuration rechnet duty_slots.hours_value (bereits durch die Ablösekette
+// gekappt) in eine Dauer um. Nicht-positive Werte stammen aus kaputten
+// Bestandszeilen und fallen auf eine Stunde zurück, damit kein Event mit
+// DTEND <= DTSTART entsteht. Gerundet auf Minuten gegen Float-Rauschen.
+func dutyDuration(hours float64) time.Duration {
+	d := time.Duration(math.Round(hours*60)) * time.Minute
+	if d <= 0 {
+		return time.Hour
+	}
+	return d
 }
 
 // ── iCal rendering ───────────────────────────────────────────────────────────
@@ -588,9 +641,17 @@ func renderICal(events []calEvent, calName string) string {
 	writeLine(&sb, "X-WR-CALNAME:"+escapeText(calName))
 	writeLine(&sb, "CALSCALE:GREGORIAN")
 	writeLine(&sb, "METHOD:PUBLISH")
+	for _, l := range vtimezoneBerlin {
+		writeLine(&sb, l)
+	}
 	for _, e := range events {
 		sb.WriteString("BEGIN:VEVENT\r\n")
 		writeField(&sb, "UID", e.UID)
+		stamp := e.Stamp
+		if stamp.IsZero() {
+			stamp = time.Now()
+		}
+		writeLine(&sb, "DTSTAMP:"+stamp.UTC().Format("20060102T150405Z"))
 		writeField(&sb, "SUMMARY", escapeText(e.Summary))
 		if e.Location != "" {
 			writeField(&sb, "LOCATION", escapeText(e.Location))
@@ -598,9 +659,15 @@ func renderICal(events []calEvent, calName string) string {
 		if e.Description != "" {
 			writeField(&sb, "DESCRIPTION", escapeText(e.Description))
 		}
-		writeLine(&sb, "DTSTART;TZID=Europe/Berlin:"+formatDT(e.Start))
-		if e.HasEnd {
-			writeLine(&sb, "DTEND;TZID=Europe/Berlin:"+formatDT(e.End))
+		switch {
+		case e.AllDay:
+			writeLine(&sb, "DTSTART;VALUE=DATE:"+e.Start.Format("20060102"))
+			writeLine(&sb, "DTEND;VALUE=DATE:"+e.End.Format("20060102"))
+		default:
+			writeLine(&sb, "DTSTART;TZID=Europe/Berlin:"+formatDT(e.Start))
+			if e.HasEnd {
+				writeLine(&sb, "DTEND;TZID=Europe/Berlin:"+formatDT(e.End))
+			}
 		}
 		sb.WriteString("END:VEVENT\r\n")
 	}
@@ -608,27 +675,51 @@ func renderICal(events []calEvent, calName string) string {
 	return sb.String()
 }
 
-// writeLine folds at 75 octets per RFC 5545.
+// vtimezoneBerlin definiert die TZID, auf die DTSTART/DTEND verweisen (RFC 5545
+// verlangt die Komponente im Kalender). Die Regeln sind die EU-Sommerzeit
+// (letzter Sonntag März/Oktober) als Literal, während die Zeitstempel selbst
+// über time/tzdata gerechnet werden: schafft die EU die Umstellung ab, zieht
+// tzdata nach, dieser Block aber nicht — dann hier mit anpassen.
+var vtimezoneBerlin = []string{
+	"BEGIN:VTIMEZONE",
+	"TZID:Europe/Berlin",
+	"BEGIN:DAYLIGHT",
+	"TZOFFSETFROM:+0100",
+	"TZOFFSETTO:+0200",
+	"TZNAME:CEST",
+	"DTSTART:19700329T020000",
+	"RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU",
+	"END:DAYLIGHT",
+	"BEGIN:STANDARD",
+	"TZOFFSETFROM:+0200",
+	"TZOFFSETTO:+0100",
+	"TZNAME:CET",
+	"DTSTART:19701025T030000",
+	"RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU",
+	"END:STANDARD",
+	"END:VTIMEZONE",
+}
+
+// writeLine faltet nach RFC 5545 bei 75 Oktetten (Fortsetzungszeilen 74 plus
+// führendes Leerzeichen), schneidet aber nur an Rune-Grenzen — ein Schnitt in
+// einer UTF-8-Sequenz macht beide Zeilen ungültig. Ein Codepoint hat höchstens
+// 4 Byte, der Schnittpunkt liegt also immer > 0: kein Stillstand möglich.
 func writeLine(sb *strings.Builder, line string) {
-	b := []byte(line)
-	const max = 75
-	if len(b) <= max {
-		sb.Write(b)
-		sb.WriteString("\r\n")
-		return
-	}
-	sb.Write(b[:max])
-	sb.WriteString("\r\n")
-	b = b[max:]
-	for len(b) > 0 {
-		sb.WriteByte(' ')
-		n := 74 // continuation lines: 1 space + 74 chars = 75
-		if n > len(b) {
-			n = len(b)
+	limit := 75
+	for {
+		if len(line) <= limit {
+			sb.WriteString(line)
+			sb.WriteString("\r\n")
+			return
 		}
-		sb.Write(b[:n])
-		sb.WriteString("\r\n")
-		b = b[n:]
+		cut := limit
+		for !utf8.RuneStart(line[cut]) {
+			cut--
+		}
+		sb.WriteString(line[:cut])
+		sb.WriteString("\r\n ")
+		line = line[cut:]
+		limit = 74
 	}
 }
 
