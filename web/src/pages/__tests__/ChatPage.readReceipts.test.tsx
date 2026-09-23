@@ -108,7 +108,7 @@ describe('ChatPage — Read-Receipts', () => {
 
 describe('MessageReadsModal', () => {
   test('5.3 rendert Leser-Liste mit Uhrzeit', async () => {
-    renderAsPersona(<MessageReadsModal messageId={5} onClose={() => {}} />, 'spieler', {
+    renderAsPersona(<MessageReadsModal target={{ kind: 'message', id: 5 }} onClose={() => {}} />, 'spieler', {
       mocks: [
         {
           url: /\/chat\/messages\/5\/reads/,

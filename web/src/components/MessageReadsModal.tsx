@@ -11,14 +11,24 @@ interface Reader {
   readAt: string;
 }
 
+// Chat-Nachricht oder Mitteilung — beide Leserlisten haben dieselbe Form und
+// sind absender-only; nur Route und Leertext unterscheiden sich.
+export type ReadsTarget =
+  | { kind: "message"; id: number }
+  | { kind: "broadcast"; id: number };
+
 interface Props {
-  messageId: number;
+  target: ReadsTarget;
   onClose: () => void;
 }
 
-// MessageReadsModal zeigt dem Absender, wer seine Nachricht wann gelesen hat.
-// Lädt on-demand GET /chat/messages/{id}/reads (nur der Absender ist berechtigt).
-export default function MessageReadsModal({ messageId, onClose }: Props) {
+const readsUrl = (t: ReadsTarget) =>
+  t.kind === "message" ? `/chat/messages/${t.id}/reads` : `/chat/broadcasts/${t.id}/reads`;
+
+// MessageReadsModal zeigt dem Absender, wer seine Nachricht bzw. Mitteilung
+// wann gelesen hat. Lädt die Leserliste on-demand (nur der Absender ist berechtigt).
+export default function MessageReadsModal({ target, onClose }: Props) {
+  const url = readsUrl(target);
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   useEscapeKey(onClose);
@@ -31,7 +41,7 @@ export default function MessageReadsModal({ messageId, onClose }: Props) {
     let alive = true;
     (async () => {
       try {
-        const r = await api.get(`/chat/messages/${messageId}/reads`);
+        const r = await api.get(url);
         if (alive) setReaders(r.data ?? []);
       } catch (e) {
         if (alive) setError(errorMessage(e, "Fehler beim Laden"));
@@ -42,7 +52,7 @@ export default function MessageReadsModal({ messageId, onClose }: Props) {
     return () => {
       alive = false;
     };
-  }, [messageId]);
+  }, [url]);
 
   return (
     <div
@@ -72,7 +82,7 @@ export default function MessageReadsModal({ messageId, onClose }: Props) {
 
         {!error && !loading && readers.length === 0 && (
           <p className="text-sm text-brand-text-muted">
-            Noch niemand hat diese Nachricht gelesen.
+            Noch niemand hat diese {target.kind === "broadcast" ? "Mitteilung" : "Nachricht"} gelesen.
           </p>
         )}
 

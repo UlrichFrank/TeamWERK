@@ -62,7 +62,7 @@ import WindowedRows from "../components/WindowedRows";
 import { useAuth } from "../contexts/AuthContext";
 import { useChatEvents } from "../hooks/useChatEvents";
 import ConversationParticipantsModal from "../components/ConversationParticipantsModal";
-import MessageReadsModal from "../components/MessageReadsModal";
+import MessageReadsModal, { type ReadsTarget } from "../components/MessageReadsModal";
 import CreatorExitChoiceModal from "../components/CreatorExitChoiceModal";
 import ChatPollCreateModal from "../components/ChatPollCreateModal";
 import ChatPollCard from "../components/ChatPollCard";
@@ -177,6 +177,10 @@ interface Broadcast {
   mediaUrl: string | null;
   mediaWidth?: number;
   mediaHeight?: number;
+  // Nur bei eigenen Mitteilungen gesetzt (isSent); readTotal ist die beim
+  // Versand eingefrorene Empfängerzahl ohne den Absender.
+  readCount?: number;
+  readTotal?: number;
 }
 interface ChatUser {
   id: number;
@@ -429,7 +433,7 @@ export default function ChatPage() {
   } | null>(null);
   // Bild im Vollbild-Overlay (Lightbox), url ohne /api-Prefix.
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
-  const [readsModalMsgId, setReadsModalMsgId] = useState<number | null>(null);
+  const [readsTarget, setReadsTarget] = useState<ReadsTarget | null>(null);
   const [showPollCreate, setShowPollCreate] = useState(false);
   const [pollVotesMsgId, setPollVotesMsgId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1010,6 +1014,19 @@ export default function ChatPage() {
               : m,
           ),
         );
+      }
+    }
+    if (event.startsWith("chat:broadcast-read:")) {
+      // chat:broadcast-read:<broadcastId> — geht nur an den Absender und nur beim
+      // ersten Lesevorgang eines Empfängers, deshalb genügt lokal +1.
+      const bcId = parseInt(event.split(":")[2]);
+      if (!Number.isNaN(bcId)) {
+        const bump = (b: Broadcast) =>
+          b.id === bcId && b.readCount !== undefined
+            ? { ...b, readCount: b.readCount + 1 }
+            : b;
+        setBroadcasts((prev) => prev.map(bump));
+        setActiveBroadcast((prev) => (prev ? bump(prev) : prev));
       }
     }
     if (event.startsWith("chat:member-left")) {
@@ -1977,7 +1994,7 @@ export default function ChatPage() {
                           }}
                           onClosePicker={() => setEmojiPickerMsgId(null)}
                           onToggleReaction={toggleReaction}
-                          onOpenReads={(m) => setReadsModalMsgId(m.id)}
+                          onOpenReads={(m) => setReadsTarget({ kind: "message", id: m.id })}
                           onOpenVotes={(m) => setPollVotesMsgId(m.id)}
                           onImageClick={() => {
                             if (msg.mediaUrl) setLightboxUrl(msg.mediaUrl);
@@ -2165,6 +2182,24 @@ export default function ChatPage() {
                 {activeBroadcast.editedAt && (
                   <span className="ml-2">(bearbeitet)</span>
                 )}
+                {/* Bewusst eine Zahl statt eines Häkchens: bei vielen
+                    Empfängern wäre „gelesen, weil einer gelesen hat" falsch. */}
+                {activeBroadcast.isSent &&
+                  activeBroadcast.readCount !== undefined &&
+                  activeBroadcast.readTotal !== undefined && (
+                    <>
+                      <span className="mx-2" aria-hidden="true">·</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setReadsTarget({ kind: "broadcast", id: activeBroadcast.id })
+                        }
+                        className="underline decoration-dotted underline-offset-2 hover:text-brand-text transition-colors"
+                      >
+                        {activeBroadcast.readCount} / {activeBroadcast.readTotal} gelesen
+                      </button>
+                    </>
+                  )}
               </p>
               <p className="text-sm text-brand-text whitespace-pre-wrap break-words">
                 {renderWithLinks(activeBroadcast.body, false)}
@@ -2358,10 +2393,10 @@ export default function ChatPage() {
         />
       )}
 
-      {readsModalMsgId !== null && (
+      {readsTarget !== null && (
         <MessageReadsModal
-          messageId={readsModalMsgId}
-          onClose={() => setReadsModalMsgId(null)}
+          target={readsTarget}
+          onClose={() => setReadsTarget(null)}
         />
       )}
 
