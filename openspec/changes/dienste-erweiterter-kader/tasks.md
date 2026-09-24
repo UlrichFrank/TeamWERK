@@ -44,4 +44,4 @@
 
 - [x] 7.1 Benutzerhandbuch (`web/public/benutzerhandbuch.html`), Abschnitt Dienste: Aushilfe im erweiterten Kader; verifiziert durch Sichtprüfung im Browser
 - [x] 7.2 Gotcha-Absatz „Dienst-Bilanz je Kind“ in `docs/agent/06-gotchas.md` um Stufen 3/4 und den Aushilfe-Zähler je (Mitglied, Team) ergänzen; verifiziert durch Review
-- [ ] 7.3 `/verify-change` ausführen (Build, `make test`, Lint, `pnpm -C web test`, `openspec validate dienste-erweiterter-kader --strict`); verifiziert durch grünes Gate
+- [x] 7.3 `/verify-change` ausführen (Build, `make test`, Lint, `pnpm -C web test`, `openspec validate dienste-erweiterter-kader --strict`); verifiziert durch grünes Gate
