@@ -689,6 +689,7 @@ var matrix = []endpointCase{
 	// ── Match-Reports: Freigeber-Tier (RequireClubFunction medien/vorstand) ──────
 	{method: "GET", path: "/api/match-reports/pending", expected: exMatchReportPublisher},
 	{method: "POST", path: "/api/match-reports/{id}/publish", expected: exMatchReportPublisher},
+	{method: "POST", path: "/api/match-reports/{id}/return", expected: exMatchReportPublisher},
 
 	// ── Match-Reports: nur RequireAuth, Handler entscheidet via guardMutation ────
 	{method: "GET", path: "/api/match-reports/{id}", expected: exMatchReportMixed},

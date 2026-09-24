@@ -4,10 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import { compressImage } from '../lib/imageCompress'
 import MarkdownRenderer from '../components/MarkdownRenderer'
-import { AlertTriangle, ImageOff, Trash2, Upload, X, Eye, EyeOff, Send } from 'lucide-react'
+import { AlertTriangle, ImageOff, Trash2, Upload, X, Eye, EyeOff, Send, Undo2, MessageSquare } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL } from '../lib/buttonStyles'
 import { MATCH_REPORT_STATE_LABEL, type MatchReportState } from '../lib/matchReportState'
 
 const MAX_IMAGES = 10
@@ -59,6 +59,9 @@ type MatchReport = {
     published_url: string | null
     typo3_page_uid: number | null
     error_message: string | null
+    /** Kommentar der letzten Rückgabe an den Autor (POST /return). */
+    review_comment: string | null
+    returned_at: string | null
     images: ReportImage[]
     photo_consent_missing: ConsentMember[] | null
 }
@@ -75,6 +78,9 @@ export default function MatchReportFormPage() {
     const [saving, setSaving] = useState(false)
     const [publishing, setPublishing] = useState(false)
     const [submitting, setSubmitting] = useState(false)
+    // Rückgabe-Dialog des Freigebers: null = geschlossen, sonst der Kommentar-Entwurf.
+    const [returnComment, setReturnComment] = useState<string | null>(null)
+    const [returning, setReturning] = useState(false)
     const [preview, setPreview] = useState(false)
 
     const [homeGoals, setHomeGoals] = useState('')
@@ -215,7 +221,7 @@ export default function MatchReportFormPage() {
     }
 
     const submitForReview = async () => {
-        if (!confirm('Bericht zur Prüfung senden? Nach dem Absenden kannst du ihn nicht mehr bearbeiten — nur Medien oder Vorstand veröffentlichen oder korrigieren dann noch.')) return
+        if (!confirm('Bericht zur Prüfung senden? Danach kannst du ihn erst wieder bearbeiten, wenn Medien oder Vorstand ihn dir zurückgeben.')) return
         setSubmitting(true)
         try {
             if (!(await saveDraft())) return
@@ -247,6 +253,27 @@ export default function MatchReportFormPage() {
             }
         } finally {
             setPublishing(false)
+        }
+    }
+
+    // Zurückgeben: offene Änderungen des Freigebers vorher speichern, sonst
+    // bekäme der Autor einen Stand ohne die Korrekturen, auf die der Kommentar verweist.
+    const returnToAuthor = async () => {
+        const comment = (returnComment ?? '').trim()
+        if (!comment) return
+        setReturning(true)
+        try {
+            if (!(await saveDraft())) return
+            await api.post(`/match-reports/${reportID}/return`, { comment })
+            setReturnComment(null)
+            load()
+        } catch (err) {
+            const detail = (err as { response?: { data?: { error?: string } } })?.response?.data
+            setError(detail?.error === 'not_pending_review'
+                ? 'Der Bericht wartet nicht mehr auf Freigabe — bitte neu laden.'
+                : detail?.error ?? 'Zurückgeben fehlgeschlagen')
+        } finally {
+            setReturning(false)
         }
     }
 
@@ -291,6 +318,22 @@ export default function MatchReportFormPage() {
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger space-y-1">
                     <div className="font-medium">Letzter Publish-Fehler:</div>
                     <pre className="whitespace-pre-wrap break-words font-mono text-xs">{report.error_message}</pre>
+                </div>
+            )}
+
+            {report.review_comment && report.state === 'draft' && (
+                <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-text flex gap-2">
+                    <MessageSquare className="w-5 h-5 shrink-0 text-brand-danger" />
+                    <div>
+                        <div className="font-medium text-brand-danger">Zurückgegeben — bitte überarbeiten und erneut zur Prüfung senden:</div>
+                        <p className="mt-1 whitespace-pre-wrap break-words">{report.review_comment}</p>
+                    </div>
+                </div>
+            )}
+            {report.review_comment && report.state === 'pending_review' && isReviewer && (
+                <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
+                    <div className="font-medium">Letzte Rückgabe an den Autor:</div>
+                    <p className="mt-1 whitespace-pre-wrap break-words">{report.review_comment}</p>
                 </div>
             )}
 
@@ -409,6 +452,12 @@ export default function MatchReportFormPage() {
                             </button>
                         )}
                         {isReviewer && report.state === 'pending_review' && (
+                            <button className={BTN_SECONDARY} onClick={() => setReturnComment('')} disabled={returning}>
+                                <Undo2 className="inline-block w-4 h-4 mr-1" />
+                                Zurückgeben
+                            </button>
+                        )}
+                        {isReviewer && report.state === 'pending_review' && (
                             <button className={BTN_DANGER} onClick={deletePendingReview}>
                                 <Trash2 className="inline-block w-4 h-4 mr-1" />
                                 Bericht löschen
@@ -417,6 +466,39 @@ export default function MatchReportFormPage() {
                     </div>
                 )}
             </div>
+
+            {returnComment !== null && (
+                <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setReturnComment(null)}>
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="return-title"
+                        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md space-y-3"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h2 id="return-title" className="text-base font-semibold text-brand-text">Bericht zurückgeben</h2>
+                        <p className="text-sm text-brand-text-muted">
+                            Der Autor kann den Bericht danach wieder bearbeiten und erneut einreichen. Er bekommt deinen Kommentar als Benachrichtigung.
+                        </p>
+                        <textarea
+                            className={input}
+                            rows={5}
+                            maxLength={2000}
+                            autoFocus
+                            value={returnComment}
+                            onChange={e => setReturnComment(e.target.value)}
+                            placeholder="Was soll geändert werden?"
+                            aria-label="Kommentar für den Autor"
+                        />
+                        <div className="flex justify-end gap-2">
+                            <button className={BTN_SECONDARY} onClick={() => setReturnComment(null)}>Abbrechen</button>
+                            <button className={BTN_PRIMARY} onClick={returnToAuthor} disabled={returning || returnComment.trim() === ''}>
+                                {returning ? 'Gebe zurück…' : 'Zurückgeben'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

@@ -249,6 +249,7 @@ var tierOnly = map[string]string{
 
 	// Match-Report-Freigeber (medien/vorstand)
 	"POST /api/match-reports/{id}/publish": "Freigeber-Tier (medien/vorstand)",
+	"POST /api/match-reports/{id}/return":  "Freigeber-Tier (medien/vorstand)",
 }
 
 // ── Fixture-Katalog ──────────────────────────────────────────────────────────

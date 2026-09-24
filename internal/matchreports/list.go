@@ -15,6 +15,8 @@ type ListItem struct {
 	MatchDate    string  `json:"match_date"`
 	Opponent     string  `json:"opponent"`
 	PublishedURL *string `json:"published_url"`
+	// Returned: Draft, den ein Freigeber zur Überarbeitung zurückgegeben hat.
+	Returned bool `json:"returned"`
 }
 
 // SlotItem ist ein noch offener „Spielbericht"-Slot, für den der User
@@ -58,7 +60,8 @@ func (h *Handler) MyList(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) loadMyReports(userID int) ([]ListItem, error) {
 	rows, err := h.db.Query(
-		`SELECT r.id, r.game_id, r.state, g.date, g.opponent, r.published_url
+		`SELECT r.id, r.game_id, r.state, g.date, g.opponent, r.published_url,
+		        r.state = 'draft' AND r.review_comment IS NOT NULL
 		 FROM match_reports r
 		 JOIN games g ON g.id = r.game_id
 		 WHERE r.author_user_id = ?
@@ -74,7 +77,7 @@ func (h *Handler) loadMyReports(userID int) ([]ListItem, error) {
 	for rows.Next() {
 		var it ListItem
 		var url sql.NullString
-		if err := rows.Scan(&it.ID, &it.GameID, &it.State, &it.MatchDate, &it.Opponent, &url); err != nil {
+		if err := rows.Scan(&it.ID, &it.GameID, &it.State, &it.MatchDate, &it.Opponent, &url, &it.Returned); err != nil {
 			return nil, err
 		}
 		if len(it.MatchDate) > 10 {

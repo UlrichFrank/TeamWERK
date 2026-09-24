@@ -52,6 +52,7 @@ func testServer(t *testing.T, h *matchreports.Handler) *httptest.Server {
 		r.Delete("/api/match-reports/{id}", h.Delete)
 		r.Post("/api/match-reports/{id}/publish", h.Publish)
 		r.Post("/api/match-reports/{id}/submit-for-review", h.SubmitForReview)
+		r.Post("/api/match-reports/{id}/return", h.Return)
 	})
 }
 

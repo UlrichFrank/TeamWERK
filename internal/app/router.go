@@ -600,6 +600,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 				r.Use(auth.RequireClubFunction("medien", "vorstand"))
 				r.Get("/api/match-reports/pending", h.MatchReports.Pending)
 				r.Post("/api/match-reports/{id}/publish", h.MatchReports.Publish)
+				r.Post("/api/match-reports/{id}/return", h.MatchReports.Return)
 			})
 
 			// Gemischte Routen (Update, Bilder, Detail-Get): Zugriff hängt vom
