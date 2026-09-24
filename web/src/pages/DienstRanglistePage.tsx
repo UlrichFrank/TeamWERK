@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, Handshake } from 'lucide-react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useCompactHeader } from '../hooks/useCompactHeader'
@@ -26,11 +26,22 @@ interface RanglisteRow {
   vorhersage: number
 }
 
+// Aushilfe aus dem erweiterten Kader (openspec/changes/dienste-erweiterter-kader):
+// ungerankt, ohne Fair-Anteil, gleiche Anonymisierung wie die Rangliste.
+interface AushilfeRow {
+  memberId: number | null
+  name: string | null
+  isOwn: boolean
+  geleistet: number
+  vorhersage: number
+}
+
 interface RanglisteBlock {
   teamId: number
   teamLabel: string
   soll: number
   rows: RanglisteRow[]
+  aushilfen?: AushilfeRow[]
 }
 
 interface RanglisteResponse {
@@ -83,6 +94,39 @@ function RanglisteRowView({ row, scale, soll }: { row: RanglisteRow; scale: numb
   )
 }
 
+function AushilfenSection({ rows }: { rows: AushilfeRow[] }) {
+  return (
+    <div className="mt-4 pt-3 border-t border-brand-border-subtle" data-testid="rangliste-aushilfen">
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-blue mb-1">
+        <Handshake className="w-4 h-4" aria-hidden="true" />
+        Aushilfen · ohne Platz, ohne Fair-Anteil
+      </p>
+      <div className="space-y-1">
+        {rows.map((row, i) => {
+          const displayName = row.name ?? '-'
+          return (
+            <div
+              key={row.memberId ?? `aushilfe-${i}`}
+              className={`flex items-center gap-2 sm:gap-3 py-2 px-2 rounded-md ${row.isOwn ? 'bg-brand-yellow/20' : ''}`}
+            >
+              <span className="w-6 shrink-0" aria-hidden="true" />
+              <span
+                className={`flex-1 min-w-0 truncate text-sm ${row.isOwn ? 'font-semibold text-brand-text' : 'text-brand-text'}`}
+                title={displayName}
+              >
+                {displayName}
+              </span>
+              <span className="shrink-0 text-xs text-brand-text-muted whitespace-nowrap">
+                {formatDiensteZahl(row.geleistet)} geleistet · {formatDiensteZahl(row.vorhersage)} eingetragen
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function RanglisteBlockCard({ block }: { block: RanglisteBlock }) {
   const maxRowTotal = block.rows.reduce((m, r) => Math.max(m, r.geleistet + r.vorhersage), 0)
   const scale = Math.max(block.soll, maxRowTotal)
@@ -105,6 +149,8 @@ function RanglisteBlockCard({ block }: { block: RanglisteBlock }) {
           ))}
         </div>
       )}
+
+      {block.aushilfen && block.aushilfen.length > 0 && <AushilfenSection rows={block.aushilfen} />}
     </div>
   )
 }

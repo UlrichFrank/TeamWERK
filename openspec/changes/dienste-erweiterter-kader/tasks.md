@@ -34,10 +34,10 @@
 
 ## 6. Frontend
 
-- [ ] 6.1 `ExtendedBadge` nach `web/src/components/AushilfeBadge.tsx` verallgemeinern (Text-Prop, `brand-blue`-Tokens), Dashboard-Termine weiter „Erw. Kader“; verifiziert durch bestehende Dashboard-Tests grün
-- [ ] 6.2 `DutySlotList`: Chip „Aushilfe“ an Gruppen mit `aushilfe`, Badge neben Eingetragenen mit `aushilfe`; verifiziert durch `DutySlotList.aushilfe.test.tsx`
-- [ ] 6.3 `DashboardPage`: Abschnitt „Aushilfe (erw. Kader)“ unter „Meine Dienste“ (Icon `Handshake`, Link `/dienste`) und Abschnitt „Aushilfe“ unter der Bilanz ohne Soll-Balken; verifiziert durch `DashboardPage.aushilfe.test.tsx`
-- [ ] 6.4 `DienstRanglistePage`: Abschnitt „Aushilfen“ je Block (Desktop-Tabelle + Mobile-Cards); verifiziert durch `DienstRanglistePage.aushilfe.test.tsx`
+- [x] 6.1 `ExtendedBadge` nach `web/src/components/AushilfeBadge.tsx` verallgemeinern (Text-Prop, `brand-blue`-Tokens), Dashboard-Termine weiter „Erw. Kader“; verifiziert durch bestehende Dashboard-Tests grün
+- [x] 6.2 `DutySlotList`: Chip „Aushilfe“ an Gruppen mit `aushilfe` (Gruppenkopf in `DutyPage.tsx`), Badge neben Eingetragenen mit `aushilfe`; verifiziert durch `DutySlotList.aushilfe.test.tsx`
+- [x] 6.3 `DashboardPage`: Abschnitt „Aushilfe (erw. Kader)“ unter „Meine Dienste“ (Icon `Handshake`, Link `/dienste`) und Abschnitt „Aushilfe“ unter der Bilanz ohne Soll-Balken; verifiziert durch `DashboardPage.aushilfe.test.tsx`
+- [x] 6.4 `DienstRanglistePage`: Abschnitt „Aushilfen“ je Block (Desktop-Tabelle + Mobile-Cards); verifiziert durch `DienstRanglistePage.aushilfe.test.tsx`
 - [ ] 6.5 Live-Updates prüfen: bestehende `useLiveUpdates`-Abos auf Dienst-Events decken Board, Dashboard und Rangliste ab; verifiziert durch manuellen Zwei-Session-Test (Aushilfe belegt → Trainer-Session zeigt Badge ohne Reload)
 
 ## 7. Doku & Abschluss

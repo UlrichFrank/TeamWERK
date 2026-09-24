@@ -15,6 +15,7 @@ import { getEventColors } from '../lib/eventColors'
 import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId } from '../lib/teamFilter'
 import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
+import AushilfeBadge from '../components/AushilfeBadge'
 
 interface BoardGroup {
   game_id: number | null
@@ -27,6 +28,9 @@ interface BoardGroup {
   venue?: string
   label: string | null
   past: boolean
+  // Betrachter ist mit den Teams der Gruppe nur über den erweiterten Kader
+  // verbunden (dienste-erweiterter-kader) — freiwillige Aushilfe.
+  aushilfe?: boolean
   slots: BoardSlot[]
 }
 
@@ -374,7 +378,10 @@ export default function DutyPage() {
                   )}
                   </div>
                 </div>
-                <span className="text-xs text-brand-text-muted font-medium">{g.team_names.join(', ')}</span>
+                <span className="flex items-center gap-2 text-xs text-brand-text-muted font-medium">
+                  {g.aushilfe && <AushilfeBadge />}
+                  {g.team_names.join(', ')}
+                </span>
               </div>
 
               <DutySlotList

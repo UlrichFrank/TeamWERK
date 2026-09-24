@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   Calendar, BarChart2, Users, Car, ArrowRight,
   Home, Plane, Dumbbell, ChevronDown, ChevronRight, Check, Search, Info,
-  MessageSquare, MessageCircle, Megaphone, Activity
+  MessageSquare, MessageCircle, Megaphone, Activity, Handshake
 } from 'lucide-react'
 import { api } from '../lib/api'
 import { chatUnreadCounts } from '../lib/chatUnread'
@@ -12,6 +12,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useChatEvents } from '../hooks/useChatEvents'
 import EventNoteIndicator from '../components/EventNoteIndicator'
+import AushilfeBadge from '../components/AushilfeBadge'
 import { relativeTime } from '../lib/relativeTime'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
 
@@ -59,12 +60,40 @@ interface DutyAccountEntry {
   soll: number
 }
 
+// Aushilfe im erweiterten Kader (openspec/changes/dienste-erweiterter-kader):
+// getrennt vom Stamm-Block, ohne Soll.
+interface AushilfeSlot {
+  date: string
+  eventTime: string
+  dutyTypeName: string
+  label: string
+  teamLabel: string
+}
+
+interface MeineDiensteAushilfe {
+  mySlots: AushilfeSlot[]
+  nextGame: NextDiensteGame | null
+  teamLabel?: string
+  openSlotsCount: number
+}
+
+interface DutyAccountAushilfeEntry {
+  memberId: number
+  name: string
+  teamId: number
+  teamLabel: string
+  geleistet: number
+  vorhersage: number
+}
+
 interface MeineDienste {
   nextGame: NextDiensteGame | null
   mySlots: DiensteSlot[]
   openSlotsCount: number
   dutyAccount: DutyAccountEntry[]
   recentAssignments: RecentAssignment[]
+  dutyAccountAushilfe?: DutyAccountAushilfeEntry[]
+  aushilfe?: MeineDiensteAushilfe | null
 }
 
 interface CarpoolingPaarung { paarungId: number; partnerName: string; partnerTreffpunkt: string }
@@ -144,13 +173,6 @@ function ResponsiveLabel({ long, short }: { long: string; short: string }) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function ExtendedBadge() {
-  return (
-    <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-semibold text-brand-blue border border-brand-blue/30 whitespace-nowrap flex-shrink-0">
-      Erw. Kader
-    </span>
-  )
-}
 
 function Accordion({
   id, title, icon: Icon, isOpen, onToggle, badge, children,
@@ -269,7 +291,7 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
               badge={(e.note.trim() || e.isExtended) ? (
                 <span className="flex items-center gap-1">
                   <EventNoteIndicator variant="icon" note={e.note} />
-                  {e.isExtended ? <ExtendedBadge /> : null}
+                  {e.isExtended ? <AushilfeBadge label="Erw. Kader" /> : null}
                 </span>
               ) : undefined}
             />
@@ -338,12 +360,74 @@ function DutyAccountRow({ entry }: { entry: DutyAccountEntry }) {
   )
 }
 
+// Aushilfe-Block unter dem Stamm-Block: eigene Aushilfe-Zusagen und das
+// nächste Spiel eines erweiterten Teams mit offenen Diensten.
+function AushilfeDiensteBlock({ aushilfe }: { aushilfe: MeineDiensteAushilfe }) {
+  const { mySlots, nextGame, teamLabel, openSlotsCount } = aushilfe
+  return (
+    <div className="pt-3 border-t border-brand-border-subtle space-y-1" data-testid="aushilfe-block">
+      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-blue">
+        <Handshake className="w-4 h-4" aria-hidden="true" />
+        Aushilfe (erw. Kader)
+      </p>
+      <ul className="space-y-1">
+        {mySlots.map((s, i) => (
+          <li key={i}>
+            <DashboardRow
+              to="/dienste"
+              dateISO={s.date}
+              icon={<Check className="w-4 h-4 text-brand-success" />}
+              title={s.dutyTypeName}
+              subtitle={[s.label, s.teamLabel, s.eventTime].filter(Boolean).join(' · ')}
+              badge={<AushilfeBadge />}
+            />
+          </li>
+        ))}
+        {nextGame && (
+          <li>
+            <DashboardRow
+              to="/dienste"
+              dateISO={nextGame.date}
+              icon={<Info className="w-4 h-4" />}
+              title={`${openSlotsCount} offene Dienst${openSlotsCount !== 1 ? 'e' : ''} zum Aushelfen`}
+              subtitle={teamLabel ? `${nextGame.opponent} · ${teamLabel}` : nextGame.opponent}
+            />
+          </li>
+        )}
+      </ul>
+    </div>
+  )
+}
+
+// Aushilfe-Zeilen der Bilanz: nur Zähler, bewusst ohne Ziel und ohne Balken —
+// Aushilfe ist freiwillig und hat kein Soll.
+function DutyAccountAushilfeRow({ entry }: { entry: DutyAccountAushilfeEntry }) {
+  const { name, teamId, teamLabel, geleistet, vorhersage } = entry
+  return (
+    <Link
+      to={`/dienste/rangliste?team=${teamId}`}
+      className="flex items-center justify-between gap-2 py-1.5 rounded px-2 -mx-2 hover:bg-brand-border-subtle transition-colors"
+    >
+      <span className="text-sm font-medium text-brand-text truncate">
+        {name} <span className="text-brand-text-muted font-normal">· {teamLabel}</span>
+      </span>
+      <span className="text-xs text-brand-text-muted whitespace-nowrap">
+        {formatDiensteZahl(geleistet)} <ResponsiveLabel long="geleistet" short="gel." />
+        {' · '}
+        {formatDiensteZahl(vorhersage)} <ResponsiveLabel long="eingetragen" short="eingetr." />
+      </span>
+    </Link>
+  )
+}
+
 function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
   const [historyOpen, setHistoryOpen] = useState(false)
 
   if (!dienste) return null
 
   const { nextGame, mySlots, openSlotsCount, dutyAccount, recentAssignments } = dienste
+  const aushilfe = dienste.aushilfe ?? null
+  const dutyAccountAushilfe = dienste.dutyAccountAushilfe ?? []
 
   return (
     <div className="space-y-3 mt-1">
@@ -375,10 +459,24 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
         <p className="text-sm text-brand-text-muted">Kein kommendes Spiel mit Diensten.</p>
       )}
 
+      {aushilfe && <AushilfeDiensteBlock aushilfe={aushilfe} />}
+
       {dutyAccount.length > 0 && (
         <div className="pt-3 border-t border-brand-border-subtle space-y-1">
           {dutyAccount.map(entry => (
             <DutyAccountRow key={`${entry.memberId}-${entry.teamId}`} entry={entry} />
+          ))}
+        </div>
+      )}
+
+      {dutyAccountAushilfe.length > 0 && (
+        <div className="pt-3 border-t border-brand-border-subtle space-y-1" data-testid="bilanz-aushilfe">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-blue">
+            <Handshake className="w-4 h-4" aria-hidden="true" />
+            Aushilfe
+          </p>
+          {dutyAccountAushilfe.map(entry => (
+            <DutyAccountAushilfeRow key={`${entry.memberId}-${entry.teamId}`} entry={entry} />
           ))}
         </div>
       )}
@@ -436,7 +534,7 @@ function MeinTeamSection() {
           >
             <span className="flex items-center gap-2 text-sm font-medium text-brand-text">
               {t.name}
-              {t.isExtended && <ExtendedBadge />}
+              {t.isExtended && <AushilfeBadge label="Erw. Kader" />}
             </span>
             <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
           </Link>
