@@ -194,8 +194,12 @@ func (s *Store) ReportForGame(ctx context.Context, bwhvGameID int) (*ReportDetai
 		return nil, err
 	}
 	d.HasPDF = pdfPath != ""
-	d.Warnings = decodeWarnings(warnings)
-	d.RefereeNames = decodeStrings(refereesJSON)
+	// Listen immer als [] ausliefern, nie als null: SpielberichtPanel liest
+	// `warnings.length` direkt, ein null ließ die Seite leer abstürzen.
+	d.Warnings = append([]string{}, decodeWarnings(warnings)...)
+	d.RefereeNames = append([]string{}, decodeStrings(refereesJSON)...)
+	d.Players = []PlayerLine{}
+	d.Events = []EventLine{}
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT p.id, p.member_id, p.name, pg.side, pg.jersey_number,

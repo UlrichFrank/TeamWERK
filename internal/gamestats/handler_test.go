@@ -210,6 +210,17 @@ func TestReport_HappyPath(t *testing.T) {
 	if len(d.Players) != 26 || len(d.Events) != 66 {
 		t.Errorf("Spieler = %d, Ereignisse = %d; erwartet 26 und 66", len(d.Players), len(d.Events))
 	}
+	// Listen kommen als [] statt null — das Panel liest `warnings.length`
+	// ungeschützt, ein null brachte die ganze Seite zum Absturz.
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(body, &raw); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range []string{"warnings", "refereeNames", "players", "events"} {
+		if string(raw[k]) == "null" {
+			t.Errorf("%s = null, erwartet eine (ggf. leere) Liste", k)
+		}
+	}
 }
 
 func TestReport_NochKeinBericht(t *testing.T) {
