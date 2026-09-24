@@ -66,9 +66,10 @@ nicht). Diese Mitglieder werden **keinem** `Team.Members` hinzugefügt und zähl
 Die Frage „Aushilfe ja/nein“ steht an drei Stellen (Board-Gruppe/Eingetragener in SQL,
 Dashboard in SQL, Bilanz in Go). Die SQL-Seite bekommt **einen** Fragment-Baustein in
 `internal/db` (Foundation, dort liegt schon `TeamDisplayShort`):
-`appdb.UserTeamsSQL(kind)` mit `kind ∈ {stamm, extended}` — die Teams eines Accounts
-(selbst + Kinder, aktive Saison; `stamm` inkl. Trainer). Board und Dashboard nutzen
-denselben Baustein; der `'eltern'`-Match nutzt die `extended`-Variante zusätzlich.
+`appdb.UserTeamsSQL(kind, userExpr)` mit `kind ∈ {TeamsStamm, TeamsExtended, TeamsChildren}` —
+die Teams eines Accounts (selbst + Kinder, aktive Saison; Stamm inkl. Trainer; Children =
+Kinder in Stamm- oder erweitertem Kader, die Team-Menge des `'eltern'`-Matchs). Board und
+Dashboard nutzen denselben Baustein.
 Die Go-Seite (`dutyfairness`) muss dasselbe Ergebnis liefern; ein Test legt eine
 Konstellation an und vergleicht `aushilfe` aus dem Board mit der Stufe aus der Bilanz
 (Paritäts-Test statt Doku-Versprechen).
@@ -132,6 +133,44 @@ erweitert“ und sie steht nur oben).
   Stufe 3 einem Stammteam gutgeschrieben werden, wandern nach dem Deploy in den
   Aushilfe-Abschnitt — Geleistet im Stammteam sinkt. Vorab-Zählung auf Prod (Task 1.1),
   um die Größenordnung zu kennen und ggf. den Vorstand zu informieren.
+  Query (read-only, vor dem Deploy von Hand gegen die Prod-DB ausführen):
+
+  ```sql
+  WITH act AS (SELECT id FROM seasons WHERE is_active = 1),
+  slot_teams AS (
+    SELECT ds.id AS slot_id, gt.team_id FROM duty_slots ds
+    JOIN game_teams gt ON gt.game_id = ds.game_id
+    WHERE ds.season_id = (SELECT id FROM act)
+    UNION
+    SELECT ds.id, ds.team_id FROM duty_slots ds
+    WHERE ds.game_id IS NULL AND ds.team_id IS NOT NULL AND ds.season_id = (SELECT id FROM act)
+  ),
+  acc AS (  -- Account → Mitglied (eigenes + Kinder)
+    SELECT user_id, id AS member_id FROM members WHERE user_id IS NOT NULL
+    UNION SELECT parent_user_id, member_id FROM family_links
+  ),
+  stamm AS (
+    SELECT acc.user_id, k.team_id FROM acc
+    JOIN kader_members km ON km.member_id = acc.member_id
+    JOIN kader k ON k.id = km.kader_id AND k.season_id = (SELECT id FROM act)
+    UNION
+    SELECT m.user_id, k.team_id FROM members m
+    JOIN kader_trainers kt ON kt.member_id = m.id
+    JOIN kader k ON k.id = kt.kader_id AND k.season_id = (SELECT id FROM act)
+  ),
+  ext AS (
+    SELECT acc.user_id, k.team_id FROM acc
+    JOIN kader_extended_members kem ON kem.member_id = acc.member_id
+    JOIN members m ON m.id = kem.member_id AND m.status <> 'ausgetreten'
+    JOIN kader k ON k.id = kem.kader_id AND k.season_id = (SELECT id FROM act)
+  )
+  SELECT COUNT(*) AS aushilfe_zuweisungen, COUNT(DISTINCT da.user_id) AS accounts
+  FROM duty_assignments da
+  WHERE EXISTS (SELECT 1 FROM slot_teams st JOIN ext e ON e.team_id = st.team_id
+                WHERE st.slot_id = da.duty_slot_id AND e.user_id = da.user_id)
+    AND NOT EXISTS (SELECT 1 FROM slot_teams st JOIN stamm s ON s.team_id = st.team_id
+                    WHERE st.slot_id = da.duty_slot_id AND s.user_id = da.user_id);
+  ```
 - **Mehr Sichtbarkeit = mehr Claims auf fremden Teams:** Trainer könnten Slots „ihres“
   Teams von Aushilfen belegt finden, die sie erst später bemerken. Mitigiert durch das
   Kennzeichen am Eingetragenen.
