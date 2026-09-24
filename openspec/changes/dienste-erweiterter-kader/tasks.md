@@ -14,9 +14,9 @@
 
 ## 3. Dienst-Bilanz (`dutyfairness`)
 
-- [ ] 3.1 Snapshot lädt `kader_extended_members` der aktiven Saison als `extTeams`; Nur-erweitert-Mitglieder in `ownByUser`/`childrenByUser`, aber nicht in `Team.Members`/`PlayerCount`; verifiziert durch `TestCompute_AushilfeAendertSollNicht`
-- [ ] 3.2 Zurechnungsstufen 3/4 (Aushilfe) vor der bisherigen Stufe 3, Aushilfe-Zähler je (Mitglied, Team); verifiziert durch `TestCompute_AushilfeZaehltNichtAufsStammteam`, `TestCompute_StammkindSchlaegtAushilfekind`
-- [ ] 3.3 `Snapshot.AushilfeFor(userID)` und `Team.Aushilfen()` bereitstellen; verifiziert durch Unit-Tests in `fairness_test.go`
+- [x] 3.1 Snapshot lädt `kader_extended_members` der aktiven Saison als `extTeams`; Nur-erweitert-Mitglieder in `ownByUser`/`childrenByUser`, aber nicht in `Team.Members`/`PlayerCount`; verifiziert durch `TestCompute_AushilfeAendertSollNicht`
+- [x] 3.2 Zurechnungsstufen 3/4 (Aushilfe) vor der bisherigen Stufe 3, Aushilfe-Zähler je (Mitglied, Team); verifiziert durch `TestCompute_AushilfeZaehltNichtAufsStammteam`, `TestCompute_StammkindSchlaegtAushilfekind`
+- [x] 3.3 `Snapshot.AushilfeFor(userID)` und `Team.Aushilfen()` bereitstellen; verifiziert durch Unit-Tests in `fairness_test.go`
 - [ ] 3.4 Paritäts-Test Board ↔ Bilanz; verifiziert durch `TestAushilfePraedikat_BoardUndBilanzDeckungsgleich` (in `internal/permissions` oder `internal/app`, wo beide Handler verfügbar sind)
 
 ## 4. Dashboard (Backend)

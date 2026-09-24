@@ -60,10 +60,16 @@ Aushilfe-Werte liegen **nicht** am `Member`, sondern in
 `Snapshot.aushilfe map[memberTeamKey]*Counts` — sonst schlüge eine Aushilfe in Team B über
 den Member-Zähler in jede Stammteam-Rangliste durch. Der Snapshot lädt dafür zusätzlich
 `kader_extended_members` (aktive Saison, `team_id IS NOT NULL`, `status <> 'ausgetreten'`)
-als `extTeams map[memberID][]teamID`; `ownByUser`/`childrenByUser` werden um
-Mitglieder ergänzt, die **nur** im erweiterten Kader stehen (sonst fände Stufe 3/4 sie
-nicht). Diese Mitglieder werden **keinem** `Team.Members` hinzugefügt und zählen nicht in
-`PlayerCount` — das Soll des fremden Teams bleibt unberührt.
+als `extTeams map[memberID][]teamID`, dazu eigene Zuordnungen `extOwnByUser`/
+`extChildrenByUser` — bewusst getrennt von `ownByUser`/`childrenByUser`, damit Stufen 1, 2
+und 5 sich nicht verändern. Mitglieder, die nur im erweiterten Kader stehen, werden
+**keinem** `Team.Members` hinzugefügt und zählen nicht in `PlayerCount` — das Soll des
+fremden Teams bleibt unberührt. Die Positionen hängen als `Team.Aushilfe` am Team.
+
+Stufen 3/4 greifen **nicht** bei generischen Slots (ohne Team) und **nicht**, wenn der
+Account Trainer eines Slot-Teams ist — beides ist in der Dienstbörse keine Aushilfe (dort
+zählt Trainer zur Stamm-Menge). Ohne diese Regel gäbe die Bilanz dem Kind eines Trainers
+eine Aushilfe, während das Board den Trainer ohne Kennzeichen zeigt.
 
 ### 3. Ein Aushilfe-Prädikat für Board, Dashboard und Bilanz
 

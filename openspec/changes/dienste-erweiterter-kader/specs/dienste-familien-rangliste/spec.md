@@ -28,7 +28,8 @@ des Mitglieds eingehen, sondern getrennt je (Mitglied, Aushilfe-Team) als
 `aushilfe_geleistet`/`aushilfe_vorhersage` gezählt werden. Sie hat kein Soll und
 verändert weder die Zahlen des Mitglieds in seinen Stammteams noch Gesamtsumme oder
 Soll des Aushilfe-Teams. Passt ein Slot mit mehreren Teams zu einem Stammkader- und
-einem erweiterten Team, gewinnt die Stammkader-Stufe.
+einem erweiterten Team, gewinnt die Stammkader-Stufe. Die Stufen 3 und 4 SHALL nicht greifen, wenn
+der Slot keinem Team zugeordnet ist oder der Account Trainer eines Teams des Slots ist.
 
 Ein generischer Slot passt zu jedem Team. Eine Eltern-Zuweisung an einem Slot, zu
 dem kein Kind passt, zählt für niemanden.
@@ -70,6 +71,10 @@ dem kein Kind passt, zählt für niemanden.
 #### Scenario: Stammkader-Kind schlägt Aushilfe-Kind
 - **WHEN** ein Elternteil einen Dienst von Team B belegt, ein Kind im Stammkader von Team B und ein anderes im erweiterten Kader von Team B steht
 - **THEN** zählt die Zuweisung voll für das Stammkader-Kind und nicht als Aushilfe
+
+#### Scenario: Trainer-Zuweisung ist keine Aushilfe
+- **WHEN** ein Trainer von Team B einen Dienst von Team B belegt und sein Kind nur im erweiterten Kader von Team B steht
+- **THEN** zählt die Zuweisung nicht als Aushilfe des Kindes
 
 #### Scenario: Aushilfe ändert das Soll des fremden Teams nicht
 - **WHEN** ein Aushilfe-Dienst in Team B belegt wird
