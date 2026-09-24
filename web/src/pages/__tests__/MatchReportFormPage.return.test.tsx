@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest'
-import { screen, waitFor, render, within } from '@testing-library/react'
+import { act, screen, waitFor, render, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import MockAdapter from 'axios-mock-adapter'
@@ -41,6 +41,7 @@ async function setup(auth: AuthCtx) {
       <MemoryRouter initialEntries={['/spielberichte/42']}>
         <Routes>
           <Route path="/spielberichte/:id" element={<MatchReportFormPage />} />
+          <Route path="/spielberichte/pruefen" element={<p>Prüfliste</p>} />
         </Routes>
       </MemoryRouter>
     </AuthContext.Provider>,
@@ -78,6 +79,25 @@ describe('Spielbericht zurückgeben', () => {
     expect(JSON.parse(post.data)).toEqual({ comment: 'Halbzeitstand fehlt' })
     expect(mock.history.put.length).toBe(1)
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    // Danach ist der Bericht ein draft, den der Freigeber nicht mehr lesen darf:
+    // kein erneutes GET (→ 403 „forbidden"), sondern zurück zur Prüfliste.
+    await waitFor(() => expect(screen.getByText('Prüfliste')).toBeInTheDocument())
+    expect(mock.history.get.filter(r => r.url === '/match-reports/42').length).toBe(1)
+    expect(screen.queryByText('forbidden')).toBeNull()
+  })
+
+  test('Live-Update nach fremder Rückgabe führt zur Prüfliste statt zu „forbidden"', async () => {
+    const { useLiveUpdates } = await import('../../hooks/useLiveUpdates')
+    mock.onGet('/match-reports/42').replyOnce(200, report())
+    mock.onGet('/match-reports/42').reply(403, { error: 'forbidden' })
+    await setup(ctx(9, ['medien']))
+
+    const calls = vi.mocked(useLiveUpdates).mock.calls
+    const onEvent = calls[calls.length - 1][0] as (evt: string) => void
+    act(() => onEvent('match-report-event'))
+
+    await waitFor(() => expect(screen.getByText('Prüfliste')).toBeInTheDocument())
+    expect(screen.queryByText('forbidden')).toBeNull()
   })
 
   test('Autor sieht im zurückgegebenen Entwurf den Kommentar und darf wieder bearbeiten', async () => {

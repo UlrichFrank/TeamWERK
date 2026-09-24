@@ -149,7 +149,16 @@ export default function MatchReportFormPage() {
                     }
                 }
             })
-            .catch(err => setError(err.response?.data?.error ?? 'Bericht nicht gefunden'))
+            .catch(err => {
+                // Ein schon angezeigter Bericht wird unsichtbar, wenn ein anderer
+                // Freigeber ihn zurückgibt (Live-Update) — zurück zur Prüfliste
+                // statt einer nackten 403-Meldung.
+                if (seededRef.current && err.response?.status === 403) {
+                    navigate('/spielberichte/pruefen', { replace: true })
+                    return
+                }
+                setError(err.response?.data?.error ?? 'Bericht nicht gefunden')
+            })
     }
     useEffect(() => {
         seededRef.current = false
@@ -266,7 +275,13 @@ export default function MatchReportFormPage() {
             if (!(await saveDraft())) return
             await api.post(`/match-reports/${reportID}/return`, { comment })
             setReturnComment(null)
-            load()
+            // Zurückgegeben = wieder draft, und den sieht außer Autor und Admin
+            // niemand (canReadReport) — ein Neuladen endete für den Freigeber in 403.
+            if (report?.author_user_id === user?.id || user?.role === 'admin') {
+                load()
+            } else {
+                navigate('/spielberichte/pruefen', { replace: true })
+            }
         } catch (err) {
             const detail = (err as { response?: { data?: { error?: string } } })?.response?.data
             setError(detail?.error === 'not_pending_review'
