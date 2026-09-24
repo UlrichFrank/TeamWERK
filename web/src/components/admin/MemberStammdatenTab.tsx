@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
-import { CLUB_FUNCTION_OPTIONS } from '../../lib/constants'
+import { CLUB_FUNCTION_OPTIONS, EXTERN_CLUB_FUNCTIONS } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import ImageCropModal from '../ImageCropModal'
 
@@ -114,7 +114,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   const joinDateRequired = !STATUS_WITHOUT_JOIN_DATE.includes(form.status)
 
   const toggleClubFunction = (fn: string) => {
-    if (isExtern && fn !== 'trainer') return
+    if (isExtern && !EXTERN_CLUB_FUNCTIONS.includes(fn)) return
     const next = clubFunctions.includes(fn)
       ? clubFunctions.filter(f => f !== fn)
       : [...clubFunctions, fn]
@@ -383,7 +383,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                 onClick={() => {
                   const updates: Record<string, unknown> = { status: s }
                   if (s === 'extern') {
-                    updates.club_functions = clubFunctions.filter(f => f === 'trainer')
+                    updates.club_functions = clubFunctions.filter(f => EXTERN_CLUB_FUNCTIONS.includes(f))
                     updates.member_number = ''
                     updates.pass_number = ''
                     updates.home_club = ''
@@ -438,7 +438,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           <label className="block text-sm font-medium text-gray-700 mb-2">Vereinsfunktion</label>
           <div className="flex flex-wrap gap-2">
             {CLUB_FUNCTION_OPTIONS.map(opt => {
-              const disabled = isExtern && opt.value !== 'trainer'
+              const disabled = isExtern && !EXTERN_CLUB_FUNCTIONS.includes(opt.value)
               return (
                 <label key={opt.value} className={`flex items-center gap-2 select-none ${disabled ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}`}>
                   <input

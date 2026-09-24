@@ -81,3 +81,43 @@ func TestUpdateMember_Handball360ID_KeptForExternStatus(t *testing.T) {
 		t.Errorf("handball_360_id: erwartet weiterhin 'H360-99' bei Status 'extern', war %v", handball360)
 	}
 }
+
+// Invariante: ein Mitglied mit Status 'extern' darf neben 'trainer' auch
+// 'medien' tragen (externe Helfer, die Spielberichte prüfen); alle anderen
+// Vereinsfunktionen setzen eine Mitgliedschaft voraus und werden verworfen.
+func TestUpdateMember_Extern_BehaeltTrainerUndMedien(t *testing.T) {
+	database := testutil.NewDB(t)
+	memberID := testutil.CreateMember(t, database, 0)
+	vorstandID := testutil.CreateUser(t, database, "standard")
+	tok := testutil.Token(t, vorstandID, "standard", []string{"vorstand"})
+	srv := newMembersServer(t, database)
+
+	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/members/%d", memberID), tok,
+		map[string]any{
+			"first_name":     "Hans",
+			"last_name":      "Dampf",
+			"status":         "extern",
+			"join_date":      "2026-01-01",
+			"club_functions": []string{"trainer", "medien", "vorstand", "spieler"},
+		})
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("PUT /members/{id}: expected 204, got %d", res.StatusCode)
+	}
+
+	rows, err := database.Query(`SELECT function FROM member_club_functions WHERE member_id=? ORDER BY function`, memberID)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	defer rows.Close()
+	var got []string
+	for rows.Next() {
+		var f string
+		if err := rows.Scan(&f); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		got = append(got, f)
+	}
+	if fmt.Sprint(got) != "[medien trainer]" {
+		t.Errorf("club_functions bei extern: got %v, want [medien trainer]", got)
+	}
+}

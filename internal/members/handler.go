@@ -20,6 +20,12 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/policy"
 )
 
+// externClubFunctions sind die Vereinsfunktionen, die ein Mitglied mit Status
+// 'extern' (ohne Vereinszugehörigkeit) tragen darf: Übungsleiter von außen und
+// Medien-Helfer, die Spielberichte prüfen. Alle anderen Funktionen setzen eine
+// Mitgliedschaft voraus und werden beim Speichern verworfen.
+var externClubFunctions = map[string]bool{"trainer": true, "medien": true}
+
 type Handler struct {
 	db  *sql.DB
 	hub *hub.EventHub
@@ -844,7 +850,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		req.HomeClubID = nil
 		filtered := []string{}
 		for _, f := range req.ClubFunctions {
-			if f == "trainer" {
+			if externClubFunctions[f] {
 				filtered = append(filtered, f)
 			}
 		}
