@@ -63,8 +63,8 @@ describe('DashboardPage — Aushilfe im erweiterten Kader', () => {
     expect(row).toHaveTextContent('Aushilfe')
     expect(row).toHaveTextContent('SG Weinstadt · mB1 · 10:00')
     expect(row).toHaveAttribute('href', '/dienste?focus=slot-42')
-    expect(within(block).getByText('3 offene Dienste zum Aushelfen').closest('a')).toHaveAttribute('href', '/dienste?focus=game-2')
-    expect(block).toHaveTextContent('3 offene Dienste zum Aushelfen')
+    expect(within(block).getByText('3 offene Dienste verfügbar').closest('a')).toHaveAttribute('href', '/dienste?focus=game-2')
+    expect(block).toHaveTextContent('3 offene Dienste verfügbar')
     expect(block).toHaveTextContent('HC Oppenweiler · mB1')
     // Stamm-Zeile: Sprung auf den Slot, Mannschaft wie bei der Aushilfe, kein Kennzeichen.
     const stamm = screen.getByText('Kampfgericht').closest('a')!

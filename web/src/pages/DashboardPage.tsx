@@ -91,6 +91,7 @@ interface DutyAccountAushilfeEntry {
 
 interface MeineDienste {
   nextGame: NextDiensteGame | null
+  teamLabel?: string
   mySlots: DiensteSlot[]
   openSlotsCount: number
   dutyAccount: DutyAccountEntry[]
@@ -395,7 +396,7 @@ function AushilfeDiensteBlock({ aushilfe }: { aushilfe: MeineDiensteAushilfe }) 
               to={gameUrl(nextGame.id)}
               dateISO={nextGame.date}
               icon={<Info className="w-4 h-4" />}
-              title={`${openSlotsCount} offene Dienst${openSlotsCount !== 1 ? 'e' : ''} zum Aushelfen`}
+              title={`${openSlotsCount} offene Dienst${openSlotsCount !== 1 ? 'e' : ''} verfügbar`}
               subtitle={teamLabel ? `${nextGame.opponent} · ${teamLabel}` : nextGame.opponent}
               badge={<AushilfeBadge />}
             />
@@ -432,7 +433,7 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
 
   if (!dienste) return null
 
-  const { nextGame, mySlots, openSlotsCount, dutyAccount, recentAssignments } = dienste
+  const { nextGame, teamLabel, mySlots, openSlotsCount, dutyAccount, recentAssignments } = dienste
   const aushilfe = dienste.aushilfe ?? null
   const dutyAccountAushilfe = dienste.dutyAccountAushilfe ?? []
 
@@ -459,7 +460,7 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
             dateISO={nextGame.date}
             icon={<Info className="w-4 h-4" />}
             title={`${openSlotsCount} offene Dienst${openSlotsCount !== 1 ? 'e' : ''} verfügbar`}
-            subtitle={nextGame.opponent}
+            subtitle={teamLabel ? `${nextGame.opponent} · ${teamLabel}` : nextGame.opponent}
           />
         )
       ) : (

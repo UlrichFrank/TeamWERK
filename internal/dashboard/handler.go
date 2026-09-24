@@ -52,7 +52,9 @@ type NextDiensteGame struct {
 }
 
 type MeineDienste struct {
-	NextGame          *NextDiensteGame   `json:"nextGame"`
+	NextGame *NextDiensteGame `json:"nextGame"`
+	// TeamLabel nennt die Stamm-Teams des Nutzers, die an NextGame beteiligt sind.
+	TeamLabel         string             `json:"teamLabel,omitempty"`
 	MySlots           []DiensteSlot      `json:"mySlots"`
 	OpenSlotsCount    int                `json:"openSlotsCount"`
 	DutyAccount       []DutyAccountEntry `json:"dutyAccount"`
@@ -418,11 +420,15 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 	}
 
 	var game NextDiensteGame
+	var teamLabel string
 	err := h.db.QueryRowContext(r.Context(), fmt.Sprintf(`
-		SELECT g.id, g.date, g.opponent
+		SELECT g.id, g.date, g.opponent,
+		       COALESCE((SELECT GROUP_CONCAT(COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), ', ')
+		                 FROM game_teams gt2 JOIN teams t ON t.id = gt2.team_id
+		                 WHERE gt2.game_id = g.id AND gt2.team_id IN (%[1]s)), '')
 		FROM games g
 		JOIN game_teams gt ON g.id = gt.game_id
-		WHERE gt.team_id IN (%s)
+		WHERE gt.team_id IN (%[1]s)
 		  AND g.season_id = ?
 		  AND DATE(g.date) >= DATE('now')
 		  AND EXISTS (
@@ -434,12 +440,18 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 		GROUP BY g.id
 		ORDER BY g.date ASC, g.time ASC
 		LIMIT 1`, dutyTeamQuery),
-		append(append(appdb.UserArgs(appdb.TeamsStamm, userID), seasonID, seasonID), audienceArgs(userID)...)...,
-	).Scan(&game.ID, &game.Date, &game.Opponent)
+		concatArgs(
+			appdb.UserArgs(appdb.TeamsStamm, userID),
+			appdb.UserArgs(appdb.TeamsStamm, userID),
+			[]any{seasonID, seasonID},
+			audienceArgs(userID),
+		)...,
+	).Scan(&game.ID, &game.Date, &game.Opponent, &teamLabel)
 	if err != nil {
 		return result
 	}
 	result.NextGame = &game
+	result.TeamLabel = teamLabel
 
 	// User's own assignments for this game. teamLabel nennt die Stamm-Teams
 	// des Nutzers, zu denen der Slot gehört — dieselbe Form wie im Aushilfe-Block.
