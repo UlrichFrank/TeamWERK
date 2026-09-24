@@ -21,9 +21,9 @@
 
 ## 4. Dashboard (Backend)
 
-- [ ] 4.1 `audienceMatchClauseSQL` und `dutyTeamQuery` auf `appdb.UserTeamsSQL` umstellen, Stamm-Block unverändert; Stamm-`mySlots` schließt Aushilfe-Zusagen aus; verifiziert durch bestehenden `TestDashboard_MeineDienste_ErweiterterKaderZaehltNicht` (grün)
-- [ ] 4.2 `queryMeineDiensteAushilfe` → `meineDienste.aushilfe` (`mySlots` ≤ 5, `nextGame`, `openSlotsCount`, sonst `null`); verifiziert durch `TestDashboard_MeineDienste_AushilfeBlock`, `TestDashboard_MeineDienste_OhneErweitertenKaderKeinBlock`
-- [ ] 4.3 `meineDienste.dutyAccountAushilfe` aus `Snapshot.AushilfeFor`; verifiziert durch `TestDashboard_DutyAccountAushilfe`
+- [x] 4.1 `audienceMatchClauseSQL` und `dutyTeamQuery` auf `appdb.UserTeamsSQL` umstellen, Stamm-Block unverändert; Stamm-`mySlots` schließt Aushilfe-Zusagen aus; verifiziert durch bestehenden `TestDashboard_MeineDienste_ErweiterterKaderZaehltNicht` (grün)
+- [x] 4.2 `queryMeineDiensteAushilfe` → `meineDienste.aushilfe` (`mySlots` ≤ 5, `nextGame`, `openSlotsCount`, sonst `null`); verifiziert durch `TestDashboard_MeineDienste_AushilfeBlock`, `TestDashboard_MeineDienste_OhneErweitertenKaderKeinBlock`
+- [x] 4.3 `meineDienste.dutyAccountAushilfe` aus `Snapshot.AushilfeFor`; verifiziert durch `TestDashboard_DutyAccountAushilfe`
 
 ## 5. Rangliste (Backend)
 

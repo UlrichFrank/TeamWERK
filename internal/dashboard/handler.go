@@ -55,6 +55,40 @@ type MeineDienste struct {
 	OpenSlotsCount    int                `json:"openSlotsCount"`
 	DutyAccount       []DutyAccountEntry `json:"dutyAccount"`
 	RecentAssignments []RecentAssignment `json:"recentAssignments"`
+	// DutyAccountAushilfe: Aushilfe-Positionen je (Mitglied, Team) — kein Soll.
+	DutyAccountAushilfe []DutyAccountAushilfeEntry `json:"dutyAccountAushilfe"`
+	// Aushilfe ist der getrennte Block für Teams, mit denen der Nutzer nur über
+	// den erweiterten Kader verbunden ist; nil, wenn es dort nichts zu zeigen gibt.
+	Aushilfe *MeineDiensteAushilfe `json:"aushilfe"`
+}
+
+// MeineDiensteAushilfe: eigene kommende Aushilfe-Zusagen (des Nutzers oder
+// seiner Kinder-Accounts) und das nächste Spiel eines erweiterten Teams mit
+// offenen, zur Zielgruppe passenden Diensten.
+type MeineDiensteAushilfe struct {
+	MySlots        []AushilfeSlot   `json:"mySlots"`
+	NextGame       *NextDiensteGame `json:"nextGame"`
+	TeamLabel      string           `json:"teamLabel,omitempty"`
+	OpenSlotsCount int              `json:"openSlotsCount"`
+}
+
+type AushilfeSlot struct {
+	Date         string `json:"date"`
+	EventTime    string `json:"eventTime"`
+	DutyTypeName string `json:"dutyTypeName"`
+	Label        string `json:"label"`
+	TeamLabel    string `json:"teamLabel"`
+}
+
+// DutyAccountAushilfeEntry ist eine Aushilfe-Zeile der Bilanz-Kachel: nur
+// geleistet/vorhersage, bewusst ohne Soll.
+type DutyAccountAushilfeEntry struct {
+	MemberID   int     `json:"memberId"`
+	Name       string  `json:"name"`
+	TeamID     int     `json:"teamId"`
+	TeamLabel  string  `json:"teamLabel"`
+	Geleistet  float64 `json:"geleistet"`
+	Vorhersage float64 `json:"vorhersage"`
 }
 
 type RecentAssignment struct {
@@ -221,17 +255,21 @@ func (h *Handler) teamQueryForUser() string {
 // dutyTeamQuery liefert die Teams, deren Dienste den User betreffen: Stammkader
 // (selbst oder Kind via family_links) und Trainer — bewusst OHNE erweiterten
 // Kader, anders als teamQueryForUser. Wer im erweiterten Kader aushilft,
-// schuldet keine Dienste (vgl. duties.eligibleDutyRecipients); deckungsgleich
-// mit der Team-Quelle der Dienstbörse (duties.Handler.Board).
-// Parameter: seasonID, userID, userID, seasonID, userID.
-const dutyTeamQuery = `SELECT pm.team_id FROM player_memberships pm
-	WHERE pm.season_id = ? AND pm.member_id IN (
-		SELECT id FROM members WHERE user_id = ?
-		UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)
-	UNION
-	SELECT trm.team_id FROM trainer_memberships trm
-	JOIN members m ON m.id = trm.member_id
-	WHERE trm.season_id = ? AND m.user_id = ?`
+// schuldet keine Dienste; seine Dienste stehen im getrennten Aushilfe-Block
+// (queryMeineDiensteAushilfe). Derselbe Baustein wie die Team-Quelle der
+// Dienstbörse (duties.Handler.Board). Parameter: appdb.UserArgs(TeamsStamm, userID).
+var dutyTeamQuery = appdb.UserTeamsSQL(appdb.TeamsStamm, "?")
+
+// dutyExtTeamQuery: Teams des erweiterten Kaders (selbst oder Kind), aktive
+// Saison. Parameter: appdb.UserArgs(TeamsExtended, userID).
+var dutyExtTeamQuery = appdb.UserTeamsSQL(appdb.TeamsExtended, "?")
+
+// slotInTeams ist wahr, wenn der Slot `ds` zu einem Team aus teamsSQL gehört —
+// mit Spiel über game_teams, ohne Spiel über ds.team_id (Regel der Dienstbörse).
+func slotInTeams(teamsSQL string) string {
+	return `((ds.game_id IS NULL AND ds.team_id IN (` + teamsSQL + `))
+		OR ds.game_id IN (SELECT gt_s.game_id FROM game_teams gt_s WHERE gt_s.team_id IN (` + teamsSQL + `)))`
+}
 
 // queryNextEvents returns all events on the next day that has at least one event.
 // Combines training_sessions and games for the user's teams.
@@ -333,28 +371,17 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 
 // audienceMatchClauseSQL filters duty_slots to those whose audience matches the
 // current user. Mirrors the duty board's filter (handler.go in internal/duties).
-// Requires `ds` and `dt` to be in scope. Takes two positional parameters:
-// userID (for the 'eltern' family-link match) and userID (for the
-// member_club_functions match).
-const audienceMatchClauseSQL = `(
+// Requires `ds` and `dt` to be in scope. Positional parameters:
+// audienceArgs(userID) — the 'eltern' match (children in Stammkader or
+// erweitertem Kader of a slot team) and the member_club_functions match.
+var audienceMatchClauseSQL = `(
 	COALESCE(ds.audiences, dt.audiences) IS NULL
 	OR (
 		json_valid(COALESCE(ds.audiences, dt.audiences)) AND (
 			(EXISTS (
 				SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 				WHERE je.value = 'eltern'
-			) AND EXISTS (
-				SELECT 1 FROM family_links fl_a
-				JOIN player_memberships pm_a ON pm_a.member_id = fl_a.member_id
-				JOIN seasons sa ON sa.id = pm_a.season_id AND sa.is_active = 1
-				WHERE fl_a.parent_user_id = ?
-				AND (
-					(ds.game_id IS NULL AND pm_a.team_id = ds.team_id)
-					OR (ds.game_id IS NOT NULL AND pm_a.team_id IN (
-						SELECT gt_a.team_id FROM game_teams gt_a WHERE gt_a.game_id = ds.game_id
-					))
-				)
-			))
+			) AND ` + slotInTeams(appdb.UserTeamsSQL(appdb.TeamsChildren, "?")) + `)
 			OR EXISTS (
 				SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 				JOIN member_club_functions mcf_a ON mcf_a.function = je.value
@@ -365,16 +392,26 @@ const audienceMatchClauseSQL = `(
 	)
 )`
 
+// audienceArgs liefert die Parameter von audienceMatchClauseSQL.
+func audienceArgs(userID int) []any {
+	args := appdb.UserArgs(appdb.TeamsChildren, userID)
+	args = append(args, appdb.UserArgs(appdb.TeamsChildren, userID)...)
+	return append(args, userID)
+}
+
 // queryMeineDienste finds the next game with duty slots and returns user's own
 // assignments (or open slot count) plus the season duty account. Both the
 // next-game lookup and the open-slot count are restricted to slots whose
 // audience matches the user — a trainer must not see player-only slots on
 // their dashboard, even when those slots belong to one of their teams.
 func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, seasonID int) *MeineDienste {
+	account, accountAushilfe := h.queryDutyAccount(r.Context(), userID, seasonID)
 	result := &MeineDienste{
-		MySlots:           []DiensteSlot{},
-		DutyAccount:       h.queryDutyAccount(r.Context(), userID, seasonID),
-		RecentAssignments: h.queryRecentAssignments(r.Context(), userID, role, seasonID),
+		MySlots:             []DiensteSlot{},
+		DutyAccount:         account,
+		DutyAccountAushilfe: accountAushilfe,
+		RecentAssignments:   h.queryRecentAssignments(r.Context(), userID, role, seasonID),
+		Aushilfe:            h.queryMeineDiensteAushilfe(r.Context(), userID, seasonID),
 	}
 
 	var game NextDiensteGame
@@ -394,7 +431,7 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 		GROUP BY g.id
 		ORDER BY g.date ASC, g.time ASC
 		LIMIT 1`, dutyTeamQuery),
-		seasonID, userID, userID, seasonID, userID, seasonID, seasonID, userID, userID,
+		append(append(appdb.UserArgs(appdb.TeamsStamm, userID), seasonID, seasonID), audienceArgs(userID)...)...,
 	).Scan(&game.ID, &game.Date, &game.Opponent)
 	if err != nil {
 		return result
@@ -428,23 +465,145 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 			WHERE ds.game_id = ? AND ds.season_id = ?
 			  AND ds.slots_filled < ds.slots_total
 			  AND `+audienceMatchClauseSQL,
-			game.ID, seasonID, userID, userID,
+			append([]any{game.ID, seasonID}, audienceArgs(userID)...)...,
 		).Scan(&result.OpenSlotsCount)
 	}
 
 	return result
 }
 
+// queryMeineDiensteAushilfe baut den Aushilfe-Block (dienste-erweiterter-kader).
+// Aushilfe heißt: der Slot gehört zu einem Team des erweiterten Kaders und zu
+// keinem Stamm-/Trainer-Team — dieselbe Regel wie das Kennzeichen der
+// Dienstbörse. Der Stamm-Block oben bleibt davon unberührt.
+func (h *Handler) queryMeineDiensteAushilfe(ctx context.Context, userID, seasonID int) *MeineDiensteAushilfe {
+	res := &MeineDiensteAushilfe{MySlots: []AushilfeSlot{}}
+
+	// Eigene Zusagen — auch die der Kinder-Proxy-Accounts, denn Eltern tragen
+	// ihre Kinder über den „Für wen?"-Dialog auf deren Account ein. Das
+	// Aushilfe-Prädikat gilt je eingetragenem Account (wie am Board).
+	accExt := appdb.UserTeamsSQL(appdb.TeamsExtended, "da.user_id")
+	accStamm := appdb.UserTeamsSQL(appdb.TeamsStamm, "da.user_id")
+	rows, err := h.db.QueryContext(ctx, `
+		SELECT COALESCE(ds.event_date, ''), COALESCE(ds.event_time, ''), dt.name,
+		       COALESCE(NULLIF(g.opponent, ''), ds.event_name, ''),
+		       COALESCE((SELECT GROUP_CONCAT(COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), ', ')
+		                 FROM teams t WHERE t.id IN (`+dutyExtTeamQuery+`)
+		                   AND (t.id = ds.team_id OR t.id IN (SELECT team_id FROM game_teams WHERE game_id = ds.game_id))), '')
+		FROM duty_assignments da
+		JOIN duty_slots ds ON ds.id = da.duty_slot_id
+		JOIN duty_types dt ON dt.id = ds.duty_type_id
+		LEFT JOIN games g ON g.id = ds.game_id
+		WHERE ds.season_id = ?
+		  AND DATE(ds.event_date) >= DATE('now')
+		  AND da.user_id IN (
+		      SELECT ? UNION
+		      SELECT m.user_id FROM family_links fl JOIN members m ON m.id = fl.member_id
+		      WHERE fl.parent_user_id = ? AND m.user_id IS NOT NULL)
+		  AND `+slotInTeams(accExt)+`
+		  AND NOT `+slotInTeams(accStamm)+`
+		ORDER BY ds.event_date, COALESCE(ds.event_time, ''), ds.id
+		LIMIT 5`,
+		append(appdb.UserArgs(appdb.TeamsExtended, userID), seasonID, userID, userID)...)
+	if err != nil {
+		slog.Error("dashboard aushilfe mySlots", "user", userID, "error", err)
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var s AushilfeSlot
+			rows.Scan(&s.Date, &s.EventTime, &s.DutyTypeName, &s.Label, &s.TeamLabel)
+			if len(s.Date) > 10 {
+				s.Date = s.Date[:10]
+			}
+			res.MySlots = append(res.MySlots, s)
+		}
+	}
+
+	// Nächstes Spiel eines erweiterten Teams, das kein Spiel eines Stamm-Teams
+	// ist (Stamm schlägt erweitert), mit offenen passenden Diensten.
+	var game NextDiensteGame
+	var teamLabel string
+	err = h.db.QueryRowContext(ctx, `
+		SELECT g.id, g.date, g.opponent,
+		       COALESCE((SELECT GROUP_CONCAT(COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), ', ')
+		                 FROM game_teams gt2 JOIN teams t ON t.id = gt2.team_id
+		                 WHERE gt2.game_id = g.id AND gt2.team_id IN (`+dutyExtTeamQuery+`)), '')
+		FROM games g
+		WHERE g.season_id = ?
+		  AND DATE(g.date) >= DATE('now')
+		  AND EXISTS (SELECT 1 FROM game_teams gt WHERE gt.game_id = g.id AND gt.team_id IN (`+dutyExtTeamQuery+`))
+		  AND NOT EXISTS (SELECT 1 FROM game_teams gt WHERE gt.game_id = g.id AND gt.team_id IN (`+dutyTeamQuery+`))
+		  AND EXISTS (
+		      SELECT 1 FROM duty_slots ds
+		      JOIN duty_types dt ON dt.id = ds.duty_type_id
+		      WHERE ds.game_id = g.id AND ds.season_id = ?
+		        AND ds.slots_filled < ds.slots_total
+		        AND `+audienceMatchClauseSQL+`)
+		ORDER BY g.date ASC, g.time ASC
+		LIMIT 1`,
+		concatArgs(
+			appdb.UserArgs(appdb.TeamsExtended, userID),
+			[]any{seasonID},
+			appdb.UserArgs(appdb.TeamsExtended, userID),
+			appdb.UserArgs(appdb.TeamsStamm, userID),
+			[]any{seasonID},
+			audienceArgs(userID),
+		)...,
+	).Scan(&game.ID, &game.Date, &game.Opponent, &teamLabel)
+	if err == nil {
+		res.NextGame = &game
+		res.TeamLabel = teamLabel
+		h.db.QueryRowContext(ctx, `
+			SELECT COALESCE(SUM(ds.slots_total - ds.slots_filled), 0)
+			FROM duty_slots ds
+			JOIN duty_types dt ON dt.id = ds.duty_type_id
+			WHERE ds.game_id = ? AND ds.season_id = ?
+			  AND ds.slots_filled < ds.slots_total
+			  AND `+audienceMatchClauseSQL,
+			append([]any{game.ID, seasonID}, audienceArgs(userID)...)...,
+		).Scan(&res.OpenSlotsCount)
+	} else if err != sql.ErrNoRows {
+		slog.Error("dashboard aushilfe nextGame", "user", userID, "error", err)
+	}
+
+	if len(res.MySlots) == 0 && res.NextGame == nil {
+		return nil
+	}
+	return res
+}
+
+func concatArgs(parts ...[]any) []any {
+	var out []any
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
+}
+
 // queryDutyAccount liefert eine Position je Kind (bzw. für den Nutzer selbst)
 // mit aktiver Kader-Mitgliedschaft. Die Zahlen kommen aus dutyfairness —
 // derselbe Codepfad wie die Rangliste, damit Kachel und Rangliste nie
 // auseinanderlaufen.
-func (h *Handler) queryDutyAccount(ctx context.Context, userID, seasonID int) []DutyAccountEntry {
+//
+// Die zweite Liste sind die Aushilfe-Positionen (erweiterter Kader) — ohne
+// Soll, getrennt ausgewiesen (Change dienste-erweiterter-kader).
+func (h *Handler) queryDutyAccount(ctx context.Context, userID, seasonID int) ([]DutyAccountEntry, []DutyAccountAushilfeEntry) {
 	entries := []DutyAccountEntry{}
+	aushilfe := []DutyAccountAushilfeEntry{}
 	snap, err := dutyfairness.Compute(ctx, h.db, seasonID)
 	if err != nil {
 		slog.Error("dashboard queryDutyAccount: compute failed", "user", userID, "error", err)
-		return entries
+		return entries, aushilfe
+	}
+	for _, p := range snap.AushilfeFor(userID) {
+		aushilfe = append(aushilfe, DutyAccountAushilfeEntry{
+			MemberID:   p.Member.MemberID,
+			Name:       p.Member.Name,
+			TeamID:     p.Team.TeamID,
+			TeamLabel:  p.Team.Label,
+			Geleistet:  dutyfairness.Round2(p.Geleistet),
+			Vorhersage: dutyfairness.Round2(p.Vorhersage),
+		})
 	}
 	for _, p := range snap.PositionsFor(userID) {
 		entries = append(entries, DutyAccountEntry{
@@ -457,7 +616,7 @@ func (h *Handler) queryDutyAccount(ctx context.Context, userID, seasonID int) []
 			Soll:       dutyfairness.Round2(p.Team.Soll),
 		})
 	}
-	return entries
+	return entries, aushilfe
 }
 
 // queryRecentAssignments returns the user's five most recent assignments in
