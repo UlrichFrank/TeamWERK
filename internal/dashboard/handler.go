@@ -39,8 +39,10 @@ type NextEvent struct {
 }
 
 type DiensteSlot struct {
+	SlotID       int    `json:"slotId"`
 	DutyTypeName string `json:"dutyTypeName"`
 	EventTime    string `json:"eventTime"`
+	TeamLabel    string `json:"teamLabel"`
 }
 
 type NextDiensteGame struct {
@@ -73,6 +75,7 @@ type MeineDiensteAushilfe struct {
 }
 
 type AushilfeSlot struct {
+	SlotID       int    `json:"slotId"`
 	Date         string `json:"date"`
 	EventTime    string `json:"eventTime"`
 	DutyTypeName string `json:"dutyTypeName"`
@@ -438,21 +441,25 @@ func (h *Handler) queryMeineDienste(r *http.Request, userID int, role string, se
 	}
 	result.NextGame = &game
 
-	// User's own assignments for this game
+	// User's own assignments for this game. teamLabel nennt die Stamm-Teams
+	// des Nutzers, zu denen der Slot gehört — dieselbe Form wie im Aushilfe-Block.
 	rows, err := h.db.QueryContext(r.Context(), `
-		SELECT dt.name, COALESCE(ds.event_time, '')
+		SELECT ds.id, dt.name, COALESCE(ds.event_time, ''),
+		       COALESCE((SELECT GROUP_CONCAT(COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), ', ')
+		                 FROM teams t WHERE t.id IN (`+dutyTeamQuery+`)
+		                   AND (t.id = ds.team_id OR t.id IN (SELECT team_id FROM game_teams WHERE game_id = ds.game_id))), '')
 		FROM duty_assignments da
 		JOIN duty_slots ds ON da.duty_slot_id = ds.id
 		JOIN duty_types dt ON ds.duty_type_id = dt.id
 		WHERE da.user_id = ?
 		  AND ds.game_id = ?
 		  AND da.status IN ('assigned','fulfilled','cash_substitute')
-		ORDER BY ds.event_time ASC`, userID, game.ID)
+		ORDER BY ds.event_time ASC`, append(appdb.UserArgs(appdb.TeamsStamm, userID), userID, game.ID)...)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
 			var slot DiensteSlot
-			rows.Scan(&slot.DutyTypeName, &slot.EventTime)
+			rows.Scan(&slot.SlotID, &slot.DutyTypeName, &slot.EventTime, &slot.TeamLabel)
 			result.MySlots = append(result.MySlots, slot)
 		}
 	}
@@ -485,7 +492,7 @@ func (h *Handler) queryMeineDiensteAushilfe(ctx context.Context, userID, seasonI
 	accExt := appdb.UserTeamsSQL(appdb.TeamsExtended, "da.user_id")
 	accStamm := appdb.UserTeamsSQL(appdb.TeamsStamm, "da.user_id")
 	rows, err := h.db.QueryContext(ctx, `
-		SELECT COALESCE(ds.event_date, ''), COALESCE(ds.event_time, ''), dt.name,
+		SELECT ds.id, COALESCE(ds.event_date, ''), COALESCE(ds.event_time, ''), dt.name,
 		       COALESCE(NULLIF(g.opponent, ''), ds.event_name, ''),
 		       COALESCE((SELECT GROUP_CONCAT(COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), ', ')
 		                 FROM teams t WHERE t.id IN (`+dutyExtTeamQuery+`)
@@ -511,7 +518,7 @@ func (h *Handler) queryMeineDiensteAushilfe(ctx context.Context, userID, seasonI
 		defer rows.Close()
 		for rows.Next() {
 			var s AushilfeSlot
-			rows.Scan(&s.Date, &s.EventTime, &s.DutyTypeName, &s.Label, &s.TeamLabel)
+			rows.Scan(&s.SlotID, &s.Date, &s.EventTime, &s.DutyTypeName, &s.Label, &s.TeamLabel)
 			if len(s.Date) > 10 {
 				s.Date = s.Date[:10]
 			}

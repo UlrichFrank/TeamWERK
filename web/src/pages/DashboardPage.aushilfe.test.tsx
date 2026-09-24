@@ -32,7 +32,7 @@ function renderDashboard() {
 
 const STAMM = {
   nextGame: { id: 1, date: '2099-09-26', opponent: 'TV Bittenfeld' },
-  mySlots: [{ dutyTypeName: 'Kampfgericht', eventTime: '13:30' }],
+  mySlots: [{ slotId: 41, dutyTypeName: 'Kampfgericht', eventTime: '13:30', teamLabel: 'mC1' }],
   openSlotsCount: 0,
   dutyAccount: [{ memberId: 11, name: 'Lena Beispiel', teamId: 5, teamLabel: 'mC1', geleistet: 4, vorhersage: 1, soll: 6 }],
   recentAssignments: [],
@@ -47,7 +47,7 @@ describe('DashboardPage — Aushilfe im erweiterten Kader', () => {
     seed({
       ...STAMM,
       aushilfe: {
-        mySlots: [{ date: '2099-09-20', eventTime: '10:00', dutyTypeName: 'Bewirtung', label: 'SG Weinstadt', teamLabel: 'mB1' }],
+        mySlots: [{ slotId: 42, date: '2099-09-20', eventTime: '10:00', dutyTypeName: 'Bewirtung', label: 'SG Weinstadt', teamLabel: 'mB1' }],
         nextGame: { id: 2, date: '2099-09-27', opponent: 'HC Oppenweiler' },
         teamLabel: 'mB1',
         openSlotsCount: 3,
@@ -57,12 +57,20 @@ describe('DashboardPage — Aushilfe im erweiterten Kader', () => {
     renderDashboard()
 
     const block = await screen.findByTestId('aushilfe-block')
-    expect(block).toHaveTextContent('Aushilfe (erw. Kader)')
-    expect(within(block).getByText('Bewirtung')).toBeInTheDocument()
+    // Keine Abschnitts-Überschrift mehr — das Kennzeichen steht hinter dem Titel.
+    expect(block).not.toHaveTextContent('erw. Kader')
+    const row = within(block).getByText('Bewirtung').closest('a')!
+    expect(row).toHaveTextContent('Aushilfe')
+    expect(row).toHaveTextContent('SG Weinstadt · mB1 · 10:00')
+    expect(row).toHaveAttribute('href', '/dienste?focus=slot-42')
+    expect(within(block).getByText('3 offene Dienste zum Aushelfen').closest('a')).toHaveAttribute('href', '/dienste?focus=game-2')
     expect(block).toHaveTextContent('3 offene Dienste zum Aushelfen')
     expect(block).toHaveTextContent('HC Oppenweiler · mB1')
-    // Stamm-Block bleibt oberhalb unverändert.
-    expect(screen.getByText('Kampfgericht')).toBeInTheDocument()
+    // Stamm-Zeile: Sprung auf den Slot, Mannschaft wie bei der Aushilfe, kein Kennzeichen.
+    const stamm = screen.getByText('Kampfgericht').closest('a')!
+    expect(stamm).toHaveAttribute('href', '/dienste?focus=slot-41')
+    expect(stamm).toHaveTextContent('TV Bittenfeld · mC1 · 13:30')
+    expect(stamm).not.toHaveTextContent('Aushilfe')
   })
 
   test('ohne aushilfe kein Abschnitt', async () => {

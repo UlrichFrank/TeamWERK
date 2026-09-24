@@ -166,3 +166,51 @@ func TestDashboard_DutyAccountAushilfe(t *testing.T) {
 		t.Error("Aushilfe-Position darf kein soll tragen")
 	}
 }
+
+// Beide Blöcke liefern die Slot-ID (Sprungziel /dienste?focus=slot-<id>) und
+// die Mannschaft des Slots — auch der Stamm-Block, nicht nur die Aushilfe.
+func TestDashboard_MeineDienste_SlotIDUndMannschaft(t *testing.T) {
+	s := newAushilfeSetup(t)
+	dt := testutil.CreateDutyType(t, s.db, "Bewirtung", 1.0)
+
+	stammGame := testutil.CreateGame(t, s.db, s.season, s.stammTeam, dayOffset(2))
+	stammSlot := testutil.CreateDutySlot(t, s.db, dt, s.season, s.stammTeam, stammGame, dayOffset(2))
+	erwGame := testutil.CreateGame(t, s.db, s.season, s.erwTeam, dayOffset(3))
+	erwSlot := testutil.CreateDutySlot(t, s.db, dt, s.season, s.erwTeam, erwGame, dayOffset(3))
+	for _, id := range []int{stammSlot, erwSlot} {
+		if _, err := s.db.Exec(`INSERT INTO duty_assignments (duty_slot_id, user_id) VALUES (?, ?)`, id, s.user); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	srv := testServer(t, dashboard.NewHandler(s.db))
+	res := testutil.Get(t, srv, "/api/dashboard", testutil.Token(t, s.user, "standard", []string{"spieler"}))
+	defer res.Body.Close()
+	var body struct {
+		MeineDienste struct {
+			MySlots []struct {
+				SlotID    int    `json:"slotId"`
+				TeamLabel string `json:"teamLabel"`
+			} `json:"mySlots"`
+			Aushilfe *struct {
+				MySlots []struct {
+					SlotID    int    `json:"slotId"`
+					TeamLabel string `json:"teamLabel"`
+				} `json:"mySlots"`
+			} `json:"aushilfe"`
+		} `json:"meineDienste"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	md := body.MeineDienste
+	if len(md.MySlots) != 1 || md.MySlots[0].SlotID != stammSlot || md.MySlots[0].TeamLabel == "" {
+		t.Errorf("Stamm-Slot = %+v, want slotId=%d mit Mannschaft", md.MySlots, stammSlot)
+	}
+	if md.Aushilfe == nil || len(md.Aushilfe.MySlots) != 1 || md.Aushilfe.MySlots[0].SlotID != erwSlot {
+		t.Fatalf("Aushilfe-Slot fehlt oder falsche ID: %+v", md.Aushilfe)
+	}
+	if md.MySlots[0].TeamLabel == md.Aushilfe.MySlots[0].TeamLabel {
+		t.Errorf("Stamm- und Aushilfe-Slot tragen dieselbe Mannschaft %q", md.MySlots[0].TeamLabel)
+	}
+}

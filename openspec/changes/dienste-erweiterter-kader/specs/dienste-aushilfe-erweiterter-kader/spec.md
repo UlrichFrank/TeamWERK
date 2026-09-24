@@ -73,8 +73,15 @@ Stammkader-, Kinder-im-Stammkader- und Trainer-Teams bilden. Zusätzlich SHALL s
   Nutzers passende Slots hat, samt deren Anzahl.
 
 Ist beides leer, SHALL `aushilfe` `null` sein, und das Frontend SHALL den Block nicht
-zeigen. Andernfalls SHALL das Frontend unter dem bestehenden Block einen visuell
-getrennten Abschnitt „Aushilfe (erw. Kader)“ zeigen, der auf `/dienste` verlinkt.
+zeigen. Andernfalls SHALL das Frontend die Aushilfe-Zeilen unter den Stamm-Zeilen zeigen,
+ohne eigene Abschnitts-Überschrift: jede Aushilfe-Zeile trägt hinter dem Titel dasselbe
+Kennzeichen „Aushilfe“ wie die Dienstbörse.
+
+Jeder Eintrag in `mySlots` (Stamm und Aushilfe) SHALL `slotId` und `teamLabel` tragen —
+`teamLabel` nennt die Mannschaft(en) des Nutzers, zu denen der Slot gehört. Das Frontend
+SHALL die Mannschaft in beiden Blöcken gleich, durch „·“ abgetrennt, in der Unterzeile
+zeigen. Ein Klick auf eine Dienst-Zeile SHALL auf `/dienste?focus=slot-<slotId>` springen,
+ein Klick auf eine „offene Dienste“-Zeile auf `/dienste?focus=game-<gameId>`.
 
 Die Dienst-Bilanz-Kachel (`meineDienste.dutyAccount`) SHALL Aushilfe-Positionen je
 (Mitglied, Aushilfe-Team) in einem eigenen Feld `dutyAccountAushilfe` liefern — nur
@@ -88,6 +95,11 @@ Abschnitt „Aushilfe“ unter den Stammteam-Positionen zeigen, ohne Soll-Balken
 #### Scenario: Aushilfe-Block zeigt das nächste Spiel des erweiterten Teams
 - **WHEN** derselbe Spieler die Kachel lädt und Team B morgen ein Spiel mit drei offenen passenden Slots hat
 - **THEN** enthält `meineDienste.aushilfe.nextGame` dieses Spiel und `openSlotsCount = 3`
+
+#### Scenario: Dienst-Zeile springt auf den Slot
+- **WHEN** der Spieler im Dashboard auf eine eigene Dienst-Zusage (Stamm oder Aushilfe) klickt
+- **THEN** öffnet sich `/dienste?focus=slot-<slotId>` mit diesem Slot im Fokus
+- **AND** zeigt die Zeile die Mannschaft des Slots, bei Aushilfe zusätzlich das Kennzeichen „Aushilfe“
 
 #### Scenario: Eigene Aushilfe-Zusage erscheint im Aushilfe-Block
 - **WHEN** der Spieler einen kommenden Dienst von Team B belegt hat

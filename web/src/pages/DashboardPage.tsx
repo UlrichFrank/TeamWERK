@@ -34,8 +34,10 @@ interface NextEvent {
 }
 
 interface DiensteSlot {
+  slotId: number
   dutyTypeName: string
   eventTime: string
+  teamLabel: string
 }
 
 interface NextDiensteGame {
@@ -63,6 +65,7 @@ interface DutyAccountEntry {
 // Aushilfe im erweiterten Kader (openspec/changes/dienste-erweiterter-kader):
 // getrennt vom Stamm-Block, ohne Soll.
 interface AushilfeSlot {
+  slotId: number
   date: string
   eventTime: string
   dutyTypeName: string
@@ -360,21 +363,24 @@ function DutyAccountRow({ entry }: { entry: DutyAccountEntry }) {
   )
 }
 
-// Aushilfe-Block unter dem Stamm-Block: eigene Aushilfe-Zusagen und das
-// nächste Spiel eines erweiterten Teams mit offenen Diensten.
+// Sprungziele in die Dienstbörse: DutyPage scrollt zu `focus=slot-<id>` bzw.
+// `focus=game-<id>` und hebt die Zeile hervor.
+const slotUrl = (slotId: number) => `/dienste?focus=slot-${slotId}`
+const gameUrl = (gameId: number) => `/dienste?focus=game-${gameId}`
+
+// Aushilfe-Zeilen unter dem Stamm-Block: eigene Aushilfe-Zusagen und das
+// nächste Spiel eines erweiterten Teams mit offenen Diensten. Ohne eigene
+// Überschrift — das „Aushilfe“-Kennzeichen hinter dem Titel trägt die
+// Unterscheidung, wie in der Dienstbörse.
 function AushilfeDiensteBlock({ aushilfe }: { aushilfe: MeineDiensteAushilfe }) {
   const { mySlots, nextGame, teamLabel, openSlotsCount } = aushilfe
   return (
-    <div className="pt-3 border-t border-brand-border-subtle space-y-1" data-testid="aushilfe-block">
-      <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-blue">
-        <Handshake className="w-4 h-4" aria-hidden="true" />
-        Aushilfe (erw. Kader)
-      </p>
+    <div className="space-y-1" data-testid="aushilfe-block">
       <ul className="space-y-1">
         {mySlots.map((s, i) => (
           <li key={i}>
             <DashboardRow
-              to="/dienste"
+              to={slotUrl(s.slotId)}
               dateISO={s.date}
               icon={<Check className="w-4 h-4 text-brand-success" />}
               title={s.dutyTypeName}
@@ -386,11 +392,12 @@ function AushilfeDiensteBlock({ aushilfe }: { aushilfe: MeineDiensteAushilfe }) 
         {nextGame && (
           <li>
             <DashboardRow
-              to="/dienste"
+              to={gameUrl(nextGame.id)}
               dateISO={nextGame.date}
               icon={<Info className="w-4 h-4" />}
               title={`${openSlotsCount} offene Dienst${openSlotsCount !== 1 ? 'e' : ''} zum Aushelfen`}
               subtitle={teamLabel ? `${nextGame.opponent} · ${teamLabel}` : nextGame.opponent}
+              badge={<AushilfeBadge />}
             />
           </li>
         )}
@@ -437,18 +444,18 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
             {mySlots.map((s, i) => (
               <li key={i}>
                 <DashboardRow
-                  to="/dienste"
+                  to={slotUrl(s.slotId)}
                   dateISO={nextGame.date}
                   icon={<Check className="w-4 h-4 text-brand-success" />}
                   title={s.dutyTypeName}
-                  subtitle={s.eventTime ? `${nextGame.opponent} · ${s.eventTime}` : nextGame.opponent}
+                  subtitle={[nextGame.opponent, s.teamLabel, s.eventTime].filter(Boolean).join(' · ')}
                 />
               </li>
             ))}
           </ul>
         ) : (
           <DashboardRow
-            to="/dienste"
+            to={gameUrl(nextGame.id)}
             dateISO={nextGame.date}
             icon={<Info className="w-4 h-4" />}
             title={`${openSlotsCount} offene Dienst${openSlotsCount !== 1 ? 'e' : ''} verfügbar`}

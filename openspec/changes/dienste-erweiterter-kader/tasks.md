@@ -36,7 +36,7 @@
 
 - [x] 6.1 `ExtendedBadge` nach `web/src/components/AushilfeBadge.tsx` verallgemeinern (Text-Prop, `brand-blue`-Tokens), Dashboard-Termine weiter „Erw. Kader“; verifiziert durch bestehende Dashboard-Tests grün
 - [x] 6.2 `DutySlotList`: Chip „Aushilfe“ an Gruppen mit `aushilfe` (Gruppenkopf in `DutyPage.tsx`), Badge neben Eingetragenen mit `aushilfe`; verifiziert durch `DutySlotList.aushilfe.test.tsx`
-- [x] 6.3 `DashboardPage`: Abschnitt „Aushilfe (erw. Kader)“ unter „Meine Dienste“ (Icon `Handshake`, Link `/dienste`) und Abschnitt „Aushilfe“ unter der Bilanz ohne Soll-Balken; verifiziert durch `DashboardPage.aushilfe.test.tsx`
+- [x] 6.3 `DashboardPage`: Aushilfe-Zeilen unter „Meine Dienste“ mit Kennzeichen „Aushilfe“ hinter dem Titel (keine Abschnitts-Überschrift), Mannschaft in Stamm- und Aushilfe-Zeilen, Klick auf `/dienste?focus=slot-<id>` und Abschnitt „Aushilfe“ unter der Bilanz ohne Soll-Balken; verifiziert durch `DashboardPage.aushilfe.test.tsx`
 - [x] 6.4 `DienstRanglistePage`: Abschnitt „Aushilfen“ je Block (Desktop-Tabelle + Mobile-Cards); verifiziert durch `DienstRanglistePage.aushilfe.test.tsx`
 - [x] 6.5 Live-Updates: Dienst-Broadcasts erreichen auch den erweiterten Kader und dessen Eltern (`hub.Audience.DutyTeam` statt `Team` in `broadcastDutySlot`/`broadcastDutyTeams`; `team_memberships` kennt den erweiterten Kader nicht); Board, Dashboard und Rangliste abonnieren `duties` bereits; verifiziert durch `TestAudience_DutyTeam` — ein manueller Zwei-Session-Test im Browser steht noch aus
 
