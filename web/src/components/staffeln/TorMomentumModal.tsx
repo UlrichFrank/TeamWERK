@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { fetchReport } from '../../lib/staffeln'
 import type { MatrixGame, ReportDetail } from '../../lib/staffeln'
@@ -36,7 +37,7 @@ export default function TorMomentumModal({
     return () => { alive = false }
   }, [game.bwhvGameId])
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4"
       onClick={onClose}
@@ -90,6 +91,7 @@ export default function TorMomentumModal({
           />
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

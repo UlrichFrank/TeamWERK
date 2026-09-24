@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTeamList } from '../lib/teamName'
@@ -326,14 +327,14 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         )}
 
         {/* Add slot modal */}
-        {showAddSlot && (
+        {showAddSlot && createPortal(
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
             <div
               ref={addSlotDialogRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby={addSlotTitleId}
-              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm shadow-2xl"
+              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               <h3 id={addSlotTitleId} className="font-bold mb-4 text-brand-text">Dienst hinzufügen</h3>
               <div className="space-y-3">
@@ -412,18 +413,19 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
 
         {/* Edit slot modal */}
-        {editSlot && (
+        {editSlot && createPortal(
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
             <div
               ref={editSlotDialogRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby={editSlotTitleId}
-              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm shadow-2xl"
+              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               <h3 id={editSlotTitleId} className="font-bold mb-4 text-brand-text">Dienst bearbeiten</h3>
               <p className="text-sm text-brand-text-muted mb-3 font-medium">{editSlot.duty_type_name}</p>
@@ -480,18 +482,19 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
 
         {/* Delete slot confirmation */}
-        {deleteSlotId !== null && (
+        {deleteSlotId !== null && createPortal(
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
             <div
               ref={deleteSlotDialogRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby={deleteSlotTitleId}
-              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm shadow-2xl"
+              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               <h3 id={deleteSlotTitleId} className="font-bold mb-2 text-brand-text">Dienst löschen?</h3>
               <p className="text-sm text-brand-text-muted mb-4">Dieser Dienst wird endgültig gelöscht.</p>
@@ -510,18 +513,19 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
 
         {/* Delete game confirmation */}
-        {showDeleteGame && game && (
+        {showDeleteGame && game && createPortal(
           <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
             <div
               ref={deleteGameDialogRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby={deleteGameTitleId}
-              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm shadow-2xl"
+              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               <h3 id={deleteGameTitleId} className="font-bold mb-2 text-brand-text">Spiel löschen?</h3>
               <p className="text-sm text-brand-text-muted mb-1">
@@ -545,7 +549,8 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import { BookOpen, MessageCircle } from 'lucide-react'
 import { api } from '../lib/api'
@@ -308,7 +309,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
       </table>
       </div>
 
-      {noInstructionOpen && (
+      {noInstructionOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div
             ref={noInstructionRef}
@@ -330,10 +331,11 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {claimDialog !== null && user && (
+      {claimDialog !== null && user && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div
             ref={claimDialogRef}
@@ -385,10 +387,11 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {commentModal !== null && (
+      {commentModal !== null && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div
             ref={commentModalRef}
@@ -459,7 +462,8 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )

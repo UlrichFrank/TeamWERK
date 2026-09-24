@@ -1,4 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { Trash2, X, Star } from 'lucide-react'
 import { api } from '../lib/api'
@@ -1086,7 +1087,7 @@ function AusrichterKachel() {
       </div>
 
       {/* Löschen-Bestätigung mit Vorab-Bilanz (Spieltage + gebundene Vorlagen-Zeilen) */}
-      {deleteTarget && (
+      {deleteTarget && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
@@ -1166,7 +1167,8 @@ function AusrichterKachel() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { ChevronDown, MapPin, Plus, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useDialogA11y } from '../lib/useDialogA11y'
@@ -164,7 +165,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
         )}
       </div>
 
-      {showModal && (
+      {showModal && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div
             ref={newVenueDialogRef}
@@ -249,7 +250,8 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   )
