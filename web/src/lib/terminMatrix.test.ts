@@ -84,10 +84,18 @@ describe('Zu-/Absage-Regeln', () => {
   })
   test('nur eigene/Kind-Zeilen, nicht abgesagt, nicht abgemeldet', () => {
     const cell = { status: null, is_default: false }
-    expect(isCellRespondable(member([cell], true), ev(1, 'training'), cell)).toBe(true)
-    expect(isCellRespondable(member([cell], false), ev(1, 'training'), cell)).toBe(false)
-    expect(isCellRespondable(member([cell], true), ev(1, 'training', true), cell)).toBe(false)
-    expect(isCellRespondable(member([cell], true), ev(1, 'training'), { ...cell, unavailable: true })).toBe(false)
+    expect(isCellRespondable(member([cell], true), ev(1, 'training'), cell, false)).toBe(true)
+    expect(isCellRespondable(member([cell], false), ev(1, 'training'), cell, false)).toBe(false)
+    expect(isCellRespondable(member([cell], true), ev(1, 'training', true), cell, false)).toBe(false)
+    expect(isCellRespondable(member([cell], true), ev(1, 'training'), { ...cell, unavailable: true }, false)).toBe(false)
+  })
+  test('nach der Frist nur mit Override antippbar', () => {
+    const cell = { status: 'confirmed' as const, is_default: false }
+    const past = { ...ev(1, 'training'), rsvp_locks_at: '2026-09-13T14:00:00Z' }
+    const after = new Date('2026-09-14T10:00:00Z').getTime()
+    expect(isCellRespondable(member([cell], true), past, cell, false, after)).toBe(false)
+    expect(isCellRespondable(member([cell], true), past, cell, true, after)).toBe(true)
+    expect(isCellRespondable(member([cell], true), past, cell, false, new Date('2026-09-13T10:00:00Z').getTime())).toBe(true)
   })
 })
 

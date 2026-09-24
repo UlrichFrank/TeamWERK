@@ -653,7 +653,7 @@ export default function TerminePage() {
             Die Übersicht konnte nicht geladen werden.
           </div>
         ) : (
-          <TerminMatrix matrix={matrix} columns={matrixColumns} today={today} onCellClick={(row, col) => setMatrixEdit({ row, col })} />
+          <TerminMatrix matrix={matrix} columns={matrixColumns} today={today} canOverrideCutoff={canOverrideRsvpCutoff} onCellClick={(row, col) => setMatrixEdit({ row, col })} />
         )
       ) : (<>
       {focusNotFound && (

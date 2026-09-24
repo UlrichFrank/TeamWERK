@@ -134,12 +134,13 @@ describe('TerminePage — Tabellenansicht', () => {
     expect(within(row('Lias Stein')).getAllByRole('cell')[0].textContent).toBe('1 (100 %)')
   })
 
-  test('nur eigene und Kind-Zeilen sind antippbar', async () => {
+  test('nur eigene und Kind-Zeilen sind antippbar — vergangene nicht', async () => {
     seedRoutes()
     renderAt('/termine?view=tabelle&team=1')
     await waitFor(() => expect(screen.getByText('Philip Lei')).toBeTruthy())
-    expect(within(row('Philip Lei')).getAllByRole('button')).toHaveLength(3)
-    expect(within(row('Lias Stein')).getAllByRole('button')).toHaveLength(3)
+    // Die beiden vergangenen Termine liegen hinter der Frist: nur der künftige bleibt.
+    expect(within(row('Philip Lei')).getAllByRole('button')).toHaveLength(1)
+    expect(within(row('Lias Stein')).getAllByRole('button')).toHaveLength(1)
     expect(within(row('Justus W')).queryAllByRole('button')).toHaveLength(0)
   })
 
@@ -150,7 +151,7 @@ describe('TerminePage — Tabellenansicht', () => {
     await waitFor(() => expect(screen.getByText('Lias Stein')).toBeTruthy())
     const before = matrixCalls().length
 
-    await user.click(within(row('Lias Stein')).getAllByRole('button')[2])
+    await user.click(within(row('Lias Stein')).getAllByRole('button')[0])
     const dialog = screen.getByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: 'Zusagen' }))
 
@@ -164,7 +165,7 @@ describe('TerminePage — Tabellenansicht', () => {
     renderAt('/termine?view=tabelle&team=1')
     const user = userEvent.setup()
     await waitFor(() => expect(screen.getByText('Philip Lei')).toBeTruthy())
-    await user.click(within(row('Philip Lei')).getAllByRole('button')[2])
+    await user.click(within(row('Philip Lei')).getAllByRole('button')[0])
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Zusagen' }))
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/training-sessions/12/respond', { status: 'maybe', reason: '' }))
   })
@@ -174,7 +175,7 @@ describe('TerminePage — Tabellenansicht', () => {
     renderAt('/termine?view=tabelle&team=1')
     const user = userEvent.setup()
     await waitFor(() => expect(screen.getByText('Philip Lei')).toBeTruthy())
-    await user.click(within(row('Philip Lei')).getAllByRole('button')[2])
+    await user.click(within(row('Philip Lei')).getAllByRole('button')[0])
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Absagen' }))
 
     await user.type(screen.getByPlaceholderText('Begründung…'), 'krank')
@@ -182,15 +183,13 @@ describe('TerminePage — Tabellenansicht', () => {
     await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/training-sessions/12/respond', { status: 'declined', reason: 'krank' }))
   })
 
-  test('verstrichene Frist sperrt die Schaltflächen — außer mit Override', async () => {
+  test('verstrichene Frist: vergangene Zelle öffnet keinen Dialog', async () => {
     seedRoutes()
     renderAt('/termine?view=tabelle&team=1')
-    const user = userEvent.setup()
     await waitFor(() => expect(screen.getByText('Philip Lei')).toBeTruthy())
-    await user.click(within(row('Philip Lei')).getAllByRole('button')[1])
-    const dialog = screen.getByRole('dialog')
-    expect((within(dialog).getByRole('button', { name: 'Zusagen' }) as HTMLButtonElement).disabled).toBe(true)
-    expect(within(dialog).getByText(/nur noch beim Trainer/)).toBeTruthy()
+    const cells = within(row('Philip Lei')).getAllByRole('cell')
+    expect(within(cells[cells.length - 2]).queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   test('mit Override bleibt die Frist ohne Wirkung', async () => {
@@ -199,6 +198,7 @@ describe('TerminePage — Tabellenansicht', () => {
     renderAt('/termine?view=tabelle&team=1')
     const user = userEvent.setup()
     await waitFor(() => expect(screen.getByText('Philip Lei')).toBeTruthy())
+    expect(within(row('Philip Lei')).getAllByRole('button')).toHaveLength(3)
     await user.click(within(row('Philip Lei')).getAllByRole('button')[1])
     expect((within(screen.getByRole('dialog')).getByRole('button', { name: 'Zusagen' }) as HTMLButtonElement).disabled).toBe(false)
   })

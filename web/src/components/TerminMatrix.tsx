@@ -54,9 +54,11 @@ interface Props {
   today: string
   /** Tipp auf eine antwortbare Zelle (eigene Zeile, Kind). */
   onCellClick?: (row: number, col: number) => void
+  /** Darf nach der Rückmeldefrist noch ändern (Trainer/Vorstand). */
+  canOverrideCutoff?: boolean
 }
 
-export default function TerminMatrix({ matrix, columns, today, onCellClick }: Props) {
+export default function TerminMatrix({ matrix, columns, today, onCellClick, canOverrideCutoff = false }: Props) {
   const { events, members } = matrix
   const withPresence = members.some(m => m.cells.some(c => c.present !== undefined))
   // Abgesagte Termine stehen als durchgestrichene Spalte in der Tabelle, zählen
@@ -95,10 +97,10 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick }: Pr
                 >
                   Spieler
                 </th>
-                <th scope="col" title="Vergangene Termine: erfasste Anwesenheit, sonst Zusage" className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left border-b border-brand-border-subtle whitespace-nowrap">
+                <th scope="col" title="Vergangene Termine: erfasste Anwesenheit, sonst Zusage" className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left border-b border-brand-border-subtle whitespace-nowrap">
                   Bisher
                 </th>
-                <th scope="col" title="Heutige und künftige Termine: Zusagen" className="bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left border-b border-r border-brand-border-subtle whitespace-nowrap">
+                <th scope="col" title="Heutige und künftige Termine: Zusagen" className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left border-b border-r border-brand-border-subtle whitespace-nowrap">
                   Geplant
                 </th>
                 {columns.map(i => {
@@ -142,10 +144,10 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick }: Pr
                       {m.is_self && <span className="ml-1 text-xs font-normal text-brand-text-subtle">(ich)</span>}
                       {m.extended && <span className="ml-1 text-xs font-normal text-brand-text-subtle">erw.</span>}
                     </th>
-                    <td className={`px-3 py-2.5 text-brand-text whitespace-nowrap border-b border-brand-border-subtle group-hover:bg-brand-table-select ${groupBorder}`}>
+                    <td className={`hidden sm:table-cell px-3 py-2.5 text-brand-text whitespace-nowrap border-b border-brand-border-subtle group-hover:bg-brand-table-select ${groupBorder}`}>
                       {formatParticipation(part.past)}
                     </td>
-                    <td className={`px-3 py-2.5 text-brand-text whitespace-nowrap border-b border-r border-brand-border-subtle group-hover:bg-brand-table-select ${groupBorder}`}>
+                    <td className={`hidden sm:table-cell px-3 py-2.5 text-brand-text whitespace-nowrap border-b border-r border-brand-border-subtle group-hover:bg-brand-table-select ${groupBorder}`}>
                       {formatParticipation(part.future)}
                     </td>
                     {columns.map(i => {
@@ -155,7 +157,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick }: Pr
                         ? { icon: null, label: 'Termin abgesagt' }
                         : cellView(cell)
                       const tdClass = `px-2 py-2.5 text-center border-b border-brand-border-subtle group-hover:bg-brand-table-select ${groupBorder}`
-                      if (onCellClick && isCellRespondable(m, ev, cell)) {
+                      if (onCellClick && isCellRespondable(m, ev, cell, canOverrideCutoff)) {
                         return (
                           <td key={`${ev.kind}-${ev.id}`} className={`${tdClass} bg-brand-yellow/10`}>
                             <button

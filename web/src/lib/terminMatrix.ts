@@ -150,7 +150,17 @@ export function cutoffLocked(ev: MatrixEvent, canOverride: boolean, now: number 
   return !canOverride && !!ev.rsvp_locks_at && now >= new Date(ev.rsvp_locks_at).getTime()
 }
 
-/** Ob eine Zelle antippbar ist (Dialog öffnet sich). */
-export function isCellRespondable(member: MatrixMember, ev: MatrixEvent, cell: MatrixCell): boolean {
-  return member.can_respond && !ev.cancelled && !cell.unavailable
+/**
+ * Ob eine Zelle antippbar ist (Dialog öffnet sich). Nach der Rückmeldefrist —
+ * also auch für jeden vergangenen Termin — nur noch mit Override-Recht
+ * (Trainer/Vorstand); Spieler und Eltern sperrt der Server dort ohnehin (422).
+ */
+export function isCellRespondable(
+  member: MatrixMember,
+  ev: MatrixEvent,
+  cell: MatrixCell,
+  canOverride: boolean,
+  now: number = Date.now(),
+): boolean {
+  return member.can_respond && !ev.cancelled && !cell.unavailable && !cutoffLocked(ev, canOverride, now)
 }
