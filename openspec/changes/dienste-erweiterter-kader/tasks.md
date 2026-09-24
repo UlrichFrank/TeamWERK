@@ -3,7 +3,7 @@
 ## 1. Vorbereitung
 
 - [x] 1.1 Prod-Zählquery vorbereiten (nicht ausführen, dem Nutzer übergeben): Anzahl `duty_assignments` der aktiven Saison, deren Account weder selbst noch über ein Kind im Stammkader/als Trainer eines Slot-Teams steht, wohl aber im erweiterten Kader — Größenordnung der Bilanz-Verschiebung; Query als Kommentar in `design.md` unter „Risks“ ablegen
-- [ ] 1.2 SQL-Baustein `appdb.UserTeamsSQL(kind)` (stamm inkl. Trainer / extended, selbst + Kinder, aktive Saison, extended mit `status <> 'ausgetreten'`) in `internal/db` anlegen; verifiziert durch Unit-Test in `internal/db` mit Stamm-, Erweitert-, Förderkind- und Ausgetreten-Fall
+- [x] 1.2 SQL-Baustein `appdb.UserTeamsSQL(kind)` (stamm inkl. Trainer / extended, selbst + Kinder, aktive Saison, extended mit `status <> 'ausgetreten'`) in `internal/db` anlegen; verifiziert durch Unit-Test in `internal/db` mit Stamm-, Erweitert-, Förderkind- und Ausgetreten-Fall
 
 ## 2. Dienstbörse (Backend)
 
