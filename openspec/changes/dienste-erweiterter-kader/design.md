@@ -30,8 +30,12 @@ Beobachteter Stand (Code, 24.09.2026):
 - Keine Push für neue Slots an den erweiterten Kader.
 - Keine Anrechnung von Aushilfe auf irgendein Soll, keine „Gutschrift“-Logik.
 - Kein Eingriff in `Claim` (bleibt teamfrei, wie bisher).
-- Keine Änderung an Dienst-Erinnerungen (`duty-reminder-emails`): sie gehen an
-  Eingetragene, Aushilfen inklusive — das ist bereits so und bleibt so.
+- Keine Änderung an Dienst-Erinnerungen (`duty-reminder-emails`): sie erinnern an
+  **offene** Dienste und gehen an nicht eingetragene Stammkader-Mitglieder
+  (`scheduler.eligibleUsers`) — der erweiterte Kader bleibt dort bewusst draußen, wie bei
+  der Push für neue Slots. Die Absage eines Dienstes geht dagegen an **alle Eingetragenen**
+  (`assignedUsers`), eine eingetragene Aushilfe also eingeschlossen; das präzisiert die Spec
+  `terminmeldung-empfaenger` (Delta in diesem Change).
 - Kein neues Schema.
 
 ## Decisions

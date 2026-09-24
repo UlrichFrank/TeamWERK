@@ -107,9 +107,11 @@ func slotInTeamsSQL(teamsSQL string) string {
 }
 
 // eligibleDutyRecipients returns the user IDs to notify about a newly created duty slot.
-// Die Menge ist bewusst dieselbe, der die Dienstbörse den Slot mit aktivem Audience-Filter zeigt:
-// eine Push für einen Dienst, den der Empfänger auf /dienste anschließend gar nicht findet,
-// ist Rauschen mit Sackgasse. Zwei Filter greifen ineinander:
+// Die Menge ist eine Teilmenge derer, denen die Dienstbörse den Slot mit aktivem Audience-Filter
+// zeigt: eine Push für einen Dienst, den der Empfänger auf /dienste anschließend gar nicht findet,
+// ist Rauschen mit Sackgasse. Bewusst NICHT gleich: der erweiterte Kader und seine Eltern sehen
+// die Dienste des Teams als Aushilfe (dienste-erweiterter-kader), werden über neue Slots aber
+// nicht benachrichtigt — sie schulden dem Team keine Dienste. Zwei Filter greifen ineinander:
 //
 //   - Team-Quelle (teamIDs aus slotTeamScope): Spieler im Kader, Trainer des Kaders
 //     (kader_trainers) und Eltern eines Spielers im Kader — jeweils nur in der **aktiven

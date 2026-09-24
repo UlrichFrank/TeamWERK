@@ -58,6 +58,8 @@ Teams, in dem er nicht im Stammkader steht (möglich, weil `Claim` kein Team pr�
   Aushilfe-Teams an und weist Aushilfen getrennt aus.
 - `push-duties`: Empfängermenge ausdrücklich ohne erweiterten Kader (Teilmenge der
   Sichtbarkeit statt Gleichheit).
+- `terminmeldung-empfaenger`: Präzisierung — die Absage eines Dienstes erreicht alle
+  Eingetragenen, auch eine Aushilfe aus dem erweiterten Kader.
 
 ## Impact
 

@@ -44,7 +44,7 @@ var audienceAllowlist = map[string]string{
 	// soll auch nicht zur Übernahme aufgefordert werden. Siehe
 	// openspec/specs/terminmeldung-empfaenger, Requirement „Abgrenzung zu
 	// Dienstmeldungen und Sichtbarkeit".
-	"duties.eligibleDutyRecipients": "Dienstpflicht folgt dem Stammkader, nicht der Terminbetroffenheit",
+	"duties.eligibleDutyRecipients": "Dienstpflicht folgt dem Stammkader, nicht der Terminbetroffenheit; der erweiterte Kader sieht die Dienste als Aushilfe, wird über neue aber nicht benachrichtigt",
 
 	// Mitfahrgelegenheiten adressieren bewusst NUR die Eltern (plus Trainer) und
 	// schließen den Steller der Suche aus — gefragt ist „wer kann fahren?", nicht
