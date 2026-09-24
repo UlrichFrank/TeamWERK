@@ -18,7 +18,8 @@ type aushilfeBody struct {
 		NextGame *struct {
 			ID int `json:"id"`
 		} `json:"nextGame"`
-		MySlots []struct {
+		TeamLabel string `json:"teamLabel"`
+		MySlots   []struct {
 			DutyTypeName string `json:"dutyTypeName"`
 		} `json:"mySlots"`
 		Aushilfe *struct {
@@ -101,6 +102,9 @@ func TestDashboard_MeineDienste_AushilfeBlock(t *testing.T) {
 
 	if md.NextGame == nil || md.NextGame.ID != stammGame {
 		t.Fatalf("Stamm-Block muss beim Stammteam bleiben, nextGame=%+v", md.NextGame)
+	}
+	if md.TeamLabel == "" {
+		t.Error("teamLabel des Stamm-Blocks leer")
 	}
 	if len(md.MySlots) != 0 {
 		t.Errorf("Aushilfe-Zusage darf nicht im Stamm-Block stehen: %+v", md.MySlots)
