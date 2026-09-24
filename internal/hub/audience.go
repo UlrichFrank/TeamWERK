@@ -69,6 +69,48 @@ func (a *Audience) Team(ctx context.Context, teamIDs []int, extraUserIDs ...int)
 	return set.slice()
 }
 
+// DutyTeam is Team plus the erweiterter Kader of those teams and its parents.
+// Since dienste-erweiterter-kader the extended squad sees and claims the
+// teams' duties as Aushilfe, so its open /dienste and dashboard sessions must
+// reload when a slot changes. Only the live-update audience widens — push
+// notifications about new slots stay with the Stammkader
+// (duties.eligibleDutyRecipients).
+func (a *Audience) DutyTeam(ctx context.Context, teamIDs []int, extraUserIDs ...int) []int {
+	set := newIDSet()
+	for _, id := range a.Team(ctx, teamIDs, extraUserIDs...) {
+		set.add(id)
+	}
+	if len(teamIDs) > 0 {
+		a.collectTeamExtended(ctx, set, teamIDs)
+	}
+	return set.slice()
+}
+
+// collectTeamExtended adds the users of the teams' erweiterter Kader and the
+// parents (family_links) of its members.
+func (a *Audience) collectTeamExtended(ctx context.Context, set *idSet, teamIDs []int) {
+	args := make([]any, 0, 2*len(teamIDs))
+	for range 2 {
+		for _, id := range teamIDs {
+			args = append(args, id)
+		}
+	}
+	q := `SELECT m.user_id FROM kader_extended_members kem
+	      JOIN kader k ON k.id = kem.kader_id
+	      JOIN members m ON m.id = kem.member_id
+	      WHERE m.user_id IS NOT NULL AND k.team_id IN (` + placeholders(len(teamIDs)) + `)
+	      UNION
+	      SELECT fl.parent_user_id FROM family_links fl
+	      JOIN kader_extended_members kem ON kem.member_id = fl.member_id
+	      JOIN kader k ON k.id = kem.kader_id
+	      WHERE k.team_id IN (` + placeholders(len(teamIDs)) + `)`
+	rows, err := a.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return
+	}
+	scanIDs(rows, set)
+}
+
 // Kader returns the user IDs that should be notified about an event bound to the
 // given kader rows: their members (players), extended members and trainers, the
 // parents linked to those members, plus the club-wide staff.

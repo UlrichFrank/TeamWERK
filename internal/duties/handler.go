@@ -40,7 +40,7 @@ func (h *Handler) broadcastDutySlot(ctx context.Context, slotID any, extraUserID
 		return
 	}
 	a := hub.NewAudience(h.db)
-	ids := a.Team(ctx, a.TeamIDsForDutySlot(ctx, slotID), extraUserIDs...)
+	ids := a.DutyTeam(ctx, a.TeamIDsForDutySlot(ctx, slotID), extraUserIDs...)
 	h.hub.BroadcastToUsers(ids, "duties")
 }
 
@@ -50,7 +50,7 @@ func (h *Handler) broadcastDutyTeams(ctx context.Context, teamIDs []int, extraUs
 	if h.hub == nil {
 		return
 	}
-	ids := hub.NewAudience(h.db).Team(ctx, teamIDs, extraUserIDs...)
+	ids := hub.NewAudience(h.db).DutyTeam(ctx, teamIDs, extraUserIDs...)
 	h.hub.BroadcastToUsers(ids, "duties")
 }
 
