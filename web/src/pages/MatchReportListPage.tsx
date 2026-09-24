@@ -10,6 +10,7 @@ type ReportItem = {
     id: number
     game_id: number
     state: MatchReportState
+    returned?: boolean
     match_date: string
     opponent: string
     published_url: string | null
@@ -140,7 +141,9 @@ export default function MatchReportListPage() {
                                             {formatDate(r.match_date)} — {r.opponent}
                                         </div>
                                         <div className="text-xs text-brand-text-muted">
-                                            {MATCH_REPORT_STATE_LABEL[r.state] ?? r.state}
+                                            {r.returned
+                                                ? <span className="text-brand-danger font-medium">Zurückgegeben — bitte überarbeiten</span>
+                                                : MATCH_REPORT_STATE_LABEL[r.state] ?? r.state}
                                         </div>
                                     </div>
                                 </div>
