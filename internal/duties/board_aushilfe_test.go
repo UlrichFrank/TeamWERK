@@ -1,12 +1,14 @@
 package duties_test
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
 	"testing"
 
 	"github.com/teamstuttgart/teamwerk/internal/duties"
+	"github.com/teamstuttgart/teamwerk/internal/dutyfairness"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
@@ -224,5 +226,96 @@ func TestBoard_FremdesTeamWeiterhinUnsichtbar(t *testing.T) {
 	}
 	if groupFor(groups, f.gameA) != nil {
 		t.Error("Team A (keine Verbindung) darf nicht sichtbar werden")
+	}
+}
+
+// TestAushilfePraedikat_BoardUndBilanzDeckungsgleich: das Aushilfe-Kennzeichen
+// am Eingetragenen (SQL, appdb.UserTeamsSQL) und die Aushilfe-Zurechnung der
+// Dienst-Bilanz (Go, dutyfairness) sind zwei Formen derselben Regel. Je
+// Konstellation muss beides dieselbe Antwort geben (design.md Entscheidung 3).
+func TestAushilfePraedikat_BoardUndBilanzDeckungsgleich(t *testing.T) {
+	type setup func(f *aushilfeFixture) (userID, slotID int)
+	slotOf := func(f *aushilfeFixture, gameID int) int {
+		var id int
+		f.db.QueryRow(`SELECT id FROM duty_slots WHERE game_id=?`, gameID).Scan(&id)
+		return id
+	}
+	cases := []struct {
+		name string
+		want bool
+		mk   setup
+	}{
+		{"Spieler nur im erweiterten Kader", true, func(f *aushilfeFixture) (int, int) {
+			u := testutil.CreateUser(t, f.db, "standard")
+			testutil.AddExtendedKaderMember(t, f.db, f.kaderB, testutil.CreateMember(t, f.db, u))
+			return u, slotOf(f, f.gameB)
+		}},
+		{"Elternteil eines Kindes im erweiterten Kader", true, func(f *aushilfeFixture) (int, int) {
+			u := testutil.CreateUser(t, f.db, "standard")
+			c := testutil.CreateMember(t, f.db, 0)
+			testutil.AddFamilyLink(t, f.db, u, c)
+			testutil.AddExtendedKaderMember(t, f.db, f.kaderB, c)
+			return u, slotOf(f, f.gameB)
+		}},
+		{"Stammkader-Spieler", false, func(f *aushilfeFixture) (int, int) {
+			u := testutil.CreateUser(t, f.db, "standard")
+			testutil.AddKaderMember(t, f.db, f.kaderB, testutil.CreateMember(t, f.db, u))
+			return u, slotOf(f, f.gameB)
+		}},
+		{"Trainer mit Kind im erweiterten Kader", false, func(f *aushilfeFixture) (int, int) {
+			u := testutil.CreateUser(t, f.db, "standard")
+			testutil.AddKaderTrainer(t, f.db, f.kaderB, testutil.CreateMember(t, f.db, u))
+			c := testutil.CreateMember(t, f.db, 0)
+			testutil.AddFamilyLink(t, f.db, u, c)
+			testutil.AddExtendedKaderMember(t, f.db, f.kaderB, c)
+			return u, slotOf(f, f.gameB)
+		}},
+		{"Gemeinsames Spiel mit dem Stammteam", false, func(f *aushilfeFixture) (int, int) {
+			f.db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, f.gameA, f.teamB)
+			u := testutil.CreateUser(t, f.db, "standard")
+			m := testutil.CreateMember(t, f.db, u)
+			testutil.AddKaderMember(t, f.db, f.kaderA, m)
+			testutil.AddExtendedKaderMember(t, f.db, f.kaderB, m)
+			return u, slotOf(f, f.gameA)
+		}},
+		{"Ausgetreten im erweiterten Kader", false, func(f *aushilfeFixture) (int, int) {
+			u := testutil.CreateUser(t, f.db, "standard")
+			m := testutil.CreateMember(t, f.db, u)
+			f.db.Exec(`UPDATE members SET status='ausgetreten' WHERE id=?`, m)
+			testutil.AddExtendedKaderMember(t, f.db, f.kaderB, m)
+			return u, slotOf(f, f.gameB)
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f, board := newAushilfeFixture(t)
+			userID, slotID := c.mk(f)
+			f.db.Exec(`INSERT INTO duty_assignments (duty_slot_id, user_id) VALUES (?, ?)`, slotID, userID)
+
+			admin := testutil.CreateUser(t, f.db, "admin")
+			var boardFlag, seen bool
+			for _, g := range board(testutil.Token(t, admin, "admin", nil)) {
+				for _, s := range g.Slots {
+					for _, a := range s.Assignees {
+						if s.ID == slotID && a.UserID == userID {
+							boardFlag, seen = a.Aushilfe, true
+						}
+					}
+				}
+			}
+			if !seen {
+				t.Fatal("Eingetragener nicht im Board gefunden")
+			}
+
+			snap, err := dutyfairness.Compute(context.Background(), f.db, f.season)
+			if err != nil {
+				t.Fatalf("Compute: %v", err)
+			}
+			bilanzFlag := len(snap.AushilfeFor(userID)) > 0
+
+			if boardFlag != c.want || bilanzFlag != c.want {
+				t.Errorf("Board=%v Bilanz=%v, want beide %v", boardFlag, bilanzFlag, c.want)
+			}
+		})
 	}
 }
