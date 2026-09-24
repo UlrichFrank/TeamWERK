@@ -506,24 +506,30 @@ func (s *Snapshot) matching(memberIDs []int, slot slotInfo) []int {
 }
 
 // LinkedMembers liefert die Mitglieder, deren Zeile ein Account als eigene sieht:
-// das eigene Mitglied und die Kinder via family_links (nur Mitglieder mit Kader).
+// das eigene Mitglied und die Kinder via family_links (nur Mitglieder mit Kader
+// oder erweitertem Kader).
 func (s *Snapshot) LinkedMembers(userID int) map[int]bool {
 	out := map[int]bool{}
-	for _, id := range s.ownByUser[userID] {
-		out[id] = true
-	}
-	for _, id := range s.childrenByUser[userID] {
-		out[id] = true
+	for _, ids := range [][]int{s.ownByUser[userID], s.childrenByUser[userID], s.extOwnByUser[userID], s.extChildrenByUser[userID]} {
+		for _, id := range ids {
+			out[id] = true
+		}
 	}
 	return out
 }
 
-// TeamsFor liefert die Teams (in TeamOrder), in deren Kader mindestens eines der
-// gegebenen Mitglieder steht — der „eigene Teams"-Scope eines Standard-Nutzers.
+// TeamsFor liefert die Teams (in TeamOrder), in deren Kader oder erweitertem
+// Kader mindestens eines der gegebenen Mitglieder steht — der „eigene
+// Teams"-Scope eines Standard-Nutzers.
 func (s *Snapshot) TeamsFor(memberIDs map[int]bool) []int {
 	var out []int
 	for _, tid := range s.TeamOrder {
-		if slices.ContainsFunc(s.Teams[tid].Members, func(m *Member) bool { return memberIDs[m.MemberID] }) {
+		inKader := slices.ContainsFunc(s.Teams[tid].Members, func(m *Member) bool { return memberIDs[m.MemberID] })
+		inExt := false
+		for id := range memberIDs {
+			inExt = inExt || slices.Contains(s.extTeams[id], tid)
+		}
+		if inKader || inExt {
 			out = append(out, tid)
 		}
 	}

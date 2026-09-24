@@ -27,8 +27,8 @@
 
 ## 5. Rangliste (Backend)
 
-- [ ] 5.1 `TeamsFor` um `extTeams` erweitern; verifiziert durch `TestRangliste_AushilfeTeamImFilter` und bestehenden `TestRangliste_FremdesTeam_403`
-- [ ] 5.2 Block-Feld `aushilfen` (ungerankt, gleiche Anonymisierung); verifiziert durch `TestRangliste_AushilfenAnonymisiert`
+- [x] 5.1 `TeamsFor` um `extTeams` erweitern; verifiziert durch `TestRangliste_AushilfeTeamImFilter` und bestehenden `TestRangliste_FremdesTeam_403`
+- [x] 5.2 Block-Feld `aushilfen` (ungerankt, gleiche Anonymisierung); verifiziert durch `TestRangliste_AushilfenAnonymisiert`
 
 ## 6. Frontend
 
