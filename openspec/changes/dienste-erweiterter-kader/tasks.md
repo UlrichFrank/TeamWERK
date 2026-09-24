@@ -7,9 +7,9 @@
 
 ## 2. Dienstbörse (Backend)
 
-- [ ] 2.1 `duties.Board`: Team-Quelle um `extended` erweitern und `'eltern'`-Audience-Match um Kinder im erweiterten Kader ergänzen; verifiziert durch `TestBoard_ErweiterterKaderSiehtTeamDienste`, `TestBoard_ElternErweiterterKaderSehenElternSlot`, `TestBoard_AusgetretenImErweitertenKaderSiehtNichts`, `TestBoard_FoerderkindImErweitertenKader`, `TestBoard_FremdesTeamWeiterhinUnsichtbar`
-- [ ] 2.2 `aushilfe`-Flag je Gruppe (Stamm schlägt erweitert) in die Board-Response; verifiziert durch `TestBoard_StammSchlaegtErweitert` und Assertion `aushilfe: true` in 2.1-Tests
-- [ ] 2.3 `aushilfe`-Flag je Eingetragenem in der bestehenden Assignee-Nachlade-Query; verifiziert durch `TestBoard_AssigneeAushilfeKennzeichen`
+- [x] 2.1 `duties.Board`: Team-Quelle um `extended` erweitern und `'eltern'`-Audience-Match um Kinder im erweiterten Kader ergänzen; verifiziert durch `TestBoard_ErweiterterKaderSiehtTeamDienste`, `TestBoard_ElternErweiterterKaderSehenElternSlot`, `TestBoard_AusgetretenImErweitertenKaderSiehtNichts`, `TestBoard_FoerderkindImErweitertenKader`, `TestBoard_FremdesTeamWeiterhinUnsichtbar`
+- [x] 2.2 `aushilfe`-Flag je Gruppe (Stamm schlägt erweitert) in die Board-Response; verifiziert durch `TestBoard_StammSchlaegtErweitert` und Assertion `aushilfe: true` in 2.1-Tests
+- [x] 2.3 `aushilfe`-Flag je Eingetragenem in der bestehenden Assignee-Nachlade-Query; verifiziert durch `TestBoard_AssigneeAushilfeKennzeichen`
 - [ ] 2.4 Doc-Kommentar an `eligibleDutyRecipients` auf „Empfänger ⊆ Sichtbarkeit, erweiterter Kader bewusst ohne Push“ anpassen, Begründung in `audienceAllowlist` (`internal/arch/audience_test.go`) nachziehen; verifiziert durch `TestCreateSlot_ErweiterterKaderBekommtKeinePush` und grünen `go test ./internal/arch/...`
 
 ## 3. Dienst-Bilanz (`dutyfairness`)

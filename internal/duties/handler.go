@@ -98,6 +98,14 @@ func (h *Handler) slotTeamScope(ctx context.Context, teamID, gameID *int) []int 
 	return nil
 }
 
+// slotInTeamsSQL ist wahr, wenn der Slot `ds` zu einem Team aus teamsSQL
+// (einem `SELECT team_id …`) gehört: mit Spiel über game_teams, ohne Spiel über
+// ds.team_id. Dieselbe Geltungsbereichs-Regel wie Board und slotTeamScope.
+func slotInTeamsSQL(teamsSQL string) string {
+	return `((ds.game_id IS NULL AND ds.team_id IN (` + teamsSQL + `))
+		OR ds.game_id IN (SELECT gt_s.game_id FROM game_teams gt_s WHERE gt_s.team_id IN (` + teamsSQL + `)))`
+}
+
 // eligibleDutyRecipients returns the user IDs to notify about a newly created duty slot.
 // Die Menge ist bewusst dieselbe, der die Dienstbörse den Slot mit aktivem Audience-Filter zeigt:
 // eine Push für einen Dienst, den der Empfänger auf /dienste anschließend gar nicht findet,
@@ -928,64 +936,48 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	audienceBypass := claims.Role == "admin" ||
 		claims.HasAnyFunction("vorstand", "vorstand_beisitzer", "trainer", "sportliche_leitung")
 
-	args := []any{userID} // first ? is for the da LEFT JOIN
+	// Stamm- und erweiterte Teams des Betrachters (selbst + Kinder, aktive
+	// Saison) aus demselben Baustein wie das Dashboard (appdb.UserTeamsSQL).
+	stammSQL := appdb.UserTeamsSQL(appdb.TeamsStamm, "?")
+	extSQL := appdb.UserTeamsSQL(appdb.TeamsExtended, "?")
+	stammArgs := appdb.UserArgs(appdb.TeamsStamm, userID)
+	extArgs := appdb.UserArgs(appdb.TeamsExtended, userID)
+
+	// Aushilfe (dienste-erweiterter-kader): der Betrachter ist mit den Teams
+	// der Gruppe nur über den erweiterten Kader verbunden. Stamm schlägt
+	// erweitert — ein gemeinsames Spiel mit dem eigenen Stammteam ist Pflicht.
+	var selectArgs []any
+	selectArgs = append(selectArgs, extArgs...)
+	selectArgs = append(selectArgs, extArgs...)
+	selectArgs = append(selectArgs, stammArgs...)
+	selectArgs = append(selectArgs, stammArgs...)
+	aushilfeExpr := `CASE WHEN ` + slotInTeamsSQL(extSQL) + ` AND NOT ` + slotInTeamsSQL(stammSQL) + ` THEN 1 ELSE 0 END`
+
+	args := append(selectArgs, userID) // danach: ? des da LEFT JOIN
 	var whereParts string
 
 	if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		whereParts = `WHERE ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
 	} else {
-		// Team source = teams the user plays in (or a family member plays in)
-		// OR teams the user trains in (via trainer_memberships).
-		// Ein Slot mit game_id löst seinen Geltungsbereich AUSSCHLIESSLICH über
-		// game_teams auf — ds.team_id wird dort nicht mehr gelesen, auch wenn noch
-		// ein Bestandswert darin steht (design.md Decision 1). Dadurch sind
-		// migrierte und nicht migrierte Zeilen identisch sichtbar, und die
-		// Migration ist keine Voraussetzung für den Deploy. ds.team_id gilt nur
-		// noch für Slots ohne Spiel (Vereinsfest o. ä.).
-		whereParts = `WHERE (
-		     (ds.game_id IS NULL AND ds.team_id IN (
-		         SELECT DISTINCT tm.team_id
-		         FROM player_memberships tm
-		         JOIN seasons s ON s.id = tm.season_id AND s.is_active = 1
-		         WHERE tm.member_id IN (
-		             SELECT id FROM members WHERE user_id = ?
-		             UNION
-		             SELECT fl.member_id FROM family_links fl WHERE fl.parent_user_id = ?
-		         )
-		         UNION
-		         SELECT DISTINCT trm.team_id
-		         FROM trainer_memberships trm
-		         JOIN seasons strn ON strn.id = trm.season_id AND strn.is_active = 1
-		         WHERE trm.member_id IN (SELECT id FROM members WHERE user_id = ?)
-		     ))
-		     OR (ds.game_id IN (
-		         SELECT gt.game_id FROM game_teams gt
-		         WHERE gt.team_id IN (
-		             SELECT DISTINCT tm2.team_id
-		             FROM player_memberships tm2
-		             JOIN seasons s2 ON s2.id = tm2.season_id AND s2.is_active = 1
-		             WHERE tm2.member_id IN (
-		                 SELECT id FROM members WHERE user_id = ?
-		                 UNION
-		                 SELECT fl2.member_id FROM family_links fl2 WHERE fl2.parent_user_id = ?
-		             )
-		             UNION
-		             SELECT DISTINCT trm2.team_id
-		             FROM trainer_memberships trm2
-		             JOIN seasons strn2 ON strn2.id = trm2.season_id AND strn2.is_active = 1
-		             WHERE trm2.member_id IN (SELECT id FROM members WHERE user_id = ?)
-		         )
-		     ))
-		 )
+		// Team source = Stammkader und erweiterter Kader (selbst oder Kind) sowie
+		// trainierte Teams. Ein Slot mit game_id löst seinen Geltungsbereich
+		// AUSSCHLIESSLICH über game_teams auf — ds.team_id wird dort nicht mehr
+		// gelesen, auch wenn noch ein Bestandswert darin steht (design.md
+		// Decision 1 von duty-slot-team-scope). ds.team_id gilt nur noch für
+		// Slots ohne Spiel (Vereinsfest o. ä.).
+		whereParts = `WHERE ` + slotInTeamsSQL(stammSQL+` UNION `+extSQL) + `
 		 AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
-		args = append(args, userID, userID, userID, userID, userID, userID)
+		for range 2 {
+			args = append(args, stammArgs...)
+			args = append(args, extArgs...)
+		}
 	}
 
 	if !audienceBypass {
 		// The 'eltern' audience match is team-scoped: a parent only matches
-		// when their linked child plays (player_memberships) in the slot's
-		// team — or, for game-less slots, in any team participating in the
-		// slot's game.
+		// when a linked child is in the Stammkader or the erweiterter Kader
+		// of the slot's team — for slots with a game, of any team
+		// participating in the game.
 		whereParts += ` AND (
 		     COALESCE(ds.audiences, dt.audiences) IS NULL
 		     OR (
@@ -993,18 +985,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		             (EXISTS (
 		                 SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 		                 WHERE je.value = 'eltern'
-		             ) AND EXISTS (
-		                 SELECT 1 FROM family_links fl_a
-		                 JOIN player_memberships pm_a ON pm_a.member_id = fl_a.member_id
-		                 JOIN seasons sa ON sa.id = pm_a.season_id AND sa.is_active = 1
-		                 WHERE fl_a.parent_user_id = ?
-		                 AND (
-		                     (ds.game_id IS NULL AND pm_a.team_id = ds.team_id)
-		                     OR (ds.game_id IS NOT NULL AND pm_a.team_id IN (
-		                         SELECT gt_a.team_id FROM game_teams gt_a WHERE gt_a.game_id = ds.game_id
-		                     ))
-		                 )
-		             ))
+		             ) AND ` + slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsChildren, "?")) + `)
 		             OR EXISTS (
 		                 SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 		                 JOIN member_club_functions mcf_a ON mcf_a.function = je.value
@@ -1014,7 +995,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		         )
 		     )
 		 )`
-		args = append(args, userID, userID)
+		childArgs := appdb.UserArgs(appdb.TeamsChildren, userID)
+		args = append(args, childArgs...)
+		args = append(args, childArgs...)
+		args = append(args, userID)
 	}
 
 	if r.URL.Query().Get("view") == "mine" {
@@ -1062,7 +1046,8 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		    ds.hours_value,
 		    (SELECT COUNT(*) FROM duty_assignment_comments dac
 		       JOIN duty_assignments da2 ON da2.id = dac.assignment_id
-		      WHERE da2.duty_slot_id = ds.id) AS comment_count
+		      WHERE da2.duty_slot_id = ds.id) AS comment_count,
+		    `+aushilfeExpr+` AS aushilfe
 		 FROM duty_slots ds
 		 JOIN duty_types dt ON dt.id = ds.duty_type_id
 		 LEFT JOIN duty_assignments da ON da.duty_slot_id = ds.id AND da.user_id = ?
@@ -1083,6 +1068,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	type publicAssignee struct {
 		UserID int    `json:"user_id"`
 		Name   string `json:"name"`
+		// Aushilfe: der Eingetragene ist mit den Slot-Teams nur über den
+		// erweiterten Kader verbunden. Für alle Betrachter gleich; bewusst nur
+		// ein Flag, keine Kader-Zugehörigkeit Dritter.
+		Aushilfe bool `json:"aushilfe"`
 	}
 	bp := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
 	boardDutyCan := policy.DutyCan(bp)
@@ -1114,10 +1103,13 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		EventType string   `json:"event_type,omitempty"`
 		// Nur der Hallenname (nicht Straße/Stadt/PLZ) — er dient dem Textfilter
 		// auf /dienste. Leer bei game-losen Gruppen und bei Spielen ohne venue_id.
-		Venue string      `json:"venue,omitempty"`
-		Label string      `json:"label,omitempty"`
-		Past  bool        `json:"past"`
-		Slots []boardSlot `json:"slots"`
+		Venue string `json:"venue,omitempty"`
+		Label string `json:"label,omitempty"`
+		Past  bool   `json:"past"`
+		// Aushilfe: der Betrachter ist mit den Teams dieser Gruppe nur über den
+		// erweiterten Kader verbunden (selbst oder Kind) — keine Dienstpflicht.
+		Aushilfe bool        `json:"aushilfe"`
+		Slots    []boardSlot `json:"slots"`
 	}
 
 	groupOrder := []string{}
@@ -1129,11 +1121,11 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		var gameID sql.NullInt64
 		var audiences sql.NullString
 		var hoursValue float64
-		var commentCount int
+		var commentCount, aushilfeInt int
 		rows.Scan(&slotID, &eventDate, &eventTime, &slotsTotal, &slotsFilled,
 			&dutyType, &roleDesc, &claimedInt, &myAssignmentID, &gameID, &opponent, &eventType, &gameTime, &venue,
 			&teamID, &teamName, &isPastInt, &audiences, &eventName, &dutyTypeID, &hasInstrInt, &hoursValue,
-			&commentCount)
+			&commentCount, &aushilfeInt)
 
 		var key string
 		if gameID.Valid {
@@ -1143,7 +1135,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if _, ok := groupMap[key]; !ok {
-			g := &boardGroup{TeamIDs: []int{}, TeamNames: []string{}, Slots: []boardSlot{}, Past: isPastInt == 1}
+			g := &boardGroup{TeamIDs: []int{}, TeamNames: []string{}, Slots: []boardSlot{}, Past: isPastInt == 1, Aushilfe: aushilfeInt == 1}
 			// Game-lose Handslots: Team stammt aus dem Slot selbst. Game-basierte
 			// Gruppen bekommen ihre Termin-Teams (game_teams) nach dem Scan-Loop.
 			if !gameID.Valid && teamID > 0 {
@@ -1210,8 +1202,12 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		aRows, aErr := h.db.QueryContext(r.Context(), `
 			SELECT da.duty_slot_id,
 			       u.id,
-			       u.first_name || ' ' || u.last_name
+			       u.first_name || ' ' || u.last_name,
+			       CASE WHEN `+slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsExtended, "da.user_id"))+`
+			             AND NOT `+slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsStamm, "da.user_id"))+`
+			            THEN 1 ELSE 0 END
 			FROM duty_assignments da
+			JOIN duty_slots ds ON ds.id = da.duty_slot_id
 			JOIN users u ON u.id = da.user_id
 			WHERE da.duty_slot_id IN (`+strings.Join(ph, ",")+`)
 			ORDER BY da.created_at`, aArgs...)
@@ -1219,10 +1215,10 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 			defer aRows.Close()
 			assigneeMap := map[int][]publicAssignee{}
 			for aRows.Next() {
-				var slotID, userID int
+				var slotID, userID, aushilfeInt int
 				var name string
-				aRows.Scan(&slotID, &userID, &name)
-				assigneeMap[slotID] = append(assigneeMap[slotID], publicAssignee{UserID: userID, Name: name})
+				aRows.Scan(&slotID, &userID, &name, &aushilfeInt)
+				assigneeMap[slotID] = append(assigneeMap[slotID], publicAssignee{UserID: userID, Name: name, Aushilfe: aushilfeInt == 1})
 			}
 			for _, grp := range groupMap {
 				for i := range grp.Slots {
