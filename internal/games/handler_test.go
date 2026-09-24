@@ -2834,7 +2834,9 @@ func TestListTeamsForUser_TrainerElternteilErweiterterKader(t *testing.T) {
 	if !duties[teamTrainer] || !duties[teamStamm] {
 		t.Errorf("/api/teams?scope=duties: Trainer-Team (%d) und Stammkader (%d) müssen dabei sein, bekommen %v", teamTrainer, teamStamm, duties)
 	}
-	if duties[teamErw] {
-		t.Errorf("/api/teams?scope=duties: erweiterter Kader (%d) hat keine Dienstpflicht und gehört nicht in den Filter", teamErw)
+	// Seit dienste-erweiterter-kader belegt der erweiterte Kader Dienste als
+	// Aushilfe — die Mannschaft gehört deshalb in den Filter der Dienstbörse.
+	if !duties[teamErw] {
+		t.Errorf("/api/teams?scope=duties: erweiterter Kader (%d) muss als Aushilfe-Mannschaft im Filter stehen", teamErw)
 	}
 }

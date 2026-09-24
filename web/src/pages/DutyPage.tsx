@@ -184,8 +184,8 @@ export default function DutyPage() {
   useLiveUpdates((event) => { if (event === 'duties') load() })
 
   useEffect(() => {
-    // scope=duties: ohne Teams, in denen man (oder das Kind) nur im erweiterten
-    // Kader steht — dort gibt es keine Dienstpflicht und keine Slots.
+    // scope=duties: Stamm- und erweiterter Kader (Aushilfe) plus Trainer-Teams —
+    // dieselbe Menge, aus der die Dienstbörse ihre Gruppen bildet.
     api.get('/teams?scope=duties')
       .then(r => setTeams(Array.isArray(r.data) ? r.data : (r.data?.teams ?? [])))
       .catch(() => {})

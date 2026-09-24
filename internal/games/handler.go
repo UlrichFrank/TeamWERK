@@ -1710,26 +1710,20 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 		// vorhandenen Mannschaft ließ sie alle verschwinden, ohne dass es ein
 		// Kästchen gab, um sie zurückzuholen.
 		//
-		// ?scope=duties (Dienstbörse) ist die Ausnahme und bleibt es: dort
-		// zählt der Stammkader, weil der erweiterte Kader keine Dienste
-		// schuldet und eine Filter-Option dafür immer leer bliebe. Die
-		// Trainer-Teams kommen dazu; für einen Nutzer ohne Trainer-Eintrag ist
-		// diese Teilmenge leer, die Bedingung gilt deshalb unverändert für
-		// alle und braucht keinen eigenen Zweig.
+		// ?scope=duties (Dienstbörse): Stamm- und erweiterter Kader von Nutzer
+		// und Kindern plus Trainer-Teams — dieselbe Menge, aus der die
+		// Dienstbörse ihre Gruppen bildet (appdb.UserTeamsSQL). Seit
+		// dienste-erweiterter-kader sieht und belegt der erweiterte Kader die
+		// Dienste seiner Mannschaft als Aushilfe; ohne Filter-Option für diese
+		// Mannschaft blendete das Anhaken der Stammmannschaft die Aushilfe-
+		// Gruppen aus, ohne ein Kästchen zum Zurückholen. Abweichung zu
+		// user_accessible_teams: der erweiterte Zweig filtert Ausgetretene.
 		teamSource := `SELECT team_id FROM user_accessible_teams
 			     WHERE user_id = ? AND season_id = ` + activeSeasonSub
 		teamArgs := []any{claims.UserID}
 		if scope == "duties" {
-			teamSource = `SELECT pm.team_id FROM player_memberships pm
-			     WHERE pm.season_id = ` + activeSeasonSub + ` AND pm.member_id IN (
-			       SELECT id FROM members WHERE user_id = ?
-			       UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)
-			   UNION
-			   SELECT k2.team_id FROM kader_trainers kt
-			     JOIN kader k2 ON k2.id = kt.kader_id
-			     JOIN members m ON m.id = kt.member_id
-			     WHERE k2.season_id = ` + activeSeasonSub + ` AND m.user_id = ?`
-			teamArgs = []any{claims.UserID, claims.UserID, claims.UserID}
+			teamSource = appdb.UserTeamsSQL(appdb.TeamsStamm, "?") + ` UNION ` + appdb.UserTeamsSQL(appdb.TeamsExtended, "?")
+			teamArgs = append(appdb.UserArgs(appdb.TeamsStamm, claims.UserID), appdb.UserArgs(appdb.TeamsExtended, claims.UserID)...)
 		}
 		rows, err = h.db.QueryContext(r.Context(),
 			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active

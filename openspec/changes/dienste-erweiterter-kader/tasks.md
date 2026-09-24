@@ -12,6 +12,8 @@
 - [x] 2.3 `aushilfe`-Flag je Eingetragenem in der bestehenden Assignee-Nachlade-Query; verifiziert durch `TestBoard_AssigneeAushilfeKennzeichen`
 - [x] 2.4 Doc-Kommentar an `eligibleDutyRecipients` auf „Empfänger ⊆ Sichtbarkeit, erweiterter Kader bewusst ohne Push“ anpassen, Begründung in `audienceAllowlist` (`internal/arch/audience_test.go`) nachziehen; verifiziert durch `TestCreateSlot_ErweiterterKaderBekommtKeinePush` und grünen `go test ./internal/arch/...`
 
+- [x] 2.5 `GET /api/teams?scope=duties` um den erweiterten Kader erweitern (Team-Filter der Dienstbörse, nachträglich ergänzt); verifiziert durch `TestTeams_ScopeDuties_MitErweitertemKader`, `TestTeams_ScopeDuties_SpielerNurErweitert`, `TestListTeamsForUser_TrainerElternteilErweiterterKader`
+
 ## 3. Dienst-Bilanz (`dutyfairness`)
 
 - [x] 3.1 Snapshot lädt `kader_extended_members` der aktiven Saison als `extTeams`; Nur-erweitert-Mitglieder in `ownByUser`/`childrenByUser`, aber nicht in `Team.Members`/`PlayerCount`; verifiziert durch `TestCompute_AushilfeAendertSollNicht`
