@@ -258,3 +258,40 @@ func containsAll(s string, needles ...string) bool {
 	}
 	return true
 }
+
+// TestDeleteSlot_AushilfeErhaeltAbsage: eine eingetragene Aushilfe aus dem
+// erweiterten Kader bekommt die Absage wie jeder Eingetragene
+// (dienste-erweiterter-kader, Delta terminmeldung-empfaenger).
+func TestDeleteSlot_AushilfeErhaeltAbsage(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team B")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2099-06-14")
+	slotID := createDutySlot(t, db, createDutyType(t, db, "Bewirtung", 2.0), seasonID, teamID, gameID, "2099-06-14")
+
+	helperID := testutil.CreateUser(t, db, "standard")
+	testutil.AddExtendedKaderMember(t, db, kaderID, testutil.CreateMember(t, db, helperID))
+	insertDutyAssignment(t, db, slotID, helperID, "assigned")
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	srv := testServer(t, duties.NewHandler(db, testutil.TestConfig(), hub.NewHub()))
+	sent := captureSentNotifications(t)
+	res := testutil.Do(t, srv, http.MethodDelete, "/api/duty-slots/"+itoa(slotID), testutil.Token(t, adminID, "admin", nil), nil)
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204, got %d", res.StatusCode)
+	}
+	select {
+	case n := <-sent:
+		found := false
+		for _, id := range n.userIDs {
+			found = found || id == helperID
+		}
+		if !found {
+			t.Errorf("Aushilfe (%d) fehlt in den Empfängern der Absage: %v", helperID, n.userIDs)
+		}
+	default:
+		t.Fatal("keine Absage-Benachrichtigung erhalten")
+	}
+}

@@ -153,3 +153,43 @@ func TestAudience_Team_EmptyTeams(t *testing.T) {
 		t.Errorf("empty-team audience must still contain vorstand %d, got %v", vorstandU, sorted(got))
 	}
 }
+
+// TestAudience_DutyTeam: der Dienst-Broadcast erreicht zusätzlich den
+// erweiterten Kader und dessen Eltern (dienste-erweiterter-kader) — deren
+// Dienstbörse zeigt die Slots des Teams als Aushilfe.
+func TestAudience_DutyTeam(t *testing.T) {
+	db := testutil.NewDB(t)
+	season := testutil.CreateSeason(t, db, "2025/26")
+	teamA := testutil.CreateTeam(t, db, "Team A")
+	teamC := testutil.CreateTeam(t, db, "Team C")
+	kaderA := testutil.CreateKader(t, db, teamA, season)
+	kaderC := testutil.CreateKader(t, db, teamC, season)
+
+	playerU := testutil.CreateUser(t, db, "standard")
+	testutil.AddKaderMember(t, db, kaderA, testutil.CreateMember(t, db, playerU))
+
+	extU := testutil.CreateUser(t, db, "standard")
+	testutil.AddExtendedKaderMember(t, db, kaderA, testutil.CreateMember(t, db, extU))
+
+	extParentU := testutil.CreateUser(t, db, "standard")
+	child := testutil.CreateMember(t, db, 0)
+	testutil.AddFamilyLink(t, db, extParentU, child)
+	testutil.AddExtendedKaderMember(t, db, kaderA, child)
+
+	otherExtU := testutil.CreateUser(t, db, "standard")
+	testutil.AddExtendedKaderMember(t, db, kaderC, testutil.CreateMember(t, db, otherExtU))
+
+	a := hub.NewAudience(db)
+	got := a.DutyTeam(context.Background(), []int{teamA})
+	for _, want := range []int{playerU, extU, extParentU} {
+		if !contains(got, want) {
+			t.Errorf("DutyTeam(A) muss %d enthalten, got %v", want, sorted(got))
+		}
+	}
+	if contains(got, otherExtU) {
+		t.Errorf("DutyTeam(A) darf den erweiterten Kader von Team C (%d) nicht enthalten", otherExtU)
+	}
+	if team := a.Team(context.Background(), []int{teamA}); contains(team, extU) {
+		t.Error("Team() bleibt unverändert ohne erweiterten Kader")
+	}
+}

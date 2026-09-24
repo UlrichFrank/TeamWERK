@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -266,5 +267,97 @@ func TestRangliste_OhneAuth_401(t *testing.T) {
 	srv := ranglisteServer(t, testutil.NewDB(t))
 	if status, _ := getRangliste(t, srv, "", ""); status != http.StatusUnauthorized {
 		t.Errorf("status = %d, want 401", status)
+	}
+}
+
+// ── Aushilfe (dienste-erweiterter-kader) ──
+
+type aushilfeRanglisteBody struct {
+	Teams []struct {
+		ID int `json:"id"`
+	} `json:"teams"`
+	Blocks []struct {
+		TeamID    int            `json:"teamId"`
+		Soll      float64        `json:"soll"`
+		Rows      []ranglisteRow `json:"rows"`
+		Aushilfen []struct {
+			MemberID  *int    `json:"memberId"`
+			Name      *string `json:"name"`
+			IsOwn     bool    `json:"isOwn"`
+			Geleistet float64 `json:"geleistet"`
+		} `json:"aushilfen"`
+	} `json:"blocks"`
+}
+
+func getAushilfeRangliste(t *testing.T, srv *httptest.Server, query, token string) (int, aushilfeRanglisteBody) {
+	t.Helper()
+	res := testutil.Get(t, srv, ranglistePath+query, token)
+	defer res.Body.Close()
+	var body aushilfeRanglisteBody
+	if res.StatusCode == http.StatusOK {
+		if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+	}
+	return res.StatusCode, body
+}
+
+// Das Kind des Elternteils steht zusätzlich im erweiterten Kader von Team B:
+// Team B wird im Filter angeboten, der Block zeigt die Aushilfe des Kindes
+// benannt und nicht gerankt.
+func TestRangliste_AushilfeTeamImFilter(t *testing.T) {
+	s := newScenario(t)
+	testutil.AddExtendedKaderMember(t, s.f.db, s.kaderB, s.kidID)
+	s.f.assign(s.f.teamSlot(s.teamB, day(-2), 1), s.parentUserID, "assigned")
+	srv := ranglisteServer(t, s.f.db)
+
+	status, body := getAushilfeRangliste(t, srv, "?team="+strconv.Itoa(s.teamB), parentToken(t, s))
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (Team des erweiterten Kaders muss im Scope sein)", status)
+	}
+	if len(body.Teams) != 2 {
+		t.Errorf("teams = %+v, want Team A und Team B", body.Teams)
+	}
+	if len(body.Blocks) != 1 {
+		t.Fatalf("blocks = %+v, want nur Team B", body.Blocks)
+	}
+	b := body.Blocks[0]
+	if len(b.Rows) != 2 {
+		t.Errorf("gerankte Zeilen = %d, want 2 (Aushilfe darf nicht mitgerankt werden)", len(b.Rows))
+	}
+	if len(b.Aushilfen) != 1 || b.Aushilfen[0].MemberID == nil || *b.Aushilfen[0].MemberID != s.kidID || !b.Aushilfen[0].IsOwn || b.Aushilfen[0].Geleistet != 1 {
+		t.Errorf("aushilfen = %+v, want eigenes Kind benannt mit geleistet 1", b.Aushilfen)
+	}
+}
+
+func TestRangliste_AushilfenAnonymisiert(t *testing.T) {
+	s := newScenario(t)
+	helperUser := testutil.CreateUser(t, s.f.db, "standard")
+	helper := testutil.CreateMember(t, s.f.db, helperUser)
+	testutil.AddExtendedKaderMember(t, s.f.db, s.kaderB, helper)
+	s.f.assign(s.f.teamSlot(s.teamB, day(-1), 1), helperUser, "assigned")
+
+	// Elternteil mit Kind im Stammkader von Team B betrachtet Team B.
+	viewer := testutil.CreateUser(t, s.f.db, "standard")
+	testutil.AddFamilyLink(t, s.f.db, viewer, s.zID)
+	srv := ranglisteServer(t, s.f.db)
+
+	status, body := getAushilfeRangliste(t, srv, "", testutil.TokenWithIsParent(t, viewer, "standard", nil, true))
+	if status != http.StatusOK || len(body.Blocks) != 1 {
+		t.Fatalf("status=%d blocks=%+v, want 200 und ein Block", status, body.Blocks)
+	}
+	a := body.Blocks[0].Aushilfen
+	if len(a) != 1 {
+		t.Fatalf("aushilfen = %+v, want eine Zeile", a)
+	}
+	if a[0].Name != nil || a[0].MemberID != nil || a[0].IsOwn {
+		t.Errorf("fremde Aushilfe muss anonymisiert sein: %+v", a[0])
+	}
+
+	// Vorstand sieht den Namen.
+	admin := testutil.CreateUser(t, s.f.db, "admin")
+	_, body = getAushilfeRangliste(t, srv, "?team="+strconv.Itoa(s.teamB), testutil.Token(t, admin, "admin", nil))
+	if a := body.Blocks[0].Aushilfen; len(a) != 1 || a[0].Name == nil {
+		t.Errorf("Admin muss den Namen der Aushilfe sehen: %+v", a)
 	}
 }

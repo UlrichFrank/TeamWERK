@@ -11,6 +11,7 @@ import { useDialogA11y } from '../lib/useDialogA11y'
 import { useWindowedList } from '../hooks/useWindowedList'
 import WindowedTableBody from './WindowedTableBody'
 import PersonChip from './PersonChip'
+import AushilfeBadge from './AushilfeBadge'
 import ActionMenu from './ActionMenu'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
@@ -22,6 +23,8 @@ import { BTN_PRIMARY, BTN_DANGER } from '../lib/buttonStyles'
 export interface PublicAssignee {
   user_id: number
   name: string
+  // Eingetragener hilft aus dem erweiterten Kader aus (dienste-erweiterter-kader).
+  aushilfe?: boolean
 }
 
 export interface BoardSlot {
@@ -257,7 +260,12 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
                     )}
                     {s.assignees && s.assignees.length > 0 && (
                       <div className="flex flex-wrap justify-end gap-1">
-                        {s.assignees.map((a, i) => <PersonChip key={i} userId={a.user_id} name={a.name} />)}
+                        {s.assignees.map((a, i) => (
+                          <span key={i} className="inline-flex items-center gap-1">
+                            <PersonChip userId={a.user_id} name={a.name} />
+                            {a.aushilfe && <AushilfeBadge />}
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>

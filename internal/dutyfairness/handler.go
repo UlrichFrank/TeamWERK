@@ -37,6 +37,18 @@ type ranglisteBlock struct {
 	TeamLabel string         `json:"teamLabel"`
 	Soll      float64        `json:"soll"`
 	Rows      []ranglisteRow `json:"rows"`
+	// Aushilfen: Mitglieder des erweiterten Kaders mit Diensten in diesem Team —
+	// ungerankt, ohne Soll, gleiche Anonymisierung wie Rows
+	// (dienste-erweiterter-kader).
+	Aushilfen []aushilfeRow `json:"aushilfen"`
+}
+
+type aushilfeRow struct {
+	MemberID   *int    `json:"memberId"`
+	Name       *string `json:"name"`
+	IsOwn      bool    `json:"isOwn"`
+	Geleistet  float64 `json:"geleistet"`
+	Vorhersage float64 `json:"vorhersage"`
 }
 
 type ranglisteResponse struct {
@@ -98,7 +110,7 @@ func (h *Handler) Rangliste(w http.ResponseWriter, r *http.Request) {
 		if len(requested) > 0 && !slices.Contains(requested, tid) {
 			continue
 		}
-		block := ranglisteBlock{TeamID: t.TeamID, TeamLabel: t.Label, Soll: Round2(t.Soll), Rows: []ranglisteRow{}}
+		block := ranglisteBlock{TeamID: t.TeamID, TeamLabel: t.Label, Soll: Round2(t.Soll), Rows: []ranglisteRow{}, Aushilfen: []aushilfeRow{}}
 		for i, m := range t.Ranked() {
 			row := ranglisteRow{
 				Rank:       i + 1,
@@ -111,6 +123,18 @@ func (h *Handler) Rangliste(w http.ResponseWriter, r *http.Request) {
 				row.Name = &m.Name
 			}
 			block.Rows = append(block.Rows, row)
+		}
+		for _, p := range t.Aushilfen() {
+			row := aushilfeRow{
+				IsOwn:      linked[p.Member.MemberID],
+				Geleistet:  Round2(p.Geleistet),
+				Vorhersage: Round2(p.Vorhersage),
+			}
+			if privileged || row.IsOwn {
+				row.MemberID = &p.Member.MemberID
+				row.Name = &p.Member.Name
+			}
+			block.Aushilfen = append(block.Aushilfen, row)
 		}
 		resp.Blocks = append(resp.Blocks, block)
 	}

@@ -48,6 +48,20 @@ type Team struct {
 	// Soll ist der Fair-Anteil je Kind = Total / PlayerCount (0 ohne Spieler).
 	Soll    float64
 	Members []*Member
+	// Aushilfe listet die Mitglieder, die diesem Team nur über den erweiterten
+	// Kader verbunden sind und hier Dienste übernommen haben (Wert > 0). Sie
+	// gehen weder in PlayerCount noch in Total/Soll noch in die Rangfolge ein
+	// (Change dienste-erweiterter-kader).
+	Aushilfe []*AushilfePosition
+}
+
+// AushilfePosition zählt die Aushilfe-Dienste eines Mitglieds in einem Team,
+// in dem es nur im erweiterten Kader steht. Kein Soll: Aushilfe ist freiwillig.
+type AushilfePosition struct {
+	Member     *Member
+	Team       *Team
+	Geleistet  float64
+	Vorhersage float64
 }
 
 // Snapshot ist der vollständige Rechenstand einer Saison. Er wird pro Request
@@ -63,6 +77,21 @@ type Snapshot struct {
 	// Mitglied oder Kind via family_links), jeweils nur Mitglieder mit Kader.
 	ownByUser      map[int][]int
 	childrenByUser map[int][]int
+
+	// Erweiterter Kader (aktive Saison, status <> 'ausgetreten'): extTeams je
+	// Mitglied, dazu die Zuordnung Account → eigene Mitglieder bzw. Kinder mit
+	// erweitertem Kader. Bewusst getrennt von ownByUser/childrenByUser, damit
+	// die bestehenden Stufen 1, 2 und 5 unverändert bleiben.
+	extTeams          map[int][]int
+	extOwnByUser      map[int][]int
+	extChildrenByUser map[int][]int
+	// trainerTeams: Account → Teams, in deren Kader er Trainer ist. Ein Trainer
+	// eines Slot-Teams hilft dort nie aus (dieselbe Regel wie die Dienstbörse,
+	// deren Stamm-Menge Trainer einschließt).
+	trainerTeams map[int][]int
+	// parentsOf: Mitglied → Eltern-Accounts (alle family_links).
+	parentsOf map[int][]int
+	aushilfe  map[[2]int]*AushilfePosition
 }
 
 // today liefert das heutige Datum in Vereinszeit. Ein Termin von heute zählt als
@@ -85,6 +114,13 @@ func Compute(ctx context.Context, db *sql.DB, seasonID int) (*Snapshot, error) {
 		memberTeams:    map[int][]int{},
 		ownByUser:      map[int][]int{},
 		childrenByUser: map[int][]int{},
+
+		extTeams:          map[int][]int{},
+		extOwnByUser:      map[int][]int{},
+		extChildrenByUser: map[int][]int{},
+		trainerTeams:      map[int][]int{},
+		parentsOf:         map[int][]int{},
+		aushilfe:          map[[2]int]*AushilfePosition{},
 	}
 	if err := s.loadTeams(ctx, db, seasonID); err != nil {
 		return nil, err
@@ -93,6 +129,12 @@ func Compute(ctx context.Context, db *sql.DB, seasonID int) (*Snapshot, error) {
 		return nil, err
 	}
 	if err := s.loadFamilyLinks(ctx, db); err != nil {
+		return nil, err
+	}
+	if err := s.loadExtended(ctx, db, seasonID); err != nil {
+		return nil, err
+	}
+	if err := s.loadTrainers(ctx, db, seasonID); err != nil {
 		return nil, err
 	}
 	slots, err := s.loadSlots(ctx, db, seasonID)
@@ -179,9 +221,74 @@ func (s *Snapshot) loadFamilyLinks(ctx context.Context, db *sql.DB) error {
 		if err := rows.Scan(&parentUserID, &memberID); err != nil {
 			return fmt.Errorf("dutyfairness family_links scan: %w", err)
 		}
+		s.parentsOf[memberID] = append(s.parentsOf[memberID], parentUserID)
 		if s.members[memberID] != nil {
 			s.childrenByUser[parentUserID] = append(s.childrenByUser[parentUserID], memberID)
 		}
+	}
+	return rows.Err()
+}
+
+// loadExtended lädt den erweiterten Kader der Saison. Statusfilter
+// status <> 'ausgetreten', nicht = 'aktiv' — Förderkinder (status
+// 'foerderkind') sind die typische Besetzung. Mitglieder, die nur hier stehen,
+// kommen in s.members (für Name und Zählung), aber in kein Team.Members.
+func (s *Snapshot) loadExtended(ctx context.Context, db *sql.DB, seasonID int) error {
+	rows, err := db.QueryContext(ctx, `
+		SELECT DISTINCT k.team_id, m.id, m.first_name || ' ' || m.last_name, COALESCE(m.user_id, 0)
+		FROM kader_extended_members kem
+		JOIN kader k ON k.id = kem.kader_id
+		JOIN members m ON m.id = kem.member_id
+		WHERE k.season_id = ? AND k.team_id IS NOT NULL AND m.status <> 'ausgetreten'`, seasonID)
+	if err != nil {
+		return fmt.Errorf("dutyfairness extended: %w", err)
+	}
+	defer rows.Close()
+	seen := map[int]bool{}
+	for rows.Next() {
+		var teamID, memberID, userID int
+		var name string
+		if err := rows.Scan(&teamID, &memberID, &name, &userID); err != nil {
+			return fmt.Errorf("dutyfairness extended scan: %w", err)
+		}
+		if s.Teams[teamID] == nil {
+			continue
+		}
+		if s.members[memberID] == nil {
+			s.members[memberID] = &Member{MemberID: memberID, Name: name, UserID: userID}
+		}
+		s.extTeams[memberID] = append(s.extTeams[memberID], teamID)
+		if seen[memberID] {
+			continue
+		}
+		seen[memberID] = true
+		if userID > 0 {
+			s.extOwnByUser[userID] = append(s.extOwnByUser[userID], memberID)
+		}
+		for _, parent := range s.parentsOf[memberID] {
+			s.extChildrenByUser[parent] = append(s.extChildrenByUser[parent], memberID)
+		}
+	}
+	return rows.Err()
+}
+
+func (s *Snapshot) loadTrainers(ctx context.Context, db *sql.DB, seasonID int) error {
+	rows, err := db.QueryContext(ctx, `
+		SELECT DISTINCT m.user_id, k.team_id
+		FROM kader_trainers kt
+		JOIN kader k ON k.id = kt.kader_id
+		JOIN members m ON m.id = kt.member_id
+		WHERE k.season_id = ? AND k.team_id IS NOT NULL AND m.user_id IS NOT NULL`, seasonID)
+	if err != nil {
+		return fmt.Errorf("dutyfairness trainers: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var userID, teamID int
+		if err := rows.Scan(&userID, &teamID); err != nil {
+			return fmt.Errorf("dutyfairness trainers scan: %w", err)
+		}
+		s.trainerTeams[userID] = append(s.trainerTeams[userID], teamID)
 	}
 	return rows.Err()
 }
@@ -276,9 +383,17 @@ func (s *Snapshot) loadSlots(ctx context.Context, db *sql.DB, seasonID int) (map
 //
 // Eine Zuweisung trägt nur eine user_id. Zurechnung in dieser Reihenfolge,
 // die erste nicht-leere Stufe gewinnt und wird gleichmäßig geteilt:
-//  1. eigene Mitglieder des Accounts, deren Team zum Slot passt
-//  2. Kinder des Accounts (family_links), deren Team zum Slot passt
-//  3. eigene Mitglieder des Accounts, unabhängig vom Team
+//  1. eigene Mitglieder des Accounts, deren Stammkader-Team zum Slot passt
+//  2. Kinder des Accounts (family_links), deren Stammkader-Team zum Slot passt
+//  3. eigene Mitglieder im erweiterten Kader eines Slot-Teams — Aushilfe
+//  4. Kinder im erweiterten Kader eines Slot-Teams — Aushilfe
+//  5. eigene Mitglieder des Accounts, unabhängig vom Team
+//
+// Aushilfe (Stufen 3/4) zählt je (Mitglied, Team) in Team.Aushilfe, nie in
+// Member.Geleistet/Vorhersage — sonst schlüge sie in jede Stammteam-Rangliste
+// des Mitglieds durch. Sie greift nicht bei generischen Slots (ohne Team) und
+// nicht, wenn der Account Trainer eines Slot-Teams ist: beides ist auch in der
+// Dienstbörse keine Aushilfe (appdb.UserTeamsSQL, Stamm inkl. Trainer).
 //
 // Ein generischer Slot passt zu jedem Team. Eine Eltern-Zuweisung an einem
 // Slot, zu dem kein Kind passt, zählt für niemanden (Team-Match); geteilt wird
@@ -309,6 +424,9 @@ func (s *Snapshot) countAssignments(ctx context.Context, db *sql.DB, seasonID in
 		if len(targets) == 0 {
 			targets = s.matching(s.childrenByUser[userID], slot)
 		}
+		if len(targets) == 0 && s.countAushilfe(userID, slot, now) {
+			continue
+		}
 		if len(targets) == 0 {
 			targets = s.ownByUser[userID]
 		}
@@ -328,6 +446,53 @@ func (s *Snapshot) countAssignments(ctx context.Context, db *sql.DB, seasonID in
 	return rows.Err()
 }
 
+// countAushilfe prüft die Stufen 3/4 und zählt bei Treffer. Liefert true,
+// wenn die Zuweisung als Aushilfe verbucht wurde.
+func (s *Snapshot) countAushilfe(userID int, slot slotInfo, now string) bool {
+	if slot.generic || slices.ContainsFunc(s.trainerTeams[userID], func(tid int) bool {
+		return slices.Contains(slot.teams, tid)
+	}) {
+		return false
+	}
+	hits := s.extMatching(s.extOwnByUser[userID], slot)
+	if len(hits) == 0 {
+		hits = s.extMatching(s.extChildrenByUser[userID], slot)
+	}
+	if len(hits) == 0 {
+		return false
+	}
+	weight := 1.0 / float64(len(hits))
+	for _, h := range hits {
+		pos := s.aushilfe[h]
+		if pos == nil {
+			pos = &AushilfePosition{Member: s.members[h[0]], Team: s.Teams[h[1]]}
+			s.aushilfe[h] = pos
+			pos.Team.Aushilfe = append(pos.Team.Aushilfe, pos)
+		}
+		if slot.date < now {
+			pos.Geleistet += weight
+		} else {
+			pos.Vorhersage += weight
+		}
+	}
+	return true
+}
+
+// extMatching liefert die (Mitglied, Team)-Paare, bei denen das Mitglied im
+// erweiterten Kader eines Slot-Teams steht. Mehrere Treffer teilen sich die
+// Zuweisung gleichmäßig — wie bei Geschwistern in den Stufen 1/2.
+func (s *Snapshot) extMatching(memberIDs []int, slot slotInfo) [][2]int {
+	var out [][2]int
+	for _, id := range memberIDs {
+		for _, tid := range s.extTeams[id] {
+			if slices.Contains(slot.teams, tid) {
+				out = append(out, [2]int{id, tid})
+			}
+		}
+	}
+	return out
+}
+
 func (s *Snapshot) matching(memberIDs []int, slot slotInfo) []int {
 	var out []int
 	for _, id := range memberIDs {
@@ -341,24 +506,30 @@ func (s *Snapshot) matching(memberIDs []int, slot slotInfo) []int {
 }
 
 // LinkedMembers liefert die Mitglieder, deren Zeile ein Account als eigene sieht:
-// das eigene Mitglied und die Kinder via family_links (nur Mitglieder mit Kader).
+// das eigene Mitglied und die Kinder via family_links (nur Mitglieder mit Kader
+// oder erweitertem Kader).
 func (s *Snapshot) LinkedMembers(userID int) map[int]bool {
 	out := map[int]bool{}
-	for _, id := range s.ownByUser[userID] {
-		out[id] = true
-	}
-	for _, id := range s.childrenByUser[userID] {
-		out[id] = true
+	for _, ids := range [][]int{s.ownByUser[userID], s.childrenByUser[userID], s.extOwnByUser[userID], s.extChildrenByUser[userID]} {
+		for _, id := range ids {
+			out[id] = true
+		}
 	}
 	return out
 }
 
-// TeamsFor liefert die Teams (in TeamOrder), in deren Kader mindestens eines der
-// gegebenen Mitglieder steht — der „eigene Teams"-Scope eines Standard-Nutzers.
+// TeamsFor liefert die Teams (in TeamOrder), in deren Kader oder erweitertem
+// Kader mindestens eines der gegebenen Mitglieder steht — der „eigene
+// Teams"-Scope eines Standard-Nutzers.
 func (s *Snapshot) TeamsFor(memberIDs map[int]bool) []int {
 	var out []int
 	for _, tid := range s.TeamOrder {
-		if slices.ContainsFunc(s.Teams[tid].Members, func(m *Member) bool { return memberIDs[m.MemberID] }) {
+		inKader := slices.ContainsFunc(s.Teams[tid].Members, func(m *Member) bool { return memberIDs[m.MemberID] })
+		inExt := false
+		for id := range memberIDs {
+			inExt = inExt || slices.Contains(s.extTeams[id], tid)
+		}
+		if inKader || inExt {
 			out = append(out, tid)
 		}
 	}
@@ -394,6 +565,44 @@ func (s *Snapshot) PositionsFor(userID int) []Position {
 	add(slices.DeleteFunc(slices.Clone(s.childrenByUser[userID]), func(id int) bool {
 		return slices.Contains(own, id)
 	}))
+	return out
+}
+
+// AushilfeFor liefert die Aushilfe-Positionen der mit dem Account verbundenen
+// Mitglieder (eigenes Mitglied, Kinder), eigene zuerst, dann nach Name und
+// Team-Label. Nur Positionen mit gezählten Diensten.
+func (s *Snapshot) AushilfeFor(userID int) []*AushilfePosition {
+	var out []*AushilfePosition
+	add := func(memberIDs []int, skip []int) {
+		ids := slices.DeleteFunc(slices.Clone(memberIDs), func(id int) bool { return slices.Contains(skip, id) })
+		slices.SortFunc(ids, func(a, b int) int {
+			return cmp.Or(cmp.Compare(s.members[a].Name, s.members[b].Name), cmp.Compare(a, b))
+		})
+		for _, id := range slices.Compact(ids) {
+			for _, tid := range s.TeamOrder {
+				if pos := s.aushilfe[[2]int{id, tid}]; pos != nil {
+					out = append(out, pos)
+				}
+			}
+		}
+	}
+	own := s.extOwnByUser[userID]
+	add(own, nil)
+	add(s.extChildrenByUser[userID], own)
+	return out
+}
+
+// Aushilfen liefert die Aushilfe-Positionen des Teams, absteigend nach
+// geleistet+vorhersage (nur zur Lesbarkeit — Aushilfe wird nicht gerankt),
+// bei Gleichstand member_id aufsteigend.
+func (t *Team) Aushilfen() []*AushilfePosition {
+	out := slices.Clone(t.Aushilfe)
+	slices.SortFunc(out, func(a, b *AushilfePosition) int {
+		return cmp.Or(
+			cmp.Compare(Round2(b.Geleistet+b.Vorhersage), Round2(a.Geleistet+a.Vorhersage)),
+			cmp.Compare(a.Member.MemberID, b.Member.MemberID),
+		)
+	})
 	return out
 }
 

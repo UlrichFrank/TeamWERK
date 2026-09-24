@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aushilfe im Dienstplan</title>
+<meta name="description" content="Vorschau: Dienste für den erweiterten Kader und dessen Eltern in TeamWERK">
+<style>
+  :root {
+    --ground: #F4F3EF;
+    --surface: #FFFFFF;
+    --card: #F9FAFB;
+    --ink: #181310;
+    --ink-muted: #5F5A55;
+    --ink-subtle: #8C8781;
+    --line: #E3E1DB;
+    --yellow: #FDE400;
+    --on-yellow: #181310;
+    --blue: #3E4A98;
+    --blue-soft: rgba(62, 74, 152, 0.09);
+    --blue-line: rgba(62, 74, 152, 0.32);
+    --green: #4E8A1F;
+    --danger: #C0253A;
+    --bar-track: #E7E5DF;
+    --shadow: 0 1px 2px rgba(24, 19, 16, 0.06), 0 4px 14px rgba(24, 19, 16, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #15110E;
+      --surface: #201A16;
+      --card: #1B1612;
+      --ink: #F3F0EA;
+      --ink-muted: #B9B2A9;
+      --ink-subtle: #8A837B;
+      --line: #342C26;
+      --blue: #9AA5EC;
+      --blue-soft: rgba(154, 165, 236, 0.12);
+      --blue-line: rgba(154, 165, 236, 0.38);
+      --green: #8FCB5A;
+      --danger: #F0788A;
+      --bar-track: #342C26;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #15110E;
+    --surface: #201A16;
+    --card: #1B1612;
+    --ink: #F3F0EA;
+    --ink-muted: #B9B2A9;
+    --ink-subtle: #8A837B;
+    --line: #342C26;
+    --blue: #9AA5EC;
+    --blue-soft: rgba(154, 165, 236, 0.12);
+    --blue-line: rgba(154, 165, 236, 0.38);
+    --green: #8FCB5A;
+    --danger: #F0788A;
+    --bar-track: #342C26;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 18px rgba(0, 0, 0, 0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Hanken Grotesk", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    padding: 0 20px;
+  }
+  .page { max-width: 760px; margin: 0 auto; padding-block: 40px 64px; display: flex; flex-direction: column; gap: 44px; }
+
+  /* Kopf */
+  header { display: flex; flex-direction: column; gap: 14px; }
+  .eyebrow {
+    display: inline-flex; align-self: flex-start; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+  .eyebrow .dot { width: 10px; height: 10px; background: var(--yellow); border-radius: 2px; outline: 1px solid rgba(24,19,16,.25); }
+  h1 { font-size: clamp(30px, 5vw, 42px); line-height: 1.1; margin: 0; letter-spacing: -0.02em; text-wrap: balance; font-weight: 800; }
+  h1 mark { background: linear-gradient(transparent 58%, var(--yellow) 58%); color: inherit; padding: 0 2px; }
+  .lede { font-size: 18px; color: var(--ink-muted); margin: 0; max-width: 62ch; }
+  .meta { font-size: 13px; color: var(--ink-subtle); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+
+  h2 { font-size: 22px; line-height: 1.25; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  section { display: flex; flex-direction: column; gap: 16px; }
+  section > p { margin: 0; max-width: 65ch; }
+  .muted { color: var(--ink-muted); }
+
+  /* Drei Kernregeln */
+  .rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .rule { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+  .rule b { font-size: 15px; }
+  .rule span { font-size: 14px; color: var(--ink-muted); }
+  .rule svg { width: 20px; height: 20px; color: var(--ink); }
+
+  /* App-Nachbauten */
+  .shot { display: flex; flex-direction: column; gap: 8px; }
+  .shot-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-subtle); }
+  .app {
+    background: var(--card); border-top: 4px solid var(--yellow); border-radius: 12px; box-shadow: var(--shadow);
+    padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .app h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  .app h3 svg { width: 18px; height: 18px; }
+  .group { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .group:first-of-type { border-top: 0; padding-top: 0; }
+  .group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+  .group-head strong { font-size: 15px; }
+  .group-head .when { color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  .slot { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .slot .name { font-weight: 600; font-size: 14px; }
+  .slot .time { font-size: 13px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  .slot .who { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--ink-muted); }
+  .slot .who span { display: inline-flex; align-items: center; gap: 6px; }
+  .btn {
+    background: var(--yellow); color: var(--on-yellow); border: 0; border-radius: 6px; padding: 5px 12px; font: inherit; font-size: 12px; font-weight: 600;
+  }
+  .free { font-size: 12px; color: var(--green); font-weight: 600; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+    border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 700;
+    color: var(--blue); background: var(--blue-soft); border: 1px solid var(--blue-line);
+  }
+  .chip svg { width: 13px; height: 13px; }
+  .chip.team { color: var(--ink-muted); background: transparent; border-color: var(--line); font-weight: 600; }
+  .new-tag { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; background: var(--yellow); color: var(--on-yellow); border-radius: 4px; padding: 1px 6px; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+
+  /* Dashboard */
+  .dash-block { display: flex; flex-direction: column; gap: 8px; }
+  .dash-block + .dash-block { border-top: 1px dashed var(--blue-line); padding-top: 14px; }
+  .dash-title { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); display: flex; align-items: center; gap: 8px; }
+  .dash-block.aus .dash-title { color: var(--blue); }
+  .dash-line { font-size: 14px; display: flex; justify-content: space-between; gap: 12px; }
+  .dash-line .v { font-variant-numeric: tabular-nums; color: var(--ink-muted); }
+  .link { color: var(--blue); font-weight: 600; font-size: 13px; }
+  .bar { height: 8px; border-radius: 4px; background: var(--bar-track); overflow: hidden; display: flex; }
+  .bar i { display: block; height: 100%; }
+  .bar .done { background: var(--ink); }
+  .bar .plan { background: var(--yellow); }
+
+  /* Rangliste */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); font-weight: 700; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--line); }
+  td.num, th.num { text-align: right; }
+  tr.me td { font-weight: 700; }
+  tr.sep td { border-bottom: 0; padding-top: 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; color: var(--blue); }
+  tr.aus td { color: var(--ink-muted); }
+  .table-wrap { overflow-x: auto; }
+
+  /* Beispiel */
+  .story { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .story dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; font-size: 15px; }
+  .story dt { font-weight: 700; }
+  .story dd { margin: 0; color: var(--ink-muted); }
+
+  /* Listen */
+  ul.plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; max-width: 65ch; }
+  ul.plain li::marker { color: var(--ink-subtle); }
+  .not li::marker { content: "–  "; }
+
+  .note {
+    border-left: 4px solid var(--yellow); background: var(--surface); padding: 14px 16px; border-radius: 0 10px 10px 0;
+    font-size: 15px; max-width: 65ch;
+  }
+  .note b { display: block; margin-bottom: 4px; }
+
+  footer { font-size: 13px; color: var(--ink-subtle); border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-direction: column; gap: 4px; }
+  code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.9em; }
+
+  @media (max-width: 640px) {
+    .rules, .two { grid-template-columns: 1fr; }
+    .page { padding-block: 28px 48px; gap: 36px; }
+    .lede { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-hand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+    <symbol id="i-bell-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></symbol>
+    <symbol id="i-clip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
+  </defs>
+</svg>
+
+<main class="page">
+  <header>
+    <span class="eyebrow"><span class="dot"></span>TeamWERK · Vorschau vor der Umsetzung</span>
+    <h1>Aushelfen bei Diensten – <mark>sichtbar, aber freiwillig</mark></h1>
+    <p class="lede">Wer im erweiterten Kader einer Mannschaft steht, und seine Eltern, können deren Dienste künftig sehen und übernehmen. Diese Einsätze sind überall als <strong>Aushilfe</strong> gekennzeichnet und zählen nicht zur Dienstpflicht.</p>
+    <div class="meta">
+      <span>Stand: 24.09.2026</span>
+      <span>Status: Entwurf zur Abstimmung, noch nicht umgesetzt</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Warum</h2>
+    <p>Spielerinnen und Spieler, die regelmäßig in einer höheren Mannschaft aushelfen, stehen dort im erweiterten Kader. Termine, Chat, Kalender und Videos der Mannschaft sehen sie schon. Die Dienste dieser Mannschaft bleiben für sie und ihre Eltern bisher unsichtbar. Dabei sind die Familien bei genau diesen Spielen ohnehin in der Halle und würden oft gern einen Dienst übernehmen.</p>
+  </section>
+
+  <section>
+    <h2>Die drei Grundregeln</h2>
+    <div class="rules">
+      <div class="rule">
+        <svg aria-hidden="true"><use href="#i-eye"/></svg>
+        <b>Sehen und eintragen</b>
+        <span>Der erweiterte Kader und seine Eltern finden die Dienste der Mannschaft in der Dienstbörse und können sich eintragen.</span>
+      </div>
+      <div class="rule">
+        <svg aria-hidden="true"><use href="#i-hand"/></svg>
+        <b>Erkennbar als Aushilfe</b>
+        <span>Am Dienst, am Namen der Eingetragenen, im Dashboard und in der Rangliste.</span>
+      </div>
+      <div class="rule">
+        <svg aria-hidden="true"><use href="#i-scale"/></svg>
+        <b>Keine Pflicht, kein Soll</b>
+        <span>Aushilfe zählt weder für die eigene noch für die fremde Mannschaft zur Dienst-Bilanz.</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>So sieht es in der App aus</h2>
+    <p class="muted">Beispiel: Lena spielt im Stammkader der <strong>mC1</strong> und im erweiterten Kader der <strong>mB1</strong>. Die Ansichten zeigen, was ihr Vater sieht.</p>
+
+    <div class="shot">
+      <span class="shot-label">Dienstbörse</span>
+      <div class="app">
+        <h3><svg aria-hidden="true"><use href="#i-clip"/></svg>Dienste</h3>
+
+        <div class="group">
+          <div class="group-head">
+            <strong>vs. TV Bittenfeld</strong>
+            <span class="chip team">mC1</span>
+            <span class="when">Sa 26.09. · Anwurf 14:00</span>
+          </div>
+          <div class="slot">
+            <span class="name">Kampfgericht</span>
+            <span class="time">13:30–15:30</span>
+            <div class="who"><span>Markus Weber</span><span class="free">1 frei</span></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="group-head">
+            <strong>vs. SG Weinstadt</strong>
+            <span class="chip team">mB1</span>
+            <span class="chip"><svg aria-hidden="true"><use href="#i-hand"/></svg>Aushilfe</span>
+            <span class="new-tag">neu</span>
+            <span class="when">So 27.09. · Anwurf 16:00</span>
+          </div>
+          <div class="slot">
+            <span class="name">Bewirtung</span>
+            <span class="time">15:00–18:00</span>
+            <button class="btn" type="button" tabindex="-1">Eintragen</button>
+            <div class="who">
+              <span>Sabine Roth</span>
+              <span>Jonas Keller <span class="chip"><svg aria-hidden="true"><use href="#i-hand"/></svg>Aushilfe</span></span>
+              <span class="free">1 frei</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="muted" style="margin:0;font-size:14px">Der Chip an der Überschrift sagt dem Betrachter: Das ist nicht deine Pflichtmannschaft. Der Chip am Namen sagt allen, auch dem Trainer: Jonas hilft aus dem erweiterten Kader aus.</p>
+    </div>
+
+    <div class="two">
+      <div class="shot">
+        <span class="shot-label">Dashboard · Meine Dienste</span>
+        <div class="app">
+          <div class="dash-block">
+            <span class="dash-title"><svg width="15" height="15" aria-hidden="true"><use href="#i-home"/></svg>Nächstes Spiel · mC1</span>
+            <div class="dash-line"><span>Sa 26.09. vs. TV Bittenfeld</span></div>
+            <div class="dash-line"><span>Kampfgericht</span><span class="v">13:30</span></div>
+          </div>
+          <div class="dash-block aus">
+            <span class="dash-title"><svg width="15" height="15" aria-hidden="true"><use href="#i-hand"/></svg>Aushilfe (erw. Kader) <span class="new-tag">neu</span></span>
+            <div class="dash-line"><span>So 27.09. vs. SG Weinstadt · mB1</span></div>
+            <div class="dash-line"><span>3 offene Dienste</span><span class="link">Zur Dienstbörse</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="shot">
+        <span class="shot-label">Dashboard · Dienst-Bilanz</span>
+        <div class="app">
+          <div class="dash-block">
+            <span class="dash-title">Lena · mC1</span>
+            <div class="bar" role="img" aria-label="4 geleistet, 1 geplant, Soll 6"><i class="done" style="width:66%"></i><i class="plan" style="width:17%"></i></div>
+            <div class="dash-line"><span>4 geleistet · 1 geplant</span><span class="v">Soll 6</span></div>
+          </div>
+          <div class="dash-block aus">
+            <span class="dash-title"><svg width="15" height="15" aria-hidden="true"><use href="#i-hand"/></svg>Aushilfe <span class="new-tag">neu</span></span>
+            <div class="dash-line"><span>Lena · mB1</span><span class="v">2 geleistet · 1 geplant</span></div>
+            <div class="dash-line muted" style="font-size:13px"><span>Kein Soll, zählt nicht zur Pflicht</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="shot">
+      <span class="shot-label">Rangliste mB1 · Sicht von Lenas Vater</span>
+      <div class="app">
+        <h3><svg aria-hidden="true"><use href="#i-trophy"/></svg>Dienst-Rangliste mB1 <span class="muted" style="font-weight:400;font-size:13px">Soll je Kind: 5</span></h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Platz</th><th>Name</th><th class="num">Geleistet</th><th class="num">Geplant</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>–</td><td class="num">6</td><td class="num">1</td></tr>
+              <tr><td>2</td><td>–</td><td class="num">4</td><td class="num">1</td></tr>
+              <tr><td>3</td><td>–</td><td class="num">3</td><td class="num">0</td></tr>
+              <tr class="sep"><td colspan="4">Aushilfen · ohne Platz, ohne Soll <span class="new-tag">neu</span></td></tr>
+              <tr class="aus me"><td></td><td>Lena</td><td class="num">2</td><td class="num">1</td></tr>
+              <tr class="aus"><td></td><td>–</td><td class="num">1</td><td class="num">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="muted" style="margin:0;font-size:14px">Namen bleiben wie bisher verborgen. Man sieht nur die eigene Familie, der Vorstand sieht alle.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Genau geregelt</h2>
+    <ul class="plain">
+      <li><strong>Stammkader geht vor.</strong> Spielen zwei Mannschaften zusammen und ist man in einer davon im Stammkader, gilt der Dienst als Pflicht, nicht als Aushilfe.</li>
+      <li><strong>Bei Geschwistern zählt das Stammkader-Kind.</strong> Trägt sich ein Elternteil ein und hat es ein Kind im Stammkader und eines im erweiterten Kader derselben Mannschaft, zählt der Dienst für das Stammkader-Kind.</li>
+      <li><strong>Das Kennzeichen folgt dem aktuellen Kader.</strong> Wechselt jemand in den Stammkader, zählen seine Dienste ab dann als Pflicht, auch die schon eingetragenen.</li>
+      <li><strong>Das Soll der Mannschaft bleibt gleich.</strong> Aushilfen gehen nicht in die Spielerzahl ein, die das Soll bestimmt.</li>
+      <li><strong>Förderkinder sind eingeschlossen.</strong> Ausgetretene Mitglieder begründen keine Sichtbarkeit mehr.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Was sich nicht ändert</h2>
+    <ul class="plain not">
+      <li><strong>Keine Push-Nachricht bei neuen Diensten an den erweiterten Kader.</strong> Er schuldet keine Dienste und soll nicht gedrängt werden. Wer eingetragen ist, bekommt wie alle Erinnerungen und Absagen.</li>
+      <li>Die Kachel „Meine Dienste“ zeigt oben weiterhin das nächste Spiel der eigenen Pflichtmannschaft.</li>
+      <li>Wer einen Dienst sehen darf, der auf eine Zielgruppe beschränkt ist (z. B. nur Eltern oder nur Trainer), regeln weiterhin dieselben Zielgruppen wie heute.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="note">
+      <b>Einmaliger Effekt nach der Einführung</b>
+      Wer heute schon einen Dienst in einer fremden Mannschaft übernommen hat, bekommt ihn bisher stillschweigend der eigenen Mannschaft gutgeschrieben. Nach der Umstellung wandern diese Einsätze in den Abschnitt „Aushilfe“. Die geleisteten Dienste in der eigenen Mannschaft können dadurch in Einzelfällen sinken. Vor dem Start zählen wir, wie viele Einsätze das betrifft.
+    </div>
+  </section>
+
+  <section>
+    <h2>Rückmeldung erbeten</h2>
+    <ul class="plain">
+      <li>Passt die Bezeichnung <strong>„Aushilfe“</strong>, oder ist „Erw. Kader“ wie bei den Terminen verständlicher?</li>
+      <li>Sollen Trainer die Aushilfen ihrer Mannschaft zusätzlich gesammelt sehen, über die Rangliste hinaus?</li>
+      <li>Ist es richtig, dass Aushilfe <em>gar nicht</em> angerechnet wird, auch nicht als Bonus auf das eigene Soll?</li>
+    </ul>
+  </section>
+
+  <footer>
+    <span>TeamWERK · Team Stuttgart</span>
+    <span>Technische Grundlage: OpenSpec-Change <code>dienste-erweiterter-kader</code></span>
+  </footer>
+</main>
+</body>
+</html>

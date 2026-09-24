@@ -203,3 +203,44 @@ func TestCreateSlot_AltePlayerMembership_WirdNichtBenachrichtigt(t *testing.T) {
 		t.Errorf("Spieler nur aus der alten Saison (%d) darf nicht benachrichtigt werden: %v", ehemaliger, got)
 	}
 }
+
+// Aushilfe (dienste-erweiterter-kader): der erweiterte Kader und seine Eltern
+// sehen die Dienste des Teams, werden über neue Slots aber nicht benachrichtigt —
+// sie schulden dem Team keine Dienste. Empfänger ⊆ Sichtbarkeit, nicht gleich.
+func TestCreateSlot_ErweiterterKaderBekommtKeinePush(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamB := testutil.CreateTeam(t, db, "B-Jugend")
+	kaderB := testutil.CreateKader(t, db, teamB, seasonID)
+
+	player := addPlayer(t, db, teamB, seasonID)
+
+	helper := testutil.CreateUser(t, db, "standard")
+	helperMember := testutil.CreateMember(t, db, helper)
+	testutil.AddClubFunction(t, db, helperMember, "spieler")
+	testutil.AddExtendedKaderMember(t, db, kaderB, helperMember)
+
+	parent := testutil.CreateUser(t, db, "standard")
+	child := testutil.CreateMember(t, db, 0)
+	testutil.AddFamilyLink(t, db, parent, child)
+	testutil.AddExtendedKaderMember(t, db, kaderB, child)
+
+	got := postSlot(t, db, map[string]any{
+		"event_name":   "Kuchenverkauf",
+		"event_date":   "2099-06-14",
+		"duty_type_id": createDutyType(t, db, "Bewirtung", 2.0),
+		"slots_total":  2,
+		"team_id":      teamB,
+		"season_id":    seasonID,
+	})
+
+	if !got[player] {
+		t.Errorf("Stammkader-Spieler (%d) fehlt: %v", player, got)
+	}
+	if got[helper] {
+		t.Errorf("Spieler des erweiterten Kaders (%d) darf keine Push bekommen: %v", helper, got)
+	}
+	if got[parent] {
+		t.Errorf("Elternteil eines Kindes im erweiterten Kader (%d) darf keine Push bekommen: %v", parent, got)
+	}
+}

@@ -207,10 +207,11 @@ func TestTeams_ParentNoKader_TeamNotListed(t *testing.T) {
 	}
 }
 
-// TestTeams_ScopeDuties_OhneErweitertenKader: der Team-Filter der Dienstbörse
-// (?scope=duties) listet nur Stammkader-Teams — der erweiterte Kader schuldet
-// keine Dienste. Ohne scope bleibt die Liste unverändert (Termine/Kalender).
-func TestTeams_ScopeDuties_OhneErweitertenKader(t *testing.T) {
+// TestTeams_ScopeDuties_MitErweitertemKader: der Team-Filter der Dienstbörse
+// (?scope=duties) listet Stamm- und erweiterte Kader-Teams — der erweiterte
+// Kader belegt dort Dienste als Aushilfe (dienste-erweiterter-kader). Ohne
+// scope bleibt die Liste unverändert (Termine/Kalender).
+func TestTeams_ScopeDuties_MitErweitertemKader(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	stammTeam := testutil.CreateTeam(t, db, "Team A")
@@ -242,8 +243,8 @@ func TestTeams_ScopeDuties_OhneErweitertenKader(t *testing.T) {
 	if !containsTeam(duties, stammTeam) {
 		t.Errorf("scope=duties: expected Stammkader team %d, got %+v", stammTeam, duties)
 	}
-	if containsTeam(duties, erwTeam) {
-		t.Errorf("scope=duties: extended-kader team %d must not be listed, got %+v", erwTeam, duties)
+	if !containsTeam(duties, erwTeam) {
+		t.Errorf("scope=duties: extended-kader team %d must be listed (Aushilfe), got %+v", erwTeam, duties)
 	}
 
 	all := get("/api/teams")
@@ -252,9 +253,10 @@ func TestTeams_ScopeDuties_OhneErweitertenKader(t *testing.T) {
 	}
 }
 
-// TestTeams_ScopeDuties_SpielerNurErweitert_Leer: ein Spieler, der nur im
-// erweiterten Kader steht, bekommt mit scope=duties keine Mannschaft.
-func TestTeams_ScopeDuties_SpielerNurErweitert_Leer(t *testing.T) {
+// TestTeams_ScopeDuties_SpielerNurErweitert: ein Spieler, der nur im
+// erweiterten Kader steht, bekommt mit scope=duties genau diese Mannschaft;
+// ein ausgetretenes Mitglied im erweiterten Kader keine.
+func TestTeams_ScopeDuties_SpielerNurErweitert(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
 	teamID := testutil.CreateTeam(t, db, "Team A")
@@ -275,8 +277,17 @@ func TestTeams_ScopeDuties_SpielerNurErweitert_Leer(t *testing.T) {
 	json.NewDecoder(res.Body).Decode(&teams)
 	res.Body.Close()
 
+	if len(teams) != 1 || !containsTeam(teams, teamID) {
+		t.Errorf("expected exactly team %d for extended-only player with scope=duties, got %+v", teamID, teams)
+	}
+
+	db.Exec(`UPDATE members SET status='ausgetreten' WHERE id=?`, memberID)
+	res = testutil.Get(t, srv, "/api/teams?scope=duties", token)
+	teams = nil
+	json.NewDecoder(res.Body).Decode(&teams)
+	res.Body.Close()
 	if len(teams) != 0 {
-		t.Errorf("expected no teams for extended-only player with scope=duties, got %+v", teams)
+		t.Errorf("ausgetretenes Mitglied: expected no teams with scope=duties, got %+v", teams)
 	}
 }
 
