@@ -10,22 +10,27 @@ import (
 
 // Report ist die JSON-Repräsentation eines Berichts für GET-Responses.
 type Report struct {
-	ID                  int             `json:"id"`
-	GameID              int             `json:"game_id"`
-	DutySlotID          *int            `json:"duty_slot_id"`
-	AuthorUserID        int             `json:"author_user_id"`
-	State               string          `json:"state"`
-	Title               string          `json:"title"`
-	HomeGoals           *int            `json:"home_goals"`
-	AwayGoals           *int            `json:"away_goals"`
-	HomeGoalsHT         *int            `json:"home_goals_ht"`
-	AwayGoalsHT         *int            `json:"away_goals_ht"`
-	Tournament          bool            `json:"tournament"`
-	Abstract            string          `json:"abstract"`
-	BodyMarkdown        string          `json:"body_md"`
-	PublishedURL        *string         `json:"published_url"`
-	Typo3PageUID        *int            `json:"typo3_page_uid"`
-	ErrorMessage        *string         `json:"error_message"`
+	ID           int     `json:"id"`
+	GameID       int     `json:"game_id"`
+	DutySlotID   *int    `json:"duty_slot_id"`
+	AuthorUserID int     `json:"author_user_id"`
+	State        string  `json:"state"`
+	Title        string  `json:"title"`
+	HomeGoals    *int    `json:"home_goals"`
+	AwayGoals    *int    `json:"away_goals"`
+	HomeGoalsHT  *int    `json:"home_goals_ht"`
+	AwayGoalsHT  *int    `json:"away_goals_ht"`
+	Tournament   bool    `json:"tournament"`
+	Abstract     string  `json:"abstract"`
+	BodyMarkdown string  `json:"body_md"`
+	PublishedURL *string `json:"published_url"`
+	Typo3PageUID *int    `json:"typo3_page_uid"`
+	ErrorMessage *string `json:"error_message"`
+	// ReviewComment ist der Kommentar der letzten Rückgabe an den Autor
+	// (POST /return), ReturnedAt ihr Zeitpunkt. Beide bleiben beim erneuten
+	// Einreichen stehen, damit der Freigeber seine Bitte wiederfindet.
+	ReviewComment       *string         `json:"review_comment"`
+	ReturnedAt          *string         `json:"returned_at"`
 	Images              []Image         `json:"images"`
 	PhotoConsentMissing []ConsentMember `json:"photo_consent_missing"`
 }
@@ -109,18 +114,22 @@ func (h *Handler) loadReport(id int) (*Report, error) {
 		publishedURL     sql.NullString
 		typo3PageUID     sql.NullInt64
 		errorMessageText sql.NullString
+		reviewComment    sql.NullString
+		returnedAt       sql.NullString
 	)
 	err := h.db.QueryRow(
 		`SELECT id, game_id, duty_slot_id, author_user_id, state, title,
 		        home_goals, away_goals, home_goals_ht, away_goals_ht,
 		        tournament, abstract, body_md,
-		        published_url, typo3_page_uid, error_message
+		        published_url, typo3_page_uid, error_message,
+		        review_comment, returned_at
 		 FROM match_reports WHERE id=?`, id,
 	).Scan(
 		&r.ID, &r.GameID, &dutySlotID, &r.AuthorUserID, &r.State, &r.Title,
 		&homeGoals, &awayGoals, &homeGoalsHT, &awayGoalsHT,
 		&tournamentInt, &r.Abstract, &r.BodyMarkdown,
 		&publishedURL, &typo3PageUID, &errorMessageText,
+		&reviewComment, &returnedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -139,6 +148,14 @@ func (h *Handler) loadReport(id int) (*Report, error) {
 	if errorMessageText.Valid {
 		s := errorMessageText.String
 		r.ErrorMessage = &s
+	}
+	if reviewComment.Valid {
+		s := reviewComment.String
+		r.ReviewComment = &s
+	}
+	if returnedAt.Valid {
+		s := returnedAt.String
+		r.ReturnedAt = &s
 	}
 	return &r, nil
 }

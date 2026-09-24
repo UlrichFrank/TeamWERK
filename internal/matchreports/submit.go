@@ -26,7 +26,7 @@ type submitResp struct {
 //   - State = draft
 //
 // Nach dem Submit verliert der Autor die Edit-Rechte — die Freigeber
-// übernehmen (siehe design.md D-3: kein Rückweg).
+// übernehmen. Zurück zum Autor geht es nur über eine Rückgabe (return.go).
 func (h *Handler) SubmitForReview(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
 	if claims == nil {
