@@ -1,10 +1,7 @@
-import { useState } from 'react'
-import { Activity, Home, MapPin } from 'lucide-react'
+import { FileText, Home, MapPin } from 'lucide-react'
 import type { MatrixCell, MatrixGame, TeamMatrix } from '../../lib/staffeln'
-import { HEADER_CTRL, HEADER_NEUTRAL } from '../../lib/buttonStyles'
 import { isOwnPlayer } from '../../lib/staffelHighlight'
 import { useMediaQuery } from '../../lib/useMediaQuery'
-import TorMomentumModal from './TorMomentumModal'
 
 // Sechs Werte je Begegnung. Ohne "Blau": bwhv_player_games.blue wird konstant
 // als 0 geschrieben, der Parser liest keine blauen Karten — eine Spalte aus
@@ -35,8 +32,12 @@ const STICKY = 'sticky left-0 z-10 text-left whitespace-nowrap'
  * ihre einzige Aussage — den Vergleich über die Zeile — wegzuwerfen. Dieselbe
  * Ausnahme gilt schon für die Kreuztabelle der Staffel.
  */
-export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix; ownPlayers: number[] }) {
-  const [ablauf, setAblauf] = useState<MatrixGame | null>(null)
+export default function Spielmatrix({ matrix, ownPlayers, onOpenGame }: {
+  matrix: TeamMatrix
+  ownPlayers: number[]
+  /** Springt zur Begegnung im Spielplan; der Ablauf steht dort im Bericht. */
+  onOpenGame: (bwhvGameId: number) => void
+}) {
   // Ausgeblendete Spalten dürfen nicht per CSS (`display:none`) verschwinden:
   // ein <th colSpan> zählt seine Kinder unabhängig von deren Sichtbarkeit, ein
   // per CSS verstecktes <td> aber nicht — das Grid der Kopf- und Datenzeilen
@@ -75,7 +76,7 @@ export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix
                   colSpan={sichtbareWerte.length}
                   className={`${TH} border-l border-brand-border-subtle align-top`}
                 >
-                  <SpaltenKopf game={g} onAblauf={() => setAblauf(g)} />
+                  <SpaltenKopf game={g} onOpen={() => onOpenGame(g.bwhvGameId)} />
                 </th>
               ))}
               <th
@@ -158,14 +159,6 @@ export default function Spielmatrix({ matrix, ownPlayers }: { matrix: TeamMatrix
           </tbody>
         </table>
       </div>
-
-      {ablauf && (
-        <TorMomentumModal
-          game={ablauf}
-          halfDurationMinutes={matrix.halfDurationMinutes}
-          onClose={() => setAblauf(null)}
-        />
-      )}
     </div>
   )
 }
@@ -194,24 +187,31 @@ function SummenZellen(
   )
 }
 
-function SpaltenKopf({ game, onAblauf }: { game: MatrixGame; onAblauf: () => void }) {
+function SpaltenKopf({ game, onOpen }: { game: MatrixGame; onOpen: () => void }) {
   const gegner = game.isHome ? game.guestTeam : game.homeTeam
+  // Der ganze Kopf ist die Schaltfläche: Datum, Ergebnis und Gegner sind das,
+  // worauf man zeigt, wenn man "diese Begegnung" meint.
   return (
-    <div className="flex flex-col items-center gap-1 normal-case min-w-[9rem]">
+    <button
+      type="button"
+      onClick={onOpen}
+      title={game.hasReport ? 'Zum Spielbericht' : 'Zur Begegnung im Spielplan'}
+      className="flex flex-col items-center gap-1 normal-case min-w-[9rem] w-full rounded-md px-1 py-1 hover:bg-brand-table-select transition-colors"
+    >
       <span className="text-brand-text-muted">{formatDate(game.date)}</span>
       <span className="inline-flex items-center gap-1 text-brand-text font-semibold text-sm tabular-nums">
         {game.isHome ? <Home className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
         {game.homeGoals}:{game.guestGoals}
       </span>
-      <span className="text-brand-text-muted max-w-[9rem] truncate" title={gegner}>{gegner}</span>
+      <span className="text-brand-text-muted max-w-[9rem] truncate">{gegner}</span>
       {game.hasReport ? (
-        <button type="button" onClick={onAblauf} className={`${HEADER_CTRL} ${HEADER_NEUTRAL}`}>
-          <Activity className="w-4 h-4" /> Ablauf
-        </button>
+        <span className="inline-flex items-center gap-1 text-brand-text">
+          <FileText className="w-3 h-3" /> Bericht
+        </span>
       ) : (
         <span className="text-brand-text-subtle">kein Bericht</span>
       )}
-    </div>
+    </button>
   )
 }
 

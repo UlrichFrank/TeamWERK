@@ -154,8 +154,23 @@ export default function StaffelnPage() {
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params)
     next.set(key, value)
+    // Der Sprung zu einem Bericht gilt nur für den Spielplan; ein Reiterwechsel
+    // soll ihn nicht bei der nächsten Rückkehr erneut aufklappen.
+    if (key === 'tab') next.delete('bericht')
     setParams(next, { replace: true })
   }
+
+  // Sprung aus der Spielmatrix zur Begegnung im Spielplan. Als echter
+  // Verlaufseintrag (kein replace), damit "Zurück" in die Matrix führt. Die
+  // Suche wird geleert — sie könnte die Zielbegegnung sonst ausblenden.
+  const openGame = (bwhvGameId: number) => {
+    const next = new URLSearchParams(params)
+    next.set('tab', 'spielplan')
+    next.set('bericht', String(bwhvGameId))
+    setSearch('')
+    setParams(next)
+  }
+  const focusGameId = Number(params.get('bericht')) || null
 
   if (loading) return <p className="text-sm text-brand-text-muted">Lade…</p>
 
@@ -266,6 +281,7 @@ export default function StaffelnPage() {
               searching={search.trim() !== ''}
               ownTeams={affiliation.teamNames}
               halfDurationMinutes={staffelHalfDuration(matrices)}
+              focusGameId={focusGameId}
             />
           )}
           {tab === 'kreuztabelle' && (
@@ -277,6 +293,7 @@ export default function StaffelnPage() {
               ownTeams={affiliation.teamNames}
               matrices={matrices}
               ownPlayers={affiliation.playerIds}
+              onOpenGame={openGame}
             />
           )}
           {tab === 'tore' && (
@@ -303,11 +320,12 @@ export default function StaffelnPage() {
  * Leiste auf zehn getrieben, und bestehende Verweise auf ?tab=verlauf bleiben
  * so gültig (design.md §12).
  */
-function VerlaufView({ days, ownTeams, matrices, ownPlayers }: {
+function VerlaufView({ days, ownTeams, matrices, ownPlayers, onOpenGame }: {
   days: ProgressionDay[]
   ownTeams: string[]
   matrices: TeamMatrix[]
   ownPlayers: number[]
+  onOpenGame: (bwhvGameId: number) => void
 }) {
   return (
     <div className="space-y-6">
@@ -322,7 +340,7 @@ function VerlaufView({ days, ownTeams, matrices, ownPlayers }: {
           }
         />
       ) : (
-        matrices.map((m) => <Spielmatrix key={m.team} matrix={m} ownPlayers={ownPlayers} />)
+        matrices.map((m) => <Spielmatrix key={m.team} matrix={m} ownPlayers={ownPlayers} onOpenGame={onOpenGame} />)
       )}
     </div>
   )
@@ -375,15 +393,26 @@ function TableView({ rows, ownTeams, searching }: { rows: TableRow[]; ownTeams: 
   )
 }
 
-function ScheduleView({ games, ownTeams, searching, halfDurationMinutes }: {
+function ScheduleView({ games, ownTeams, searching, halfDurationMinutes, focusGameId }: {
   games: ScheduleGame[]
   ownTeams: string[]
   searching: boolean
   halfDurationMinutes: number | null
+  /** Begegnung, zu der gesprungen wurde (?bericht=) — aufklappen und zeigen. */
+  focusGameId: number | null
 }) {
   // Genau ein Bericht ist aufgeklappt: der Bericht ist lang (zwei Mannschafts-
   // listen plus Spielverlauf), mehrere gleichzeitig machten die Liste unbenutzbar.
-  const [openReportId, setOpenReportId] = useState<number | null>(null)
+  const [openReportId, setOpenReportId] = useState<number | null>(focusGameId)
+  const focusVorhanden = games.some((g) => g.ID === focusGameId)
+
+  // Erst scrollen, wenn die Begegnung gerendert ist: der Spielplan kommt
+  // asynchron, beim Sprung kann die Liste noch leer sein.
+  useEffect(() => {
+    if (focusGameId === null || !focusVorhanden) return
+    setOpenReportId(focusGameId)
+    document.getElementById(`spiel-${focusGameId}`)?.scrollIntoView?.({ block: 'start' })
+  }, [focusGameId, focusVorhanden])
   if (games.length === 0) return <Empty text={searching ? 'Keine Begegnung passt zur Suche.' : 'Noch kein Spielplan abgerufen.'} />
   return (
     <div className="space-y-2">
@@ -392,6 +421,7 @@ function ScheduleView({ games, ownTeams, searching, halfDurationMinutes }: {
         return (
         <div
           key={g.ID}
+          id={`spiel-${g.ID}`}
           aria-current={own || undefined}
           className={`rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 ${
             own ? 'bg-brand-table-select font-semibold' : 'bg-brand-surface-card'
