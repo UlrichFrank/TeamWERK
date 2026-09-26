@@ -142,3 +142,22 @@ export async function startCastSession(masterURL: string): Promise<void> {
 export function isCastAvailable(): boolean {
   return Boolean(window.chrome?.cast && window.cast?.framework)
 }
+
+// browserCanCast entscheidet VOR jedem Ladeversuch, ob der Browser überhaupt
+// aus einer Webseite casten kann: nur Chromium-Browser außerhalb von iOS
+// (Chrome/Edge auf Desktop und Android). Auf iOS kann es kein Browser — alle
+// laufen auf WebKit, auch Chrome (CriOS). Ohne diese Vorprüfung meldet sich
+// cast_sender.js in Safari schlicht nie zurück (gemessen 09/2026 auf dem
+// iPhone), der Klick lief in den Lade-Timeout und zeigte „Werbeblocker oder
+// Netzwerk?" — eine falsche Diagnose. Dort greift AirPlay im Player.
+//
+// iPadOS meldet sich als „Macintosh"; unterscheidbar nur über Touch-Punkte
+// (ein Mac-Chrome hat maxTouchPoints 0).
+export function browserCanCast(
+  ua: string = navigator.userAgent,
+  maxTouchPoints: number = navigator.maxTouchPoints ?? 0,
+): boolean {
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && maxTouchPoints > 1)
+  if (isIOS) return false
+  return /Chrome\//.test(ua)
+}

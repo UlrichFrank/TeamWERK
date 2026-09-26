@@ -1,7 +1,7 @@
 import { describe, test, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import CastButton, { MSG_LOAD_FAILED, MSG_START_FAILED, MSG_UNAVAILABLE } from './CastButton'
-import { isCastAvailable, loadCastSDK, startCastSession } from '../lib/cast'
+import { browserCanCast, isCastAvailable, loadCastSDK, startCastSession } from '../lib/cast'
 
 // Fehlerpfade nach dem Klick. Früher verschwand der Button bei JEDEM
 // Fehlschlag kommentarlos — ein CSP-Block des SDK sah damit aus wie ein
@@ -9,6 +9,7 @@ import { isCastAvailable, loadCastSDK, startCastSession } from '../lib/cast'
 // sichtbarer Hinweis, und nur 'unavailable' entfernt den Button endgültig.
 
 vi.mock('../lib/cast', () => ({
+  browserCanCast: vi.fn(),
   isCastAvailable: vi.fn(),
   loadCastSDK: vi.fn(),
   startCastSession: vi.fn(),
@@ -21,6 +22,7 @@ function clickCast() {
 }
 
 beforeEach(() => {
+  vi.mocked(browserCanCast).mockReturnValue(true)
   vi.mocked(isCastAvailable).mockReturnValue(false)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })

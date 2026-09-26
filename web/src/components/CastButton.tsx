@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Cast } from 'lucide-react'
-import { isCastAvailable, loadCastSDK, startCastSession } from '../lib/cast'
+import { browserCanCast, isCastAvailable, loadCastSDK, startCastSession } from '../lib/cast'
 import { BTN_SMALL } from '../lib/buttonStyles'
 
 // CastButton bietet dem User eine Wurftaste zum Chromecast/Google-TV. Das
@@ -8,7 +8,9 @@ import { BTN_SMALL } from '../lib/buttonStyles'
 // Button lediglich ein „Ich könnte casten"-Hinweis. Grund: DSGVO-neutral
 // (keine passive Google-Verbindung beim Seitenaufruf).
 //
-// Vor dem Klick zeigen wir den Button optimistisch. Scheitert der Klick, bleibt
+// Browser, die grundsätzlich nicht casten können (Safari, Firefox, jeder
+// iOS-Browser), sehen den Button gar nicht — `browserCanCast`, ohne Kontakt zu
+// Google. Sonst zeigen wir ihn optimistisch. Scheitert der Klick, bleibt
 // **immer** ein sichtbarer Hinweis stehen — früher verschwand der Button
 // kommentarlos, und ein CSP-Block des SDK sah genauso aus wie ein Browser ohne
 // Cast-Unterstützung.
@@ -32,6 +34,7 @@ export function CastButton({ masterURL }: { masterURL: string }) {
   // unavailable wird erst nach einem Ladeversuch gesetzt; ist die API schon vor
   // dem Mount injiziert, ist der Button ohnehin sichtbar.
   const [unavailable, setUnavailable] = useState(false)
+  const [canCast] = useState(() => isCastAvailable() || browserCanCast())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -61,6 +64,8 @@ export function CastButton({ masterURL }: { masterURL: string }) {
       setBusy(false)
     }
   }
+
+  if (!canCast) return null
 
   if (unavailable) {
     return (
