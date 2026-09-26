@@ -106,6 +106,24 @@ func slotInTeamsSQL(teamsSQL string) string {
 		OR ds.game_id IN (SELECT gt_s.game_id FROM game_teams gt_s WHERE gt_s.team_id IN (` + teamsSQL + `)))`
 }
 
+// boardAssigneesSQL liefert die Eingetragenen der Dienstbörse samt
+// Aushilfe-Kennzeichen je Zusage für n Slot-IDs (Platzhalter). Eigene Funktion,
+// damit der Plan-Test (dienstboerse-ladezeit) genau diese Query erklären kann.
+func boardAssigneesSQL(n int) string {
+	return `
+		SELECT da.duty_slot_id,
+		       u.id,
+		       u.first_name || ' ' || u.last_name,
+		       CASE WHEN ` + slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsExtended, "da.user_id")) + `
+		             AND NOT ` + slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsStamm, "da.user_id")) + `
+		            THEN 1 ELSE 0 END
+		FROM duty_assignments da
+		JOIN duty_slots ds ON ds.id = da.duty_slot_id
+		JOIN users u ON u.id = da.user_id
+		WHERE da.duty_slot_id IN (` + placeholders(n) + `)
+		ORDER BY da.created_at`
+}
+
 // eligibleDutyRecipients returns the user IDs to notify about a newly created duty slot.
 // Die Menge ist eine Teilmenge derer, denen die Dienstbörse den Slot mit aktivem Audience-Filter
 // zeigt: eine Push für einen Dienst, den der Empfänger auf /dienste anschließend gar nicht findet,
@@ -1195,24 +1213,11 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(slotIDs) > 0 {
-		ph := make([]string, len(slotIDs))
 		aArgs := make([]any, len(slotIDs))
 		for i, id := range slotIDs {
-			ph[i] = "?"
 			aArgs[i] = id
 		}
-		aRows, aErr := h.db.QueryContext(r.Context(), `
-			SELECT da.duty_slot_id,
-			       u.id,
-			       u.first_name || ' ' || u.last_name,
-			       CASE WHEN `+slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsExtended, "da.user_id"))+`
-			             AND NOT `+slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsStamm, "da.user_id"))+`
-			            THEN 1 ELSE 0 END
-			FROM duty_assignments da
-			JOIN duty_slots ds ON ds.id = da.duty_slot_id
-			JOIN users u ON u.id = da.user_id
-			WHERE da.duty_slot_id IN (`+strings.Join(ph, ",")+`)
-			ORDER BY da.created_at`, aArgs...)
+		aRows, aErr := h.db.QueryContext(r.Context(), boardAssigneesSQL(len(slotIDs)), aArgs...)
 		if aErr == nil {
 			defer aRows.Close()
 			assigneeMap := map[int][]publicAssignee{}
