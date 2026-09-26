@@ -3,7 +3,7 @@
 ## 1. Team-Prädikat umformulieren (Backend)
 
 - [x] 1.1 Vorher-Messung festhalten: SQL-Text der Assignee-Query aus `duties.Board` in eine unexportierte Funktion `boardAssigneesSQL(n int) string` ziehen (reines Refactoring, Form unverändert); verifiziert durch unverändert grünes `go test ./internal/duties/...`
-- [ ] 1.2 `duties.slotInTeamsSQL` und `dashboard.slotInTeams` auf `EXISTS (SELECT 1 FROM game_teams gt_s WHERE gt_s.game_id = ds.game_id AND gt_s.team_id IN (…))` umstellen, den Zweig `ds.game_id IS NULL AND ds.team_id IN (…)` unverändert lassen und den Doc-Kommentar um den Grund ergänzen (Korrelation über den PK, planerunabhängig); verifiziert durch grüne `go test ./internal/duties/... ./internal/dashboard/... ./internal/dutyfairness/...`, insbesondere `TestAushilfePraedikat_BoardUndBilanzDeckungsgleich` und die Tests in `board_aushilfe_test.go`
+- [x] 1.2 `duties.slotInTeamsSQL` und `dashboard.slotInTeams` auf `EXISTS (SELECT 1 FROM game_teams gt_s WHERE gt_s.game_id = ds.game_id AND gt_s.team_id IN (…))` umstellen, den Zweig `ds.game_id IS NULL AND ds.team_id IN (…)` unverändert lassen und den Doc-Kommentar um den Grund ergänzen (Korrelation über den PK, planerunabhängig); verifiziert durch grüne `go test ./internal/duties/... ./internal/dashboard/... ./internal/dutyfairness/...`, insbesondere `TestAushilfePraedikat_BoardUndBilanzDeckungsgleich` und die Tests in `board_aushilfe_test.go`
 - [ ] 1.3 (optional) Beide Hilfsfunktionen als `appdb.SlotInTeamsSQL` nach `internal/db/user_teams.go` zusammenlegen und die Kopien entfernen; nur umsetzen, wenn der Arch-Test (`go test ./internal/arch/...`) grün bleibt, sonst Task als bewusst verworfen markieren
 
 ## 2. Regressionsschutz (Tests)

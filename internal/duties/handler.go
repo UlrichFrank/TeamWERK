@@ -101,9 +101,17 @@ func (h *Handler) slotTeamScope(ctx context.Context, teamID, gameID *int) []int 
 // slotInTeamsSQL ist wahr, wenn der Slot `ds` zu einem Team aus teamsSQL
 // (einem `SELECT team_id …`) gehört: mit Spiel über game_teams, ohne Spiel über
 // ds.team_id. Dieselbe Geltungsbereichs-Regel wie Board und slotTeamScope.
+//
+// Der Spiel-Zweig korreliert über ds.game_id und trifft damit den
+// Primärschlüssel (game_id, team_id) von game_teams — je Slot ein Lookup auf
+// die Teams seines Termins. Die frühere Form `ds.game_id IN (SELECT game_id
+// FROM game_teams WHERE team_id IN (…))` scannte game_teams vollständig, sobald
+// teamsSQL korreliert ist (da.user_id): 2,9 s für 178 Zusagen. Ein Index auf
+// team_id hilft nur ohne ANALYZE (dienstboerse-ladezeit).
 func slotInTeamsSQL(teamsSQL string) string {
 	return `((ds.game_id IS NULL AND ds.team_id IN (` + teamsSQL + `))
-		OR ds.game_id IN (SELECT gt_s.game_id FROM game_teams gt_s WHERE gt_s.team_id IN (` + teamsSQL + `)))`
+		OR EXISTS (SELECT 1 FROM game_teams gt_s
+		           WHERE gt_s.game_id = ds.game_id AND gt_s.team_id IN (` + teamsSQL + `)))`
 }
 
 // boardAssigneesSQL liefert die Eingetragenen der Dienstbörse samt
