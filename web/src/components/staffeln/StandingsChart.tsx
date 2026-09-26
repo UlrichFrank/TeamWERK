@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { gespieltePunkte } from '../../lib/staffeln'
 import type { ProgressionDay } from '../../lib/staffeln'
 import { isOwnTeam } from '../../lib/staffelHighlight'
 
@@ -17,9 +18,13 @@ const AXIS_TEXT = '#6B7280'
 // Strichführung variiert, damit die Zuordnung ohne Farbsehen möglich bleibt.
 const DASHES = ['', '6 3', '2 3']
 
-const W = 640
-const H = 360
-const PAD = { top: 16, right: 16, bottom: 32, left: 32 }
+// Feste Pixelmaße statt viewBox-Skalierung: der Zeilenabstand entspricht einer
+// Tabellenzeile (px-2 py-2 text-sm ≈ 36 px, siehe Spielmatrix), der
+// Spaltenabstand demselben Wert — so bleibt die Kurve so dicht wie die Tabelle
+// darunter, statt mit der Fensterbreite aufzublähen. Viele Spieltage scrollen
+// waagerecht.
+const STEP = 36
+const PAD = { top: 12, right: 16, bottom: 30, left: 28 }
 
 /**
  * Platzierungsverlauf als Inline-SVG — eine Polyline je Mannschaft.
@@ -47,18 +52,20 @@ export default function StandingsChart({
 
   const teams = Array.from(new Set(days.flatMap((d) => d.entries.map((e) => e.team)))).sort()
   const maxRank = Math.max(...days.flatMap((d) => d.entries.map((e) => e.rank)))
-  const stepX = days.length > 1 ? (W - PAD.left - PAD.right) / (days.length - 1) : 0
-  const stepY = maxRank > 1 ? (H - PAD.top - PAD.bottom) / (maxRank - 1) : 0
+  const W = PAD.left + (days.length - 1) * STEP + PAD.right
+  const H = PAD.top + (maxRank - 1) * STEP + PAD.bottom
 
-  const x = (i: number) => PAD.left + i * stepX
-  const y = (rank: number) => PAD.top + (rank - 1) * stepY
+  const x = (i: number) => PAD.left + i * STEP
+  const y = (rank: number) => PAD.top + (rank - 1) * STEP
 
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4">
       <div className="overflow-x-auto">
         <svg
+          width={W}
+          height={H}
           viewBox={`0 0 ${W} ${H}`}
-          className="min-w-[36rem] w-full h-auto"
+          className="block"
           role="img"
           aria-label="Platzierungsverlauf über die Spieltage, beste Platzierung oben"
         >
@@ -68,43 +75,55 @@ export default function StandingsChart({
                 x1={PAD.left} x2={W - PAD.right} y1={y(rank)} y2={y(rank)}
                 stroke={GRID} strokeWidth={1}
               />
-              <text x={4} y={y(rank) + 4} className="text-[10px]" fill={AXIS_TEXT}>{rank}</text>
+              <text x={PAD.left - 10} y={y(rank) + 4} textAnchor="end" className="text-[10px]" fill={AXIS_TEXT}>{rank}</text>
             </g>
           ))}
           {days.map((d, i) => (
             <text
-              key={d.date} x={x(i)} y={H - 10}
+              key={d.date} x={x(i)} y={H - 8}
               textAnchor="middle" className="text-[10px]" fill={AXIS_TEXT}
             >
-              {d.date.slice(8, 10)}.{d.date.slice(5, 7)}.
+              {kurzDatum(d.date)}
             </text>
           ))}
           {teams.map((team, ti) => {
             const own = isOwnTeam(ownTeams, team)
-            const points = days
-              .map((d, i) => {
-                const e = d.entries.find((x) => x.team === team)
-                return e ? `${x(i)},${y(e.rank)}` : null
-              })
-              .filter((p): p is string => p !== null)
-            if (points.length === 0) return null
+            const punkte = gespieltePunkte(days, team)
+            if (punkte.length === 0) return null
+            const color = COLORS[ti % COLORS.length]
+            const faded = hover !== null && hover !== team && !own
             // Die eigene Linie trägt die doppelte Strichstärke — dieselbe
             // Auszeichnung wie die Zeilenmarkierung in den Tabellen, nur in
             // der Form, die eine Grafik dafür hat.
             const width = own ? 4 : hover === team ? 3 : 1.5
             return (
-              <polyline
-                key={team}
-                data-team={team}
-                data-own={own || undefined}
-                points={points.join(' ')}
-                fill="none"
-                stroke={COLORS[ti % COLORS.length]}
-                strokeDasharray={DASHES[Math.floor(ti / COLORS.length) % DASHES.length]}
-                strokeWidth={width}
-                strokeLinejoin="round"
-                opacity={hover === null || hover === team || own ? 1 : 0.25}
-              />
+              <g key={team} data-team={team} data-own={own || undefined} opacity={faded ? 0.25 : 1}>
+                {/* Eine Polyline aus einem Punkt zeichnet nichts — am ersten
+                    Spieltag steht deshalb nur der Punkt, keine Linie. */}
+                {punkte.length > 1 && (
+                  <polyline
+                    points={punkte.map((p) => `${x(p.day)},${y(p.rank)}`).join(' ')}
+                    fill="none"
+                    stroke={color}
+                    strokeDasharray={DASHES[Math.floor(ti / COLORS.length) % DASHES.length]}
+                    strokeWidth={width}
+                    strokeLinejoin="round"
+                  />
+                )}
+                {punkte.map((p) => (
+                  <circle
+                    key={p.day}
+                    cx={x(p.day)}
+                    cy={y(p.rank)}
+                    r={own ? 4.5 : 3.5}
+                    fill={color}
+                    onMouseEnter={() => setHover(team)}
+                    onMouseLeave={() => setHover(null)}
+                  >
+                    <title>{`${team} · ${kurzDatum(days[p.day].date)} · Platz ${p.rank}`}</title>
+                  </circle>
+                ))}
+              </g>
             )
           })}
         </svg>
@@ -134,4 +153,8 @@ export default function StandingsChart({
       </ul>
     </div>
   )
+}
+
+function kurzDatum(date: string): string {
+  return `${date.slice(8, 10)}.${date.slice(5, 7)}.`
 }

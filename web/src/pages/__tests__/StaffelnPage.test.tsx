@@ -67,6 +67,13 @@ const progression = [
       { team: 'Verein B', rank: 2, points: 0, games: 1, goalsFor: 25, goalDiff: -4 },
     ],
   },
+  {
+    date: '2026-09-27',
+    entries: [
+      { team: 'Verein A', rank: 1, points: 4, games: 2, goalsFor: 58, goalDiff: 14 },
+      { team: 'Verein B', rank: 2, points: 0, games: 2, goalsFor: 44, goalDiff: -14 },
+    ],
+  },
 ]
 
 const teamStats = {
@@ -326,7 +333,28 @@ describe('StaffelnPage', () => {
     await waitFor(() => expect(screen.getByRole('img', { name: /Platzierungsverlauf/ })).toBeInTheDocument())
     expect(await screen.findByText('Anna Beispiel')).toBeInTheDocument()
     expect(screen.getByText(/1 Spiel, davon\s+1 mit Spielbericht/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Ablauf/ })).toBeInTheDocument()
+  })
+
+  // Klick auf die Begegnung in der Spielmatrix: Reiter Spielplan, Bericht offen.
+  test('Klick auf eine Begegnung der Spielmatrix springt zum Bericht', async () => {
+    mockAll()
+    setup('/staffeln?tab=verlauf')
+    await screen.findByText('Anna Beispiel')
+    fireEvent.click(screen.getByRole('button', { name: /Bericht/ }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Bericht/ })).toHaveAttribute('aria-expanded', 'true'))
+    expect(screen.getByRole('button', { name: /Spielplan/ })).toHaveAttribute('aria-current', 'true')
+  })
+
+  test('die Spielerübersicht ist auf eine fremde Mannschaft umschaltbar', async () => {
+    mockAll()
+    const fremd = { ...spielmatrix[0], team: 'Verein B', players: [{ ...spielmatrix[0].players[0], playerId: 9, name: 'Bea Fremd' }] }
+    mock.onGet(/\/staffeln\/\d+\/player-games/).reply((cfg) =>
+      [200, { teams: cfg.params?.team === 'Verein B' ? [fremd] : spielmatrix }])
+    setup('/staffeln?tab=verlauf')
+    await screen.findByText('Anna Beispiel')
+    fireEvent.change(screen.getByRole('combobox', { name: /Mannschaft der Spielerübersicht/ }), { target: { value: 'Verein B' } })
+    expect(await screen.findByText('Bea Fremd')).toBeInTheDocument()
+    expect(screen.queryByText('Anna Beispiel')).not.toBeInTheDocument()
   })
 
   // Ohne verknüpfte Begegnung gibt es keine Mannschaft — und statt einer
@@ -369,20 +397,19 @@ describe('StaffelnPage', () => {
       setup('/staffeln?tab=verlauf')
       // Auf data-team eingegrenzt: die Reiter-Icons von lucide bringen eigene
       // <polyline>-Elemente mit.
-      await waitFor(() => expect(document.querySelectorAll('polyline[data-team]')).toHaveLength(2))
-      const lines = Array.from(document.querySelectorAll('polyline[data-team]'))
+      await waitFor(() => expect(document.querySelectorAll('g[data-team] polyline')).toHaveLength(2))
       const yOf = (el: Element) => Number(el.getAttribute('points')!.split(',')[1].split(' ')[0])
-      const rang1 = lines.find((l) => l.getAttribute('data-team') === 'Verein A')!
-      const rang2 = lines.find((l) => l.getAttribute('data-team') === 'Verein B')!
+      const rang1 = document.querySelector('g[data-team="Verein A"] polyline')!
+      const rang2 = document.querySelector('g[data-team="Verein B"] polyline')!
       expect(yOf(rang1)).toBeLessThan(yOf(rang2))
     })
 
     test('die eigene Linie ist doppelt so stark', async () => {
       mockAll()
       setup('/staffeln?tab=verlauf')
-      await waitFor(() => expect(document.querySelectorAll('polyline[data-team]')).toHaveLength(2))
-      const own = document.querySelector('polyline[data-team][data-own]')!
-      const other = document.querySelector('polyline[data-team]:not([data-own])')!
+      await waitFor(() => expect(document.querySelectorAll('g[data-team] polyline')).toHaveLength(2))
+      const own = document.querySelector('g[data-team][data-own] polyline')!
+      const other = document.querySelector('g[data-team]:not([data-own]) polyline')!
       expect(Number(own.getAttribute('stroke-width'))).toBeGreaterThan(
         Number(other.getAttribute('stroke-width')),
       )

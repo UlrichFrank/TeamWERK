@@ -395,7 +395,8 @@ function VerlaufView({ staffelId, days, ownTeams, matrices, ownPlayers, onOpenGa
             'Für die Spielmatrix fehlt noch die Verbindung zur eigenen Mannschaft: sie wird ' +
             'aus der Verknüpfung zwischen Verbands-Begegnung und eigenem Spieltermin ' +
             'abgeleitet, nicht über Namen geraten. Sobald ein eigenes Spiel dieser Staffel ' +
-            'importiert ist, erscheint sie hier. Andere Mannschaften sind oben wählbar.'
+            'importiert ist, erscheint sie hier.' +
+            (teams.length > 0 ? ' Andere Mannschaften sind oben wählbar.' : '')
           }
         />
       ) : (
@@ -485,7 +486,7 @@ function ScheduleView({ games, ownTeams, searching, halfDurationMinutes, focusGa
           key={g.ID}
           id={`spiel-${g.ID}`}
           aria-current={own || undefined}
-          className={`rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 ${
+          className={`rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 scroll-mt-4 ${
             own ? 'bg-brand-table-select font-semibold' : 'bg-brand-surface-card'
           }`}
         >
