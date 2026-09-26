@@ -295,7 +295,7 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
               badge={(e.note.trim() || e.isExtended) ? (
                 <span className="flex items-center gap-1">
                   <EventNoteIndicator variant="icon" note={e.note} />
-                  {e.isExtended ? <AushilfeBadge label="Erw. Kader" /> : null}
+                  {e.isExtended ? <AushilfeBadge /> : null}
                 </span>
               ) : undefined}
             />
@@ -481,7 +481,7 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
         <div className="pt-3 border-t border-brand-border-subtle space-y-1" data-testid="bilanz-aushilfe">
           <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-blue">
             <Handshake className="w-4 h-4" aria-hidden="true" />
-            Aushilfe
+            Erw. Kader
           </p>
           {dutyAccountAushilfe.map(entry => (
             <DutyAccountAushilfeRow key={`${entry.memberId}-${entry.teamId}`} entry={entry} />
@@ -542,7 +542,7 @@ function MeinTeamSection() {
           >
             <span className="flex items-center gap-2 text-sm font-medium text-brand-text">
               {t.name}
-              {t.isExtended && <AushilfeBadge label="Erw. Kader" />}
+              {t.isExtended && <AushilfeBadge />}
             </span>
             <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
           </Link>

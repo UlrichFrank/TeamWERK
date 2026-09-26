@@ -99,7 +99,7 @@ function AushilfenSection({ rows }: { rows: AushilfeRow[] }) {
     <div className="mt-4 pt-3 border-t border-brand-border-subtle" data-testid="rangliste-aushilfen">
       <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-blue mb-1">
         <Handshake className="w-4 h-4" aria-hidden="true" />
-        Aushilfen · ohne Platz, ohne Fair-Anteil
+        Erw. Kader · ohne Platz, ohne Fair-Anteil
       </p>
       <div className="space-y-1">
         {rows.map((row, i) => {

@@ -46,7 +46,7 @@ describe('DienstRanglistePage — Aushilfen', () => {
     renderAt('/dienste/rangliste?team=9')
 
     const section = await screen.findByTestId('rangliste-aushilfen')
-    expect(section).toHaveTextContent('Aushilfen')
+    expect(section).toHaveTextContent('Erw. Kader')
     expect(within(section).getByText('Lena Beispiel')).toBeInTheDocument()
     expect(within(section).getByText('-')).toBeInTheDocument()
     expect(section).toHaveTextContent('2 geleistet · 1 eingetragen')

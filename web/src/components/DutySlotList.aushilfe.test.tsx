@@ -34,7 +34,7 @@ describe('DutySlotList — Aushilfe-Kennzeichen', () => {
         </PersonContactProvider>
       </MemoryRouter>,
     )
-    const badges = screen.getAllByText('Aushilfe')
+    const badges = screen.getAllByText('Erw. Kader')
     expect(badges).toHaveLength(1)
     expect(badges[0].parentElement?.textContent).toContain('Jonas Keller')
   })
@@ -47,6 +47,6 @@ describe('DutySlotList — Aushilfe-Kennzeichen', () => {
         </PersonContactProvider>
       </MemoryRouter>,
     )
-    expect(screen.queryByText('Aushilfe')).not.toBeInTheDocument()
+    expect(screen.queryByText('Erw. Kader')).not.toBeInTheDocument()
   })
 })

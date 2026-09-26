@@ -60,7 +60,7 @@ describe('DashboardPage — Aushilfe im erweiterten Kader', () => {
     // Keine Abschnitts-Überschrift mehr — das Kennzeichen steht hinter dem Titel.
     expect(block).not.toHaveTextContent('erw. Kader')
     const row = within(block).getByText('Bewirtung').closest('a')!
-    expect(row).toHaveTextContent('Aushilfe')
+    expect(row).toHaveTextContent('Erw. Kader')
     expect(row).toHaveTextContent('SG Weinstadt · mB1 · 10:00')
     expect(row).toHaveAttribute('href', '/dienste?focus=slot-42')
     expect(within(block).getByText('3 offene Dienste verfügbar').closest('a')).toHaveAttribute('href', '/dienste?focus=game-2')
@@ -70,7 +70,7 @@ describe('DashboardPage — Aushilfe im erweiterten Kader', () => {
     const stamm = screen.getByText('Kampfgericht').closest('a')!
     expect(stamm).toHaveAttribute('href', '/dienste?focus=slot-41')
     expect(stamm).toHaveTextContent('TV Bittenfeld · mC1 · 13:30')
-    expect(stamm).not.toHaveTextContent('Aushilfe')
+    expect(stamm).not.toHaveTextContent('Erw. Kader')
   })
 
   test('ohne aushilfe kein Abschnitt', async () => {
