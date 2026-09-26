@@ -3,6 +3,7 @@ package app
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -48,5 +49,36 @@ func TestSecurityHeaders_HSTSGated(t *testing.T) {
 	const wantHSTS = "max-age=63072000; includeSubDomains"
 	if got := serveThroughSecurityHeaders(t, true).Get("Strict-Transport-Security"); got != wantHSTS {
 		t.Errorf("HSTS mit Flag: erwartet %q, bekam %q", wantHSTS, got)
+	}
+}
+
+// Das Google-Cast-Sender-SDK wird von www.gstatic.com geladen (web/src/lib/cast.ts).
+// Fehlt der Ursprung in script-src, scheitert das SDK still und Chromecast ist
+// in keinem Browser nutzbar.
+func TestSecurityHeaders_CSPErlaubtCastSDK(t *testing.T) {
+	csp := serveThroughSecurityHeaders(t, false).Get("Content-Security-Policy")
+	for _, directive := range strings.Split(csp, ";") {
+		fields := strings.Fields(directive)
+		if len(fields) > 0 && fields[0] == "script-src" {
+			for _, src := range fields[1:] {
+				if src == "https://www.gstatic.com" {
+					return
+				}
+			}
+			t.Fatalf("script-src ohne https://www.gstatic.com: %q", directive)
+		}
+	}
+	t.Fatalf("CSP ohne script-src: %q", csp)
+}
+
+// nginx setzt die CSP als zweite Schicht. Zwei CSP-Header wirken im Browser als
+// Schnittmenge — weicht nginx ab, blockt es, was die Go-Middleware erlaubt.
+func TestSecurityHeaders_NginxCSPDeckungsgleich(t *testing.T) {
+	conf, err := os.ReadFile("../../deploy/nginx-teamwerk.conf")
+	if err != nil {
+		t.Fatalf("nginx-Konfiguration lesen: %v", err)
+	}
+	if !strings.Contains(string(conf), `add_header Content-Security-Policy "`+contentSecurityPolicy+`" always;`) {
+		t.Errorf("CSP in deploy/nginx-teamwerk.conf weicht von contentSecurityPolicy ab")
 	}
 }

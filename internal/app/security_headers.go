@@ -3,7 +3,11 @@ package app
 import "net/http"
 
 // contentSecurityPolicy ist auf den realen Build abgestimmt:
-//   - script-src 'self' + matomo: Vite-Build same-origin, matomo.js extern.
+//   - script-src 'self' + matomo + www.gstatic.com: Vite-Build same-origin,
+//     matomo.js extern, Google-Cast-Sender-SDK (cast_sender.js lädt
+//     cast_framework.js nach; beides erst nach Klick auf den Cast-Button, siehe
+//     web/src/lib/cast.ts). Ohne gstatic scheitert das SDK still und der
+//     Cast-Button verschwindet.
 //   - style-src 'unsafe-inline' + fonts.googleapis.com: Tailwind-CSS ist
 //     same-origin, der Google-Fonts-Stylesheet extern; React nutzt inline
 //     style-Attribute.
@@ -18,7 +22,7 @@ import "net/http"
 //   - frame-ancestors 'none' + object-src 'none' + base-uri 'self': Clickjacking-
 //     und Injection-Härtung.
 const contentSecurityPolicy = "default-src 'self'; " +
-	"script-src 'self' https://matomo.team-stuttgart.org; " +
+	"script-src 'self' https://matomo.team-stuttgart.org https://www.gstatic.com; " +
 	"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
 	"font-src 'self' https://fonts.gstatic.com; " +
 	"img-src 'self' data: blob: https://matomo.team-stuttgart.org; " +
