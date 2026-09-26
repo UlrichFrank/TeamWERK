@@ -289,6 +289,7 @@ export default function StaffelnPage() {
           )}
           {tab === 'verlauf' && (
             <VerlaufView
+              staffelId={selected?.id ?? 0}
               days={progression}
               ownTeams={affiliation.teamNames}
               matrices={matrices}
@@ -313,34 +314,94 @@ export default function StaffelnPage() {
   )
 }
 
+// Auswahlwerte der Spielerübersicht neben den Mannschaftsnamen.
+const EIGENE = ''
+const ALLE = '*'
+
 /**
  * Der Reiter „Verlauf" trägt zwei Darstellungen derselben Frage „wie ist es
- * gelaufen": oben für die Staffel (Platzierung je Spieltag), darunter für die
- * eigene Mannschaft (Spieler je Begegnung). Ein eigener Reiter dafür hätte die
+ * gelaufen": oben für die Staffel (Platzierung je Spieltag), darunter je
+ * Mannschaft (Spieler je Begegnung; Vorgabe die eigene, umschaltbar auf jede
+ * andere der Staffel). Ein eigener Reiter dafür hätte die
  * Leiste auf zehn getrieben, und bestehende Verweise auf ?tab=verlauf bleiben
  * so gültig (design.md §12).
  */
-function VerlaufView({ days, ownTeams, matrices, ownPlayers, onOpenGame }: {
+function VerlaufView({ staffelId, days, ownTeams, matrices, ownPlayers, onOpenGame }: {
+  staffelId: number
   days: ProgressionDay[]
   ownTeams: string[]
   matrices: TeamMatrix[]
   ownPlayers: number[]
   onOpenGame: (bwhvGameId: number) => void
 }) {
+  // Welche Spielerübersicht: die eigenen Mannschaften (Vorgabe), alle der
+  // Staffel oder eine einzelne. Die Namen kommen aus dem Verlauf — der rechnet
+  // über bwhv_games, trägt also die Schreibweise des Spielplans, die die Route
+  // für ?team= verlangt.
+  const [auswahl, setAuswahl] = useState(EIGENE)
+  // Das Ergebnis trägt die Auswahl, zu der es gehört: nach einem Wechsel zeigt
+  // die Ansicht "lädt", bis die passende Antwort da ist, statt kurz die alte.
+  const [geladen, setGeladen] = useState<{ auswahl: string; data: TeamMatrix[] | null }>({ auswahl: EIGENE, data: null })
+  const teams = useMemo(
+    () => Array.from(new Set(days.flatMap((d) => d.entries.map((e) => e.team)))).sort(),
+    [days],
+  )
+
+  // `matrices` steht mit in den Abhängigkeiten: ein Live-Update lädt die
+  // eigenen neu, und die gewählte Ansicht soll dabei nicht veralten.
+  useEffect(() => {
+    if (auswahl === EIGENE || staffelId === 0) return
+    let alive = true
+    const namen = auswahl === ALLE ? teams : [auswahl]
+    Promise.all(namen.map((t) => fetchPlayerGames(staffelId, t)))
+      .then((listen) => { if (alive) setGeladen({ auswahl, data: listen.flat() }) })
+      .catch(() => { if (alive) setGeladen({ auswahl, data: null }) })
+    return () => { alive = false }
+  }, [auswahl, staffelId, teams, matrices])
+
+  const passt = geladen.auswahl === auswahl
+  const fehler = auswahl !== EIGENE && passt && geladen.data === null
+  const gezeigt = auswahl === EIGENE ? matrices : passt ? geladen.data : null
+
   return (
     <div className="space-y-6">
       <StandingsChart days={days} ownTeams={ownTeams} />
-      {matrices.length === 0 ? (
+      {teams.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium text-brand-text">Spielerübersicht</h2>
+          <select
+            className={HEADER_FIELD}
+            value={auswahl}
+            onChange={(e) => setAuswahl(e.target.value)}
+            aria-label="Mannschaft der Spielerübersicht"
+          >
+            <option value={EIGENE}>Eigene Mannschaft</option>
+            <option value={ALLE}>Alle Mannschaften</option>
+            {teams.map((t) => (
+              <option key={t} value={t}>{t}{isOwnTeam(ownTeams, t) ? ' (eigene)' : ''}</option>
+            ))}
+          </select>
+        </div>
+      )}
+      {fehler ? (
+        <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
+          Die Spielerübersicht konnte nicht geladen werden.
+        </div>
+      ) : gezeigt === null ? (
+        <p className="text-sm text-brand-text-muted">Lade Spielerübersicht…</p>
+      ) : gezeigt.length === 0 ? (
         <Empty
           text={
             'Für die Spielmatrix fehlt noch die Verbindung zur eigenen Mannschaft: sie wird ' +
             'aus der Verknüpfung zwischen Verbands-Begegnung und eigenem Spieltermin ' +
             'abgeleitet, nicht über Namen geraten. Sobald ein eigenes Spiel dieser Staffel ' +
-            'importiert ist, erscheint sie hier.'
+            'importiert ist, erscheint sie hier. Andere Mannschaften sind oben wählbar.'
           }
         />
       ) : (
-        matrices.map((m) => <Spielmatrix key={m.team} matrix={m} ownPlayers={ownPlayers} onOpenGame={onOpenGame} />)
+        gezeigt.map((m) => (
+          <Spielmatrix key={m.team} matrix={m} ownPlayers={ownPlayers} onOpenGame={onOpenGame} />
+        ))
       )}
     </div>
   )
@@ -403,6 +464,8 @@ function ScheduleView({ games, ownTeams, searching, halfDurationMinutes, focusGa
 }) {
   // Genau ein Bericht ist aufgeklappt: der Bericht ist lang (zwei Mannschafts-
   // listen plus Spielverlauf), mehrere gleichzeitig machten die Liste unbenutzbar.
+  // Der Sprung aus der Spielmatrix wechselt den Reiter, die Ansicht wird also
+  // frisch gemountet — der Startwert genügt, um den Bericht aufzuklappen.
   const [openReportId, setOpenReportId] = useState<number | null>(focusGameId)
   const focusVorhanden = games.some((g) => g.ID === focusGameId)
 
@@ -410,7 +473,6 @@ function ScheduleView({ games, ownTeams, searching, halfDurationMinutes, focusGa
   // asynchron, beim Sprung kann die Liste noch leer sein.
   useEffect(() => {
     if (focusGameId === null || !focusVorhanden) return
-    setOpenReportId(focusGameId)
     document.getElementById(`spiel-${focusGameId}`)?.scrollIntoView?.({ block: 'start' })
   }, [focusGameId, focusVorhanden])
   if (games.length === 0) return <Empty text={searching ? 'Keine Begegnung passt zur Suche.' : 'Noch kein Spielplan abgerufen.'} />

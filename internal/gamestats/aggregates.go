@@ -3,6 +3,7 @@ package gamestats
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"sort"
 )
 
@@ -892,6 +893,46 @@ func (s *Store) PlayerGameMatrix(ctx context.Context, staffelID, userID int) ([]
 		out = append(out, *m)
 	}
 	return out, nil
+}
+
+// ErrUnknownTeam heißt: die Mannschaft spielt in dieser Staffel nicht.
+var ErrUnknownTeam = errors.New("gamestats: unknown team")
+
+// TeamGameMatrix liefert die Spielmatrix einer BELIEBIGEN Mannschaft der
+// Staffel, nicht nur einer eigenen. Die Werte stammen aus denselben
+// öffentlichen Spielberichten wie Ranglisten und Fair-Play — für fremde
+// Mannschaften ist nichts sichtbar, was die Staffel-Statistik nicht schon zeigt.
+//
+// Der Name muss in der Schreibweise des SPIELPLANS kommen (bwhv_games), sonst
+// ErrUnknownTeam: ein Name aus der Mannschaftsliste des PDF lieferte eine leere
+// Matrix ohne Fehler (design.md §5).
+//
+// Die Halbzeitdauer wird von einer eigenen Mannschaft der Staffel übernommen:
+// alle Mannschaften einer Staffel spielen in derselben Altersklasse. Ohne eigene
+// Mannschaft bleibt sie NIL — bewusst kein Standardwert (design.md §7).
+func (s *Store) TeamGameMatrix(ctx context.Context, staffelID, userID int, team string) (*TeamMatrix, error) {
+	var known bool
+	if err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS (SELECT 1 FROM bwhv_games
+		                WHERE staffel_id = ? AND (home_team = ? OR guest_team = ?))`,
+		staffelID, team, team).Scan(&known); err != nil {
+		return nil, err
+	}
+	if !known {
+		return nil, ErrUnknownTeam
+	}
+	own, err := s.ownTeams(ctx, staffelID, userID)
+	if err != nil {
+		return nil, err
+	}
+	t := ownTeam{Name: team}
+	for _, o := range own {
+		if o.HalfDuration != nil {
+			t.HalfDuration = o.HalfDuration
+			break
+		}
+	}
+	return s.matrixForTeam(ctx, staffelID, t)
 }
 
 // matrixGames liefert die gespielten Begegnungen einer Mannschaft als Spalten.

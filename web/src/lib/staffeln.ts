@@ -290,8 +290,11 @@ export const fetchRefereeStats = (id: number) =>
   api.get<RefereeStat[]>(`/staffeln/${id}/schiedsrichter`).then((r) => r.data)
 export const fetchAffiliation = (id: number) =>
   api.get<Affiliation>(`/staffeln/${id}/affiliation`).then((r) => r.data)
-export const fetchPlayerGames = (id: number) =>
-  api.get<{ teams: TeamMatrix[] }>(`/staffeln/${id}/player-games`).then((r) => r.data.teams)
+/** Ohne `team` die eigenen Mannschaften, mit `team` genau diese (eigene oder
+ * fremde, Schreibweise des Spielplans). */
+export const fetchPlayerGames = (id: number, team?: string) =>
+  api.get<{ teams: TeamMatrix[] }>(`/staffeln/${id}/player-games`, { params: team ? { team } : undefined })
+    .then((r) => r.data.teams)
 export const fetchReport = (bwhvGameId: number) =>
   api.get<ReportDetail>(`/bwhv-games/${bwhvGameId}/report`).then((r) => r.data)
 
