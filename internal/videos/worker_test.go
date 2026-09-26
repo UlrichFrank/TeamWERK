@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/teamstuttgart/teamwerk/internal/background"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 	"github.com/teamstuttgart/teamwerk/internal/testutil"
 )
@@ -97,6 +98,17 @@ func newTestWorker(t *testing.T, db *sql.DB, transcode transcodeFunc) (*Worker, 
 		now:               time.Now,
 		sleep:             ctxSleep,
 	}
+	// Push-Goroutinen vor dem Aufräumen abwarten: t.Cleanup läuft LIFO, also vor
+	// dem Schließen der DB und dem RemoveAll der TempDirs aus NewDB/newTestWorker.
+	var inflight sync.WaitGroup
+	wk.goAsync = func(name string, fn func()) {
+		inflight.Add(1)
+		background.Go(name, func() {
+			defer inflight.Done()
+			fn()
+		})
+	}
+	t.Cleanup(inflight.Wait)
 	return wk, bc, cfg
 }
 
