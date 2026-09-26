@@ -113,7 +113,9 @@ describe('useScrollRestoration', () => {
     screen.getByText('zum Detail').click()
     await screen.findByText('Detail')
 
-    expect(main.scrollTop).toBe(0)
+    // Das Zurücksetzen läuft im passiven Effect nach dem Commit — findByText löst
+    // schon beim Commit auf, ein synchrones expect wäre ein Race (auf CI rot).
+    await waitFor(() => expect(main.scrollTop).toBe(0))
   })
 
   test('reine Query-Änderung auf derselben Seite lässt die Position stehen', async () => {
