@@ -4,7 +4,7 @@ import { describe, test, expect, afterEach, vi } from 'vitest'
 // 'load_failed' (Skript kam nicht an). Beides als `false` zusammenzufassen hat
 // einen CSP-Block monatelang als „Browser ohne Cast" getarnt.
 
-type W = Window & { chrome?: unknown; cast?: unknown }
+type W = { chrome?: unknown; cast?: unknown }
 
 async function freshModule() {
   vi.resetModules()
@@ -20,8 +20,8 @@ function injectedScript(): HTMLScriptElement {
 afterEach(() => {
   vi.useRealTimers()
   document.head.querySelectorAll('script').forEach((s) => s.remove())
-  delete (window as W).chrome
-  delete (window as W).cast
+  delete (window as unknown as W).chrome
+  delete (window as unknown as W).cast
   delete window.__onGCastApiAvailable
 })
 
@@ -35,8 +35,8 @@ describe('loadCastSDK', () => {
   test('Callback true mit Framework: available', async () => {
     const { loadCastSDK } = await freshModule()
     const p = loadCastSDK()
-    ;(window as W).chrome = { cast: {} }
-    ;(window as W).cast = { framework: {} }
+    ;(window as unknown as W).chrome = { cast: {} }
+    ;(window as unknown as W).cast = { framework: {} }
     window.__onGCastApiAvailable?.(true)
     await expect(p).resolves.toBe('available')
   })
