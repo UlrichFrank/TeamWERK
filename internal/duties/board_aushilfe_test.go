@@ -209,6 +209,61 @@ func TestBoard_AssigneeAushilfeKennzeichen(t *testing.T) {
 	check("Aushilfe selbst", testutil.Token(t, helper, "standard", []string{"spieler"}))
 }
 
+// dienstboerse-ladezeit: das Team-Prädikat der Eingetragenen korreliert über
+// den Termin (game_teams je game_id). Deckt die Zweige ab, die
+// TestBoard_AssigneeAushilfeKennzeichen offenlässt: Elternteil mit Kind nur im
+// erweiterten Kader, gemeinsames Spiel zweier Teams (Stamm im einen, erweitert
+// im anderen) und die Admin-Sicht.
+func TestBoard_AssigneeAushilfe_ElternUndMehrTeamSpiel(t *testing.T) {
+	f, board := newAushilfeFixture(t)
+	// Spiel A ist ein gemeinsames Spiel von A und B.
+	f.db.Exec(`INSERT INTO game_teams (game_id, team_id) VALUES (?, ?)`, f.gameA, f.teamB)
+	var slotA, slotB int
+	f.db.QueryRow(`SELECT id FROM duty_slots WHERE game_id=?`, f.gameA).Scan(&slotA)
+	f.db.QueryRow(`SELECT id FROM duty_slots WHERE game_id=?`, f.gameB).Scan(&slotB)
+
+	// Elternteil, dessen Kind nur im erweiterten Kader von B steht.
+	extParent := testutil.CreateUser(t, f.db, "standard")
+	extChild := testutil.CreateMember(t, f.db, 0)
+	testutil.AddFamilyLink(t, f.db, extParent, extChild)
+	testutil.AddExtendedKaderMember(t, f.db, f.kaderB, extChild)
+
+	// Spieler: Stammkader A, erweiterter Kader B.
+	both := testutil.CreateUser(t, f.db, "standard")
+	bm := testutil.CreateMember(t, f.db, both)
+	testutil.AddKaderMember(t, f.db, f.kaderA, bm)
+	testutil.AddExtendedKaderMember(t, f.db, f.kaderB, bm)
+
+	f.db.Exec(`INSERT INTO duty_assignments (duty_slot_id, user_id) VALUES (?, ?), (?, ?), (?, ?)`,
+		slotB, extParent, slotB, both, slotA, both)
+
+	admin := testutil.CreateUser(t, f.db, "admin")
+	groups := board(testutil.Token(t, admin, "admin", nil))
+
+	flags := func(gameID int) map[int]bool {
+		g := groupFor(groups, gameID)
+		if g == nil || len(g.Slots) == 0 {
+			t.Fatalf("Gruppe von Spiel %d fehlt", gameID)
+		}
+		m := map[int]bool{}
+		for _, a := range g.Slots[0].Assignees {
+			m[a.UserID] = a.Aushilfe
+		}
+		return m
+	}
+
+	b := flags(f.gameB)
+	if v, ok := b[extParent]; !ok || !v {
+		t.Errorf("Elternteil eines Kindes nur im erweiterten Kader muss aushilfe=true tragen (ok=%v)", ok)
+	}
+	if v, ok := b[both]; !ok || !v {
+		t.Errorf("Spiel nur von B: Stamm in A, erweitert in B ist Aushilfe (ok=%v)", ok)
+	}
+	if v, ok := flags(f.gameA)[both]; !ok || v {
+		t.Errorf("gemeinsames Spiel mit dem Stammteam darf nicht als Aushilfe gelten (ok=%v)", ok)
+	}
+}
+
 func TestBoard_FremdesTeamWeiterhinUnsichtbar(t *testing.T) {
 	f, board := newAushilfeFixture(t)
 	teamC := testutil.CreateTeam(t, f.db, "mA1")
