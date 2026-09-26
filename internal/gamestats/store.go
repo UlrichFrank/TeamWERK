@@ -150,10 +150,14 @@ func (s *Store) StaffelByID(ctx context.Context, id, seasonID int) (*Staffel, er
 // Polled=false heißt deshalb "zugeordnet, aber noch nichts abgerufen" und ist
 // ein anzeigbarer Zustand, kein Fehler.
 func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID, ownUserID int) ([]staffelResponse, error) {
-	// ownUserID > 0 schränkt auf dieselbe Teammenge ein wie der Teamfilter der
-	// Dienstbörse (GET /api/teams?scope=duties): Stammkader des Nutzers und
-	// seiner Kinder (player_memberships, kein erweiterter Kader) plus die
-	// Mannschaften, die er trainiert. 0 heißt: alle Staffeln des Vereins.
+	// ownUserID > 0 schränkt auf die Mannschaften des Nutzers ein: Stammkader
+	// (player_memberships) und erweiterter Kader (kader_extended_members) des
+	// Nutzers und seiner Kinder plus die Mannschaften, die er trainiert. 0 heißt:
+	// alle Staffeln des Vereins.
+	//
+	// Anders als beim Teamfilter der Dienstbörse zählt der erweiterte Kader hier
+	// mit: Dienstpflicht folgt dem Stammkader, aber wer in einer Mannschaft
+	// aushilft, spielt in ihrer Staffel und will Tabelle und Spielplan sehen.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT COALESCE(st.id, 0), k.staffel, COALESCE(st.name, ''),
 		       COALESCE(t.name, ''), COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), k.id,
@@ -171,11 +175,17 @@ func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID, ownUserID in
 		                SELECT id FROM members WHERE user_id = ?
 		                UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)
 		         UNION
+		         SELECT k3.team_id FROM kader_extended_members kem
+		           JOIN kader k3 ON k3.id = kem.kader_id
+		          WHERE k3.season_id = k.season_id AND kem.member_id IN (
+		                SELECT id FROM members WHERE user_id = ?
+		                UNION SELECT member_id FROM family_links WHERE parent_user_id = ?)
+		         UNION
 		         SELECT k2.team_id FROM kader_trainers kt
 		           JOIN kader k2 ON k2.id = kt.kader_id
 		           JOIN members m ON m.id = kt.member_id
 		          WHERE k2.season_id = k.season_id AND m.user_id = ?))
-		 ORDER BY t.name, k.staffel`, seasonID, ownUserID, ownUserID, ownUserID, ownUserID)
+		 ORDER BY t.name, k.staffel`, seasonID, ownUserID, ownUserID, ownUserID, ownUserID, ownUserID, ownUserID)
 	if err != nil {
 		return nil, err
 	}
