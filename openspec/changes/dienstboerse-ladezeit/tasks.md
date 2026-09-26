@@ -8,8 +8,8 @@
 
 ## 2. Regressionsschutz (Tests)
 
-- [ ] 2.1 `TestBoardAssigneesPlan_KeinScanAufGameTeams` in `internal/duties`: kleine Saison mit Spiel, `game_teams`, Slot und Zusage über `testutil` anlegen, `EXPLAIN QUERY PLAN` auf `boardAssigneesSQL` ausführen und verlangen, dass keine Planzeile `SCAN gt_s` oder `SCAN game_teams` enthält; verifiziert dadurch, dass der Test gegen die alte Form (1.1-Stand, lokal kurz zurückgestellt) rot und gegen die neue grün ist
-- [ ] 2.2 Denselben Test nach `ANALYZE` wiederholen (Szenario „Plan bleibt nach Statistik-Erhebung gleich"); verifiziert durch grünen Testlauf
+- [x] 2.1 `TestBoardAssigneesPlan_KeinScanAufGameTeams` in `internal/duties`: kleine Saison mit Spiel, `game_teams`, Slot und Zusage über `testutil` anlegen, `EXPLAIN QUERY PLAN` auf `boardAssigneesSQL` ausführen und verlangen, dass keine Planzeile `SCAN gt_s` oder `SCAN game_teams` enthält; verifiziert dadurch, dass der Test gegen die alte Form (1.1-Stand, lokal kurz zurückgestellt) rot und gegen die neue grün ist
+- [x] 2.2 Denselben Test nach `ANALYZE` wiederholen (Szenario „Plan bleibt nach Statistik-Erhebung gleich"); verifiziert durch grünen Testlauf
 - [ ] 2.3 Ergebnis-Gleichheit über Personas: in `board_aushilfe_test.go` einen Test ergänzen, der für Admin, Trainer, Stamm-Elternteil und Nur-Erweitert-Elternteil die komplette Board-Response (Gruppen, Slots, Eingetragene, beide `aushilfe`-Kennzeichen) gegen erwartete Werte prüft, falls die bestehenden Tests das Eingetragenen-Kennzeichen für den Nur-Erweitert-Fall noch nicht abdecken; verifiziert durch grünen Testlauf
 
 ## 3. Messung und Abschluss
