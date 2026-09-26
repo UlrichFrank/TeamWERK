@@ -98,12 +98,22 @@ func (h *Handler) slotTeamScope(ctx context.Context, teamID, gameID *int) []int 
 	return nil
 }
 
-// slotInTeamsSQL ist wahr, wenn der Slot `ds` zu einem Team aus teamsSQL
-// (einem `SELECT team_id …`) gehört: mit Spiel über game_teams, ohne Spiel über
-// ds.team_id. Dieselbe Geltungsbereichs-Regel wie Board und slotTeamScope.
-func slotInTeamsSQL(teamsSQL string) string {
-	return `((ds.game_id IS NULL AND ds.team_id IN (` + teamsSQL + `))
-		OR ds.game_id IN (SELECT gt_s.game_id FROM game_teams gt_s WHERE gt_s.team_id IN (` + teamsSQL + `)))`
+// boardAssigneesSQL liefert die Eingetragenen der Dienstbörse samt
+// Aushilfe-Kennzeichen je Zusage für n Slot-IDs (Platzhalter). Eigene Funktion,
+// damit der Plan-Test (dienstboerse-ladezeit) genau diese Query erklären kann.
+func boardAssigneesSQL(n int) string {
+	return `
+		SELECT da.duty_slot_id,
+		       u.id,
+		       u.first_name || ' ' || u.last_name,
+		       CASE WHEN ` + appdb.SlotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsExtended, "da.user_id")) + `
+		             AND NOT ` + appdb.SlotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsStamm, "da.user_id")) + `
+		            THEN 1 ELSE 0 END
+		FROM duty_assignments da
+		JOIN duty_slots ds ON ds.id = da.duty_slot_id
+		JOIN users u ON u.id = da.user_id
+		WHERE da.duty_slot_id IN (` + placeholders(n) + `)
+		ORDER BY da.created_at`
 }
 
 // eligibleDutyRecipients returns the user IDs to notify about a newly created duty slot.
@@ -953,7 +963,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 	selectArgs = append(selectArgs, extArgs...)
 	selectArgs = append(selectArgs, stammArgs...)
 	selectArgs = append(selectArgs, stammArgs...)
-	aushilfeExpr := `CASE WHEN ` + slotInTeamsSQL(extSQL) + ` AND NOT ` + slotInTeamsSQL(stammSQL) + ` THEN 1 ELSE 0 END`
+	aushilfeExpr := `CASE WHEN ` + appdb.SlotInTeamsSQL(extSQL) + ` AND NOT ` + appdb.SlotInTeamsSQL(stammSQL) + ` THEN 1 ELSE 0 END`
 
 	args := append(selectArgs, userID) // danach: ? des da LEFT JOIN
 	var whereParts string
@@ -967,7 +977,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		// gelesen, auch wenn noch ein Bestandswert darin steht (design.md
 		// Decision 1 von duty-slot-team-scope). ds.team_id gilt nur noch für
 		// Slots ohne Spiel (Vereinsfest o. ä.).
-		whereParts = `WHERE ` + slotInTeamsSQL(stammSQL+` UNION `+extSQL) + `
+		whereParts = `WHERE ` + appdb.SlotInTeamsSQL(stammSQL+` UNION `+extSQL) + `
 		 AND ds.season_id = (SELECT id FROM seasons WHERE is_active = 1)`
 		for range 2 {
 			args = append(args, stammArgs...)
@@ -987,7 +997,7 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		             (EXISTS (
 		                 SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 		                 WHERE je.value = 'eltern'
-		             ) AND ` + slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsChildren, "?")) + `)
+		             ) AND ` + appdb.SlotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsChildren, "?")) + `)
 		             OR EXISTS (
 		                 SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 		                 JOIN member_club_functions mcf_a ON mcf_a.function = je.value
@@ -1195,24 +1205,11 @@ func (h *Handler) Board(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(slotIDs) > 0 {
-		ph := make([]string, len(slotIDs))
 		aArgs := make([]any, len(slotIDs))
 		for i, id := range slotIDs {
-			ph[i] = "?"
 			aArgs[i] = id
 		}
-		aRows, aErr := h.db.QueryContext(r.Context(), `
-			SELECT da.duty_slot_id,
-			       u.id,
-			       u.first_name || ' ' || u.last_name,
-			       CASE WHEN `+slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsExtended, "da.user_id"))+`
-			             AND NOT `+slotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsStamm, "da.user_id"))+`
-			            THEN 1 ELSE 0 END
-			FROM duty_assignments da
-			JOIN duty_slots ds ON ds.id = da.duty_slot_id
-			JOIN users u ON u.id = da.user_id
-			WHERE da.duty_slot_id IN (`+strings.Join(ph, ",")+`)
-			ORDER BY da.created_at`, aArgs...)
+		aRows, aErr := h.db.QueryContext(r.Context(), boardAssigneesSQL(len(slotIDs)), aArgs...)
 		if aErr == nil {
 			defer aRows.Close()
 			assigneeMap := map[int][]publicAssignee{}

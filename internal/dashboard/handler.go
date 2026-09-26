@@ -269,13 +269,6 @@ var dutyTeamQuery = appdb.UserTeamsSQL(appdb.TeamsStamm, "?")
 // Saison. Parameter: appdb.UserArgs(TeamsExtended, userID).
 var dutyExtTeamQuery = appdb.UserTeamsSQL(appdb.TeamsExtended, "?")
 
-// slotInTeams ist wahr, wenn der Slot `ds` zu einem Team aus teamsSQL gehört —
-// mit Spiel über game_teams, ohne Spiel über ds.team_id (Regel der Dienstbörse).
-func slotInTeams(teamsSQL string) string {
-	return `((ds.game_id IS NULL AND ds.team_id IN (` + teamsSQL + `))
-		OR ds.game_id IN (SELECT gt_s.game_id FROM game_teams gt_s WHERE gt_s.team_id IN (` + teamsSQL + `)))`
-}
-
 // queryNextEvents returns all events on the next day that has at least one event.
 // Combines training_sessions and games for the user's teams.
 // isExtended is true when the user's access to the event team is via kader_extended_members only.
@@ -386,7 +379,7 @@ var audienceMatchClauseSQL = `(
 			(EXISTS (
 				SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 				WHERE je.value = 'eltern'
-			) AND ` + slotInTeams(appdb.UserTeamsSQL(appdb.TeamsChildren, "?")) + `)
+			) AND ` + appdb.SlotInTeamsSQL(appdb.UserTeamsSQL(appdb.TeamsChildren, "?")) + `)
 			OR EXISTS (
 				SELECT 1 FROM json_each(COALESCE(ds.audiences, dt.audiences)) je
 				JOIN member_club_functions mcf_a ON mcf_a.function = je.value
@@ -519,8 +512,8 @@ func (h *Handler) queryMeineDiensteAushilfe(ctx context.Context, userID, seasonI
 		      SELECT ? UNION
 		      SELECT m.user_id FROM family_links fl JOIN members m ON m.id = fl.member_id
 		      WHERE fl.parent_user_id = ? AND m.user_id IS NOT NULL)
-		  AND `+slotInTeams(accExt)+`
-		  AND NOT `+slotInTeams(accStamm)+`
+		  AND `+appdb.SlotInTeamsSQL(accExt)+`
+		  AND NOT `+appdb.SlotInTeamsSQL(accStamm)+`
 		ORDER BY ds.event_date, COALESCE(ds.event_time, ''), ds.id
 		LIMIT 5`,
 		append(appdb.UserArgs(appdb.TeamsExtended, userID), seasonID, userID, userID)...)
