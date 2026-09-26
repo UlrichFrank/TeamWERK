@@ -12,6 +12,9 @@ vi.mock('../../lib/api', () => ({ api: { get: (...args: unknown[]) => mockGet(..
 
 const PASSPHRASE = 'eine starke passphrase'
 const DEADLINE_KEY = 'vk_until'
+// Entsperren leitet den Schlüssel über PBKDF2 mit 600.000 Iterationen ab — allein
+// ~0,5 s, unter Last der vollen Suite deutlich über dem 1-s-Default von waitFor.
+const KDF_WAIT = { timeout: 30_000 }
 
 let setup: VaultSetup
 let captured: CryptoKey | null = null
@@ -39,7 +42,7 @@ async function unlockVault() {
   await act(async () => {
     screen.getByText('entsperren').click()
   })
-  await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('unlocked'))
+  await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('unlocked'), KDF_WAIT)
 }
 
 // Alle Werte, die die App in Web-Storage ablegt — dort darf kein Schlüsselmaterial liegen.
@@ -184,7 +187,7 @@ describe('VaultContext: Schlüssel-Caching ohne exportierbares Material', () => 
     await act(async () => {
       screen.getByText('entsperren').click()
     })
-    await waitFor(() => expect(screen.getByTestId('result').textContent).toBe('fail'))
+    await waitFor(() => expect(screen.getByTestId('result').textContent).toBe('fail'), KDF_WAIT)
     expect(screen.getByTestId('state').textContent).toBe('locked')
     expect(await vaultKeyStore.get()).toBeNull()
     expect(sessionStorage.getItem(DEADLINE_KEY)).toBeNull()
