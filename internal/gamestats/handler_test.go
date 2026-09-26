@@ -567,18 +567,20 @@ func TestStaffelSpielplan_LoestHalleAuf(t *testing.T) {
 	}
 }
 
-// Sichtbarkeit wie der Teamfilter der Dienstbörse: Spieler und Eltern sehen nur
-// die Staffeln ihres Stammkader-Teams, der erweiterte Kader zählt nicht,
-// Vorstand und sportliche Leitung sehen alle.
+// Spieler und Eltern sehen die Staffeln ihrer Mannschaften — Stammkader UND
+// erweiterter Kader (anders als der Teamfilter der Dienstbörse), Vorstand und
+// sportliche Leitung sehen alle.
 func TestListStaffeln_Sichtbarkeit(t *testing.T) {
 	srv, s, seasonID, _ := newHandlerServer(t)
 	teamA := testutil.CreateTeam(t, s.db, "Team A")
 	teamB := testutil.CreateTeam(t, s.db, "Team B")
 	teamC := testutil.CreateTeam(t, s.db, "Team C")
+	teamD := testutil.CreateTeam(t, s.db, "Team D")
+	kD := testutil.CreateKader(t, s.db, teamD, seasonID)
 	kA := testutil.CreateKader(t, s.db, teamA, seasonID)
 	kB := testutil.CreateKader(t, s.db, teamB, seasonID)
 	kC := testutil.CreateKader(t, s.db, teamC, seasonID)
-	for k, code := range map[int]string{kA: "A-Staffel", kB: "B-Staffel", kC: "C-Staffel"} {
+	for k, code := range map[int]string{kA: "A-Staffel", kB: "B-Staffel", kC: "C-Staffel", kD: "D-Staffel"} {
 		if _, err := s.db.Exec(`UPDATE kader SET staffel = ? WHERE id = ?`, code, k); err != nil {
 			t.Fatal(err)
 		}
@@ -592,6 +594,7 @@ func TestListStaffeln_Sichtbarkeit(t *testing.T) {
 	child := testutil.CreateMember(t, s.db, 0)
 	testutil.AddKaderMember(t, s.db, kB, child)
 	testutil.AddFamilyLink(t, s.db, parentUser, child)
+	testutil.AddExtendedKaderMember(t, s.db, kD, child)
 
 	codes := func(token string) []string {
 		code, body := get(t, srv, "/api/staffeln", token)
@@ -619,9 +622,11 @@ func TestListStaffeln_Sichtbarkeit(t *testing.T) {
 			}
 		}
 	}
-	eq("Spieler", codes(testutil.Token(t, playerUser, "standard", []string{"spieler"})), "A-Staffel")
-	eq("Elternteil", codes(testutil.Token(t, parentUser, "standard", nil)), "B-Staffel")
-	eq("Vorstand", codes(testutil.Token(t, 999, "standard", []string{"vorstand"})), "A-Staffel", "B-Staffel", "C-Staffel")
-	eq("sportliche Leitung", codes(testutil.Token(t, 999, "standard", []string{"sportliche_leitung"})), "A-Staffel", "B-Staffel", "C-Staffel")
-	eq("Admin", codes(testutil.Token(t, 999, "admin", nil)), "A-Staffel", "B-Staffel", "C-Staffel")
+	eq("Spieler", codes(testutil.Token(t, playerUser, "standard", []string{"spieler"})), "A-Staffel", "C-Staffel")
+	eq("Elternteil", codes(testutil.Token(t, parentUser, "standard", nil)), "B-Staffel", "D-Staffel")
+	eq("Vorstand", codes(testutil.Token(t, 999, "standard", []string{"vorstand"})), "A-Staffel", "B-Staffel", "C-Staffel", "D-Staffel")
+	eq("sportliche Leitung", codes(testutil.Token(t, 999, "standard", []string{"sportliche_leitung"})), "A-Staffel", "B-Staffel", "C-Staffel", "D-Staffel")
+	eq("Admin", codes(testutil.Token(t, 999, "admin", nil)), "A-Staffel", "B-Staffel", "C-Staffel", "D-Staffel")
+	// Ein fremder Nutzer ohne jede Kader-Verbindung sieht nichts.
+	eq("Fremd", codes(testutil.Token(t, 12345, "standard", []string{"spieler"})))
 }
