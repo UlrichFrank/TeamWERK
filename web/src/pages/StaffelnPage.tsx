@@ -260,7 +260,14 @@ export default function StaffelnPage() {
       ) : (
         <>
           {tab === 'tabelle' && <TableView rows={table.filter((r) => matchesSearch([r.TeamName], search))} searching={search.trim() !== ''} ownTeams={affiliation.teamNames} />}
-          {tab === 'spielplan' && <ScheduleView games={games.filter((g) => matchesSearch(gameSearchFields(g), search))} searching={search.trim() !== ''} ownTeams={affiliation.teamNames} />}
+          {tab === 'spielplan' && (
+            <ScheduleView
+              games={games.filter((g) => matchesSearch(gameSearchFields(g), search))}
+              searching={search.trim() !== ''}
+              ownTeams={affiliation.teamNames}
+              halfDurationMinutes={staffelHalfDuration(matrices)}
+            />
+          )}
           {tab === 'kreuztabelle' && (
             cross ? <CrossTable data={cross} ownTeams={affiliation.teamNames} /> : <Empty text={NOCH_NICHTS} />
           )}
@@ -368,7 +375,12 @@ function TableView({ rows, ownTeams, searching }: { rows: TableRow[]; ownTeams: 
   )
 }
 
-function ScheduleView({ games, ownTeams, searching }: { games: ScheduleGame[]; ownTeams: string[]; searching: boolean }) {
+function ScheduleView({ games, ownTeams, searching, halfDurationMinutes }: {
+  games: ScheduleGame[]
+  ownTeams: string[]
+  searching: boolean
+  halfDurationMinutes: number | null
+}) {
   // Genau ein Bericht ist aufgeklappt: der Bericht ist lang (zwei Mannschafts-
   // listen plus Spielverlauf), mehrere gleichzeitig machten die Liste unbenutzbar.
   const [openReportId, setOpenReportId] = useState<number | null>(null)
@@ -440,7 +452,7 @@ function ScheduleView({ games, ownTeams, searching }: { games: ScheduleGame[]; o
           </div>
           {g.HasReport && openReportId === g.ID && (
             <div className="mt-3 pt-3 border-t border-brand-border-subtle font-normal">
-              <SpielberichtPanel bwhvGameId={g.ID} />
+              <SpielberichtPanel bwhvGameId={g.ID} halfDurationMinutes={halfDurationMinutes} />
             </div>
           )}
         </div>
@@ -546,6 +558,14 @@ function Ranking({
       </ul>
     </div>
   )
+}
+
+// Alle Mannschaften einer Staffel spielen in derselben Altersklasse — die
+// gepflegte Halbzeitdauer der eigenen Mannschaft gilt deshalb für jede
+// Begegnung der Staffel. Ohne eigene Mannschaft bleibt sie offen, der Ablauf
+// leitet die Achse dann aus dem Verlauf ab.
+function staffelHalfDuration(matrices: TeamMatrix[]): number | null {
+  return matrices.find((m) => m.halfDurationMinutes !== null)?.halfDurationMinutes ?? null
 }
 
 function Empty({ text }: { text: string }) {

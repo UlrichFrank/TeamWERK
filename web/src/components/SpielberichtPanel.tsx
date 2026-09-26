@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Download, Users, Activity } from 'lucide-react'
+import { AlertTriangle, Download, Users, Activity, TrendingUp, CircleDot } from 'lucide-react'
 import {
   ReportDetail, PlayerLine, EventLine,
   fetchReport, fetchReportForGame, gameClock, sevenMeterRate,
 } from '../lib/staffeln'
+import { HEADER_CTRL, HEADER_PRIMARY, HEADER_NEUTRAL } from '../lib/buttonStyles'
+import TorMomentum from './staffeln/TorMomentum'
 
 const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4'
 const TH = 'bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-2 text-left'
@@ -14,10 +16,13 @@ interface Props {
   bwhvGameId?: number
   /** Eigener Spieltermin (aus der Detailansicht). Genau eines von beiden. */
   gameId?: number
+  /** Gepflegte Halbzeitdauer der Altersklasse, falls bekannt — sonst leitet
+   * der Ablauf die Achse aus dem Verlauf ab (docs/agent/06-gotchas.md). */
+  halfDurationMinutes?: number | null
 }
 
 /** Panel mit dem offiziellen BWHV-Spielbericht zu einer Begegnung. */
-export default function SpielberichtPanel({ bwhvGameId, gameId }: Props) {
+export default function SpielberichtPanel({ bwhvGameId, gameId, halfDurationMinutes = null }: Props) {
   const [report, setReport] = useState<ReportDetail | null>(null)
   const [state, setState] = useState<'laden' | 'da' | 'fehlt' | 'fehler'>('laden')
 
@@ -90,7 +95,7 @@ export default function SpielberichtPanel({ bwhvGameId, gameId }: Props) {
         </div>
       </div>
 
-      <Torkurve events={report.events} homeTeam={homeTeam} guestTeam={guestTeam} />
+      <Spielverlauf report={report} halfDurationMinutes={halfDurationMinutes} />
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Mannschaftsliste title={homeTeam} players={home} />
@@ -153,6 +158,58 @@ function Mannschaftsliste({ title, players }: { title: string; players: PlayerLi
   )
 }
 
+type Ansicht = 'kurve' | 'ablauf'
+
+/**
+ * Spielverlauf mit zwei Darstellungen derselben Ereignisliste: die Torkurve
+ * (Differenz über die Spielzeit) und der Ablauf (Tor-Momentum je Halbzeit).
+ * Umschaltbar statt nebeneinander — beide zeigen dieselbe Frage, und der Ablauf
+ * ist allein schon zwei Achsen hoch.
+ */
+function Spielverlauf({ report, halfDurationMinutes }: { report: ReportDetail; halfDurationMinutes: number | null }) {
+  const [ansicht, setAnsicht] = useState<Ansicht>('kurve')
+  const { events, homeTeam, guestTeam } = report
+  const hatTore = events.some((e) => e.scoreHome !== null && e.scoreGuest !== null)
+  if (!hatTore) return null
+
+  const schalter = (a: Ansicht, label: string, Icon: typeof Activity) => (
+    <button
+      type="button"
+      onClick={() => setAnsicht(a)}
+      aria-pressed={ansicht === a}
+      className={`${HEADER_CTRL} ${ansicht === a ? HEADER_PRIMARY : HEADER_NEUTRAL}`}
+    >
+      <Icon className="w-4 h-4" /> {label}
+    </button>
+  )
+
+  return (
+    <div className={CARD}>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h3 className="text-sm font-medium text-brand-text inline-flex items-center gap-1">
+          <Activity className="w-4 h-4" /> Spielverlauf
+        </h3>
+        <div className="flex gap-2" role="group" aria-label="Darstellung des Spielverlaufs">
+          {schalter('kurve', 'Kurve', TrendingUp)}
+          {schalter('ablauf', 'Ablauf', CircleDot)}
+        </div>
+      </div>
+      {ansicht === 'kurve' ? (
+        <Torkurve events={events} homeTeam={homeTeam} guestTeam={guestTeam} />
+      ) : (
+        <TorMomentum
+          events={events}
+          homeTeam={homeTeam}
+          guestTeam={guestTeam}
+          homeGoalsHt={report.homeGoalsHt}
+          guestGoalsHt={report.guestGoalsHt}
+          halfDurationMinutes={halfDurationMinutes}
+        />
+      )}
+    </div>
+  )
+}
+
 /**
  * Torkurve: Spielstand über die Spielzeit als Flächen-Differenz.
  *
@@ -162,7 +219,9 @@ function Mannschaftsliste({ title, players }: { title: string; players: PlayerLi
  */
 function Torkurve({ events, homeTeam, guestTeam }: { events: EventLine[]; homeTeam: string; guestTeam: string }) {
   const goals = events.filter((e) => e.scoreHome !== null && e.scoreGuest !== null)
-  if (goals.length < 2) return null
+  if (goals.length < 2) {
+    return <p className="text-sm text-brand-text-muted">Zu wenige Tore für eine Kurve.</p>
+  }
 
   const maxSec = Math.max(...goals.map((e) => e.gameSecond), 1)
   const maxDiff = Math.max(...goals.map((e) => Math.abs((e.scoreHome ?? 0) - (e.scoreGuest ?? 0))), 1)
@@ -176,10 +235,7 @@ function Torkurve({ events, homeTeam, guestTeam }: { events: EventLine[]; homeTe
   const path = `M0,${H / 2} L${points.join(' L')}`
 
   return (
-    <div className={CARD}>
-      <h3 className="text-sm font-medium text-brand-text mb-2 inline-flex items-center gap-1">
-        <Activity className="w-4 h-4" /> Spielverlauf
-      </h3>
+    <div>
       <div className="flex justify-between text-xs text-brand-text-muted mb-1">
         <span className="truncate">{homeTeam} führt</span>
         <span className="truncate">{guestTeam} führt</span>
