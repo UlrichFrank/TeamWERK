@@ -14,7 +14,7 @@
 
 ## 3. Messung und Abschluss
 
-- [ ] 3.1 Nachher-Messung gegen eine Kopie der lokalen DB (lokaler Server auf eigenem Port, Tokens für Admin/Trainer/Eltern/Spieler): `GET /api/duty-board` mit und ohne `from` sowie die Slot-Query allein für Nicht-Vorstand-Personas; Ziel: Board < 100 ms für alle Personas, Slot-Query nicht langsamer als vorher (Toleranz 20 ms, sonst Fallback aus design.md „Risks" umsetzen); Zahlen in den Commit-Text übernehmen
+- [x] 3.1 Nachher-Messung gegen eine Kopie der lokalen DB (lokaler Server auf eigenem Port, Tokens für Admin/Trainer/Eltern/Spieler): `GET /api/duty-board` mit und ohne `from` sowie die Slot-Query allein für Nicht-Vorstand-Personas; Ziel: Board < 100 ms für alle Personas, Slot-Query nicht langsamer als vorher (Toleranz 20 ms, sonst Fallback aus design.md „Risks" umsetzen); Zahlen in den Commit-Text übernehmen
 - [ ] 3.2 `/dienste` einmal im Browser (Chrome DevTools, Performance-Trace) als Admin laden und prüfen, dass nach dem Backend-Fix kein Rendering-Engpass > 500 ms bleibt; Befund notieren und bei Bedarf als eigenen Folge-Change vorschlagen, nicht in diesem Change umsetzen
 - [ ] 3.3 Gotcha-Absatz in `docs/agent/06-gotchas.md` ergänzen: korrelierte Team-Prädikate über `game_teams` immer über `game_id` (PK) formulieren, nicht über `team_id IN`; ein Index `game_teams(team_id)` hilft nur ohne `ANALYZE`; verifiziert durch Review des Absatzes
 - [ ] 3.4 `/verify-change` ausführen (Build, `go test ./...`, Lint, `pnpm -C web build/test/lint`, `openspec validate dienstboerse-ladezeit`); verifiziert durch grünen Lauf
