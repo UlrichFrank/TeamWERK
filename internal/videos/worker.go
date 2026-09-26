@@ -86,6 +86,11 @@ type Worker struct {
 
 	// sleep wartet auf d oder ctx-Ende; für Tests injizierbar.
 	sleep func(ctx context.Context, d time.Duration)
+
+	// goAsync startet die nachgelagerte Push (Default background.Go). Tests
+	// warten darüber auf die Goroutine, bevor t.TempDir() aufräumt — sonst liest
+	// sie noch aus der bereits gelöschten Test-DB und legt die Datei neu an.
+	goAsync func(name string, fn func())
 }
 
 // broadcaster ist die kleine Teilmenge von *hub.EventHub, die der Worker nutzt —
@@ -117,6 +122,7 @@ func NewWorker(h *Handler) *Worker {
 		diskRetryInterval: defaultDiskRetryInterval,
 		now:               time.Now,
 		sleep:             ctxSleep,
+		goAsync:           background.Go,
 	}
 }
 
@@ -342,7 +348,7 @@ func (wk *Worker) notifyReady(id int) {
 	url := "/videos/" + strconv.Itoa(id)
 	// Vorfilterung entfällt — notify.Send übernimmt Log-Fan-out sowie Push-/
 	// Email-Präferenz (Kategorie "sonstiges").
-	background.Go("videos.notifyReady", func() {
+	wk.goAsync("videos.notifyReady", func() {
 		wk.cfg.notifySend(allUids, "sonstiges", "Neues Video", body, url)
 	})
 }
