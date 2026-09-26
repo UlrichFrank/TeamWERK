@@ -244,12 +244,28 @@ func (h *Handler) GetAffiliation(w http.ResponseWriter, r *http.Request) {
 // Nach GetAffiliation die zweite nutzerabhängige Route dieser Ansicht — welche
 // Mannschaft gemeint ist, entscheidet die Zugehörigkeit. Die vier
 // Statistik-Routen bleiben bewusst für alle Nutzer gleich.
+//
+// Mit ?team=<Name> kommt stattdessen die Matrix genau dieser Mannschaft der
+// Staffel (Schreibweise des Spielplans), eigene oder fremde; unbekannt → 404.
 func (h *Handler) GetPlayerGames(w http.ResponseWriter, r *http.Request) {
 	st, ok := h.staffelOfRequest(w, r)
 	if !ok {
 		return
 	}
 	claims := auth.ClaimsFromCtx(r.Context())
+	if team := r.URL.Query().Get("team"); team != "" {
+		m, err := h.store.TeamGameMatrix(r.Context(), st.ID, claims.UserID, team)
+		switch {
+		case errors.Is(err, ErrUnknownTeam):
+			httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, err)
+			return
+		case err != nil:
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, map[string]any{"teams": []TeamMatrix{*m}})
+		return
+	}
 	teams, err := h.store.PlayerGameMatrix(r.Context(), st.ID, claims.UserID)
 	if err != nil {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)

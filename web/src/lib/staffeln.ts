@@ -104,6 +104,25 @@ export interface ProgressionDay {
   entries: ProgressionEntry[]
 }
 
+/**
+ * Die Spieltage, an denen eine Mannschaft tatsächlich gespielt hat — erkennbar
+ * daran, dass ihre Spielzahl gegenüber dem Vortag steigt. Der Verlauf führt
+ * jede Mannschaft an jedem Spieltag mit Platzierung, auch spielfrei; ein Punkt
+ * an einem spielfreien Tag behauptete aber ein Ergebnis, das es nicht gab.
+ * Verbunden werden nur diese Punkte.
+ */
+export function gespieltePunkte(days: ProgressionDay[], team: string): { day: number; rank: number }[] {
+  const out: { day: number; rank: number }[] = []
+  let vorher = 0
+  days.forEach((d, i) => {
+    const e = d.entries.find((x) => x.team === team)
+    if (!e) return
+    if (e.games > vorher) out.push({ day: i, rank: e.rank })
+    vorher = e.games
+  })
+  return out
+}
+
 // --- Mannschafts-Ranglisten -----------------------------------------------
 
 export interface GoalDistribution {
@@ -290,8 +309,11 @@ export const fetchRefereeStats = (id: number) =>
   api.get<RefereeStat[]>(`/staffeln/${id}/schiedsrichter`).then((r) => r.data)
 export const fetchAffiliation = (id: number) =>
   api.get<Affiliation>(`/staffeln/${id}/affiliation`).then((r) => r.data)
-export const fetchPlayerGames = (id: number) =>
-  api.get<{ teams: TeamMatrix[] }>(`/staffeln/${id}/player-games`).then((r) => r.data.teams)
+/** Ohne `team` die eigenen Mannschaften, mit `team` genau diese (eigene oder
+ * fremde, Schreibweise des Spielplans). */
+export const fetchPlayerGames = (id: number, team?: string) =>
+  api.get<{ teams: TeamMatrix[] }>(`/staffeln/${id}/player-games`, { params: team ? { team } : undefined })
+    .then((r) => r.data.teams)
 export const fetchReport = (bwhvGameId: number) =>
   api.get<ReportDetail>(`/bwhv-games/${bwhvGameId}/report`).then((r) => r.data)
 
