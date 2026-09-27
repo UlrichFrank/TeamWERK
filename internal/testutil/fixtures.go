@@ -155,6 +155,16 @@ func AddFamilyLink(t *testing.T, database *sql.DB, parentUserID, memberID int) {
 	}
 }
 
+// AddLineup puts members into the lineup of a game (game_lineup).
+func AddLineup(t *testing.T, database *sql.DB, gameID int, memberIDs ...int) {
+	t.Helper()
+	for _, m := range memberIDs {
+		if _, err := database.Exec(`INSERT INTO game_lineup (game_id, member_id) VALUES (?, ?)`, gameID, m); err != nil {
+			t.Fatalf("AddLineup: %v", err)
+		}
+	}
+}
+
 // AddKaderTrainer links a member to a kader as trainer.
 func AddKaderTrainer(t *testing.T, database *sql.DB, kaderID, memberID int) {
 	t.Helper()
