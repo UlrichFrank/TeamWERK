@@ -12,7 +12,7 @@ import ActionMenu from '../components/ActionMenu'
 import StaffelPicker from '../components/StaffelPicker'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
-import { compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
+import { buildTeamLongName, compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
 import { BTN_PRIMARY, HEADER_CTRL, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
 
 interface Season {
@@ -52,7 +52,6 @@ interface Kader {
 
 const KADER_PAGE_SIZE = 50
 
-const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
 const GENDER_SHORT: Record<string, string> = { m: 'm', f: 'w', mixed: 'mix' }
 
 function groupKey(k: Kader) { return `${k.age_class}|${k.gender}` }
@@ -502,7 +501,6 @@ export default function AdminKaderPage() {
       {/* Kader groups */}
       {groupOrder.map(key => {
         const group = groups.get(key)!
-        const hasMultiple = group.length > 1
 
         return (
           <div key={key} className="mb-6">
@@ -510,9 +508,7 @@ export default function AdminKaderPage() {
               const isDedicated = k.dedicated_birth_year !== null
               const isPending = pendingDedicated.has(k.id)
               const showDedicatedDropdown = isPending || isDedicated
-              const title = hasMultiple
-                ? `${k.age_class} ${k.team_number} ${GENDER_LABEL[k.gender]}`
-                : `${k.age_class} ${GENDER_LABEL[k.gender]}`
+              const title = buildTeamLongName(k, group.length)
 
               return (
                 <div key={k.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu mb-3">
@@ -792,7 +788,7 @@ export default function AdminKaderPage() {
             </div>
             <div className="px-6 py-5">
               <p className="text-sm text-brand-text-muted">
-                {deleteConfirm.age_class}{deleteConfirm.team_number > 1 ? ` ${deleteConfirm.team_number}` : ''} {GENDER_LABEL[deleteConfirm.gender]} wird unwiderruflich gelöscht.
+                {buildTeamLongName(deleteConfirm, groups.get(groupKey(deleteConfirm))?.length ?? 1)} wird unwiderruflich gelöscht.
               </p>
             </div>
             <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle justify-end">

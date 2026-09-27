@@ -20,6 +20,34 @@ function ageInitial(ageClass: string): string {
 }
 
 
+export interface KaderForName {
+  age_class: string
+  gender: string
+  team_number: number
+}
+
+/**
+ * Langform aus Kader-Feldern: "C-Jugend männlich 1" — Nummer am Ende, genau
+ * dann, wenn es in der Saison mehr als einen Kader dieser Altersklasse und
+ * dieses Geschlechts gibt (`groupCount`). Spiegelt `internal/db.TeamDisplayName`;
+ * gedacht für Oberflächen, die Kader einer *gewählten* Saison zeigen und
+ * deshalb nicht auf `display_long` (aktive Saison) zurückgreifen können.
+ */
+export function buildTeamLongName(k: KaderForName, groupCount: number): string {
+  const base = `${k.age_class} ${GENDER_LABEL[k.gender] ?? k.gender}`
+  return groupCount > 1 ? `${base} ${k.team_number}` : base
+}
+
+/** Anzahl Kader je Kombination aus Altersklasse und Geschlecht — Eingabe für `buildTeamLongName`. */
+export function countKaderGroups(list: Array<{ age_class: string; gender: string }>): (k: { age_class: string; gender: string }) => number {
+  const counts = new Map<string, number>()
+  for (const k of list) {
+    const key = `${k.age_class}|${k.gender}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return k => counts.get(`${k.age_class}|${k.gender}`) ?? 0
+}
+
 /** Short name for calendar tiles: "mA" or "mA1" — clientseitiger Fallback wenn der Server keine Display-Felder liefert. */
 export function buildTeamShortNames<T extends TeamForName>(teams: T[]): Map<number, string> {
   const result = new Map<number, string>()

@@ -33,8 +33,8 @@
 
 ## 4. Frontend: Kader-Oberflächen mit gemeinsamem Helfer
 
-- [ ] 4.1 `web/src/lib/teamName.ts`: `buildTeamLongName({age_class, gender, team_number}, groupCount)` exportieren (Nummer am Ende genau bei `groupCount > 1`), Tests in `teamName.test.ts` (1 von 2 → „C-Jugend männlich 1", einzige → „A-Jugend weiblich", gemischt); verifizieren mit `pnpm -C web test teamName`
-- [ ] 4.2 `AdminKaderPage.tsx`: Kartentitel und Lösch-Bestätigung über `buildTeamLongName` (groupCount aus der Gruppe derselben age_class+gender), lokales `GENDER_LABEL` durch den Export ersetzen, sofern nur für Namen genutzt; verifizieren mit `pnpm -C web build` und bestehenden AdminKader-Tests
+- [x] 4.1 `web/src/lib/teamName.ts`: `buildTeamLongName({age_class, gender, team_number}, groupCount)` exportieren (Nummer am Ende genau bei `groupCount > 1`), Tests in `teamName.test.ts` (1 von 2 → „C-Jugend männlich 1", einzige → „A-Jugend weiblich", gemischt); verifizieren mit `pnpm -C web test teamName`
+- [x] 4.2 `AdminKaderPage.tsx`: Kartentitel und Lösch-Bestätigung über `buildTeamLongName` (groupCount aus der Gruppe derselben age_class+gender), lokales `GENDER_LABEL` durch den Export ersetzen, sofern nur für Namen genutzt; verifizieren mit `pnpm -C web build` und bestehenden AdminKader-Tests
 - [ ] 4.3 `CopyKaderModal.tsx` und `AutoAssignModal.tsx`: `team_number` ins lokale Interface aufnehmen, Titel über `buildTeamLongName` mit groupCount aus der geladenen Kader-Liste; verifizieren mit `pnpm -C web build` und einem Test je Modal, der zwei gleichartige Kader als „… 1"/„… 2" unterscheidbar rendert
 
 ## 5. Dokumentation und Integration
