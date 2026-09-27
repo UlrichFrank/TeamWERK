@@ -2,6 +2,7 @@ package dutyfairness_test
 
 import (
 	"math"
+	"strconv"
 	"testing"
 
 	"github.com/teamstuttgart/teamwerk/internal/dutyfairness"
@@ -156,4 +157,54 @@ func TestCompute_SummeDerPositionenGleichKindZaehlung(t *testing.T) {
 		t.Errorf("Familiensumme = %v, want 5 (Zahl der Eltern-Zuweisungen)", family)
 	}
 	wantPos(t, member(t, snap.Teams[teamC], kid3), 1+1.0/3, 0)
+}
+
+// Rangliste: ein Kind in zwei Kadern steht in jedem Block mit den Zahlen der
+// jeweiligen Position — in Team B hinter einem Kind mit einem Dienst, obwohl
+// es in Team A drei geleistet hat.
+func TestRangliste_ZweiKader_EigeneZahlenJeBlock(t *testing.T) {
+	f := newFixture(t)
+	teamA, _, teamB, kaderB, parent, kid := f.zweiKader()
+	otherUser := testutil.CreateUser(t, f.db, "standard")
+	f.player(kaderB, otherUser)
+	for i := 1; i <= 3; i++ {
+		f.assign(f.gameSlot(teamA, day(-i), 1), parent, "assigned")
+	}
+	f.assign(f.gameSlot(teamB, day(-1), 1), otherUser, "assigned")
+
+	srv := ranglisteServer(t, f.db)
+	token := testutil.TokenWithIsParent(t, parent, "standard", nil, true)
+	status, body := getRangliste(t, srv, "", token)
+	if status != 200 {
+		t.Fatalf("status = %d, want 200", status)
+	}
+	blocks := map[int][]ranglisteRow{}
+	for _, b := range body.Blocks {
+		blocks[b.TeamID] = b.Rows
+	}
+	a, b := blocks[teamA], blocks[teamB]
+	if len(a) != 1 || a[0].MemberID == nil || *a[0].MemberID != kid || a[0].Geleistet != 3 {
+		t.Errorf("Block A = %+v, want Kind mit geleistet 3", a)
+	}
+	if len(b) != 2 || b[0].Geleistet != 1 || b[0].IsOwn {
+		t.Fatalf("Block B = %+v, want Platz 1 fremdes Kind mit 1", b)
+	}
+	if b[1].MemberID == nil || *b[1].MemberID != kid || b[1].Rank != 2 || b[1].Geleistet != 0 {
+		t.Errorf("Block B Platz 2 = %+v, want eigenes Kind mit 0 (nicht die 3 aus Team A)", b[1])
+	}
+}
+
+// Fehlerfall bleibt: ein Team ohne eigene Verbindung ist auch mit einem
+// Zwei-Kader-Kind 403.
+func TestRangliste_ZweiKader_FremdesTeam403(t *testing.T) {
+	f := newFixture(t)
+	_, _, _, _, parent, _ := f.zweiKader()
+	teamC, kaderC := f.team("C")
+	f.player(kaderC, 0)
+
+	srv := ranglisteServer(t, f.db)
+	token := testutil.TokenWithIsParent(t, parent, "standard", nil, true)
+	if status, _ := getRangliste(t, srv, "?team="+strconv.Itoa(teamC), token); status != 403 {
+		t.Errorf("status = %d, want 403", status)
+	}
 }
