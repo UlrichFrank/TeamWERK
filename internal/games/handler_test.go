@@ -1677,8 +1677,8 @@ func TestListGames_DoppelheimspielDisplayCSV(t *testing.T) {
 	if shortCSV, _ := g["team_display_short_csv"].(string); shortCSV != "mB1, mB2" {
 		t.Errorf("expected team_display_short_csv 'mB1, mB2', got %q", shortCSV)
 	}
-	if longCSV, _ := g["team_display_long_csv"].(string); longCSV != "B-Jugend 1 männlich, B-Jugend 2 männlich" {
-		t.Errorf("expected team_display_long_csv 'B-Jugend 1 männlich, B-Jugend 2 männlich', got %q", longCSV)
+	if longCSV, _ := g["team_display_long_csv"].(string); longCSV != "B-Jugend männlich 1, B-Jugend männlich 2" {
+		t.Errorf("expected team_display_long_csv 'B-Jugend männlich 1, B-Jugend männlich 2', got %q", longCSV)
 	}
 	teams, _ := g["teams"].([]any)
 	if len(teams) != 2 {
@@ -1769,8 +1769,8 @@ func TestListMyGames_DisplayCSV(t *testing.T) {
 	if shortCSV, _ := g["team_display_short_csv"].(string); shortCSV != "mB1, mB2" {
 		t.Errorf("expected team_display_short_csv 'mB1, mB2', got %q", shortCSV)
 	}
-	if longCSV, _ := g["team_display_long_csv"].(string); longCSV != "B-Jugend 1 männlich, B-Jugend 2 männlich" {
-		t.Errorf("expected team_display_long_csv 'B-Jugend 1 männlich, B-Jugend 2 männlich', got %q", longCSV)
+	if longCSV, _ := g["team_display_long_csv"].(string); longCSV != "B-Jugend männlich 1, B-Jugend männlich 2" {
+		t.Errorf("expected team_display_long_csv 'B-Jugend männlich 1, B-Jugend männlich 2', got %q", longCSV)
 	}
 }
 

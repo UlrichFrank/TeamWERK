@@ -6,7 +6,11 @@ package db
 //
 // Display name format:
 //   - Single team of this age_class+gender: "<age_class> <gender_label>"
-//   - Multiple teams:                       "<age_class> <team_number> <gender_label>"
+//   - Multiple teams:                       "<age_class> <gender_label> <team_number>"
+//
+// Die Nummer steht am Ende ("C-Jugend männlich 1") — dieselbe Reihenfolge wie
+// der gespeicherte teams.name ("C-Jugend männlich 2"), damit eingeklappte und
+// aufgeklappte Anzeigen nicht auseinanderlaufen.
 func TeamDisplayName(teamAlias string) string {
 	a := teamAlias
 	return `(
@@ -14,8 +18,9 @@ func TeamDisplayName(teamAlias string) string {
 			WHEN (SELECT COUNT(*) FROM kader k_cnt
 			      WHERE k_cnt.season_id = (SELECT id FROM seasons WHERE is_active=1 LIMIT 1)
 			        AND k_cnt.age_class = k_dn.age_class AND k_cnt.gender = k_dn.gender) > 1
-			THEN k_dn.age_class || ' ' || CAST(k_dn.team_number AS TEXT) || ' ' ||
-			     CASE k_dn.gender WHEN 'm' THEN 'männlich' WHEN 'f' THEN 'weiblich' ELSE 'gemischt' END
+			THEN k_dn.age_class || ' ' ||
+			     CASE k_dn.gender WHEN 'm' THEN 'männlich' WHEN 'f' THEN 'weiblich' ELSE 'gemischt' END ||
+			     ' ' || CAST(k_dn.team_number AS TEXT)
 			ELSE k_dn.age_class || ' ' ||
 			     CASE k_dn.gender WHEN 'm' THEN 'männlich' WHEN 'f' THEN 'weiblich' ELSE 'gemischt' END
 		END
