@@ -14,7 +14,7 @@
 
 ## 3. Dashboard (`internal/dashboard`)
 
-- [ ] 3.1 `queryDutyAccount` liest `geleistet`/`vorhersage` aus der Position statt vom Member; verifiziert durch `TestDashboard_DutyAccount_ZweiKaderEigeneZahlen` (zwei Positionen, K1 = 1, K2 = 0, je eigenes `soll`, Werte identisch zur Rangliste) und bestehende Dashboard-Tests grün
+- [x] 3.1 `queryDutyAccount` liest `geleistet`/`vorhersage` aus der Position statt vom Member; verifiziert durch `TestDashboard_DutyAccount_ZweiKaderEigeneZahlen` (zwei Positionen, K1 = 1, K2 = 0, je eigenes `soll`, Werte identisch zur Rangliste) und bestehende Dashboard-Tests grün
 
 ## 4. Doku
 
