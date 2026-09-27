@@ -15,9 +15,9 @@ export default function RefereeView({ rows }: { rows: RefereeStat[] }) {
   if (rows.length === 0) {
     return (
       <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
-        Noch keine Schiedsrichter erfasst. Berichte, die vor dieser Auswertung abgerufen
-        wurden, tragen die Namen nur als ungetrennte Zeile — sie erscheinen hier erst nach
-        einer erneuten Auswertung.
+        Keine Schiedsrichter bekannt. Der Verband veröffentlicht die Namen in den
+        Spielberichten dieser Staffel nicht (dort steht „N.N.“) — sobald ein Bericht
+        Namen trägt, erscheinen sie hier.
       </div>
     )
   }

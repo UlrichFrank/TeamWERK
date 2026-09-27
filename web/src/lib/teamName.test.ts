@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { compareAgeClass, type TrainingGroupCategory } from './teamName'
+import { buildTeamLongName, compareAgeClass, countKaderGroups, type TrainingGroupCategory } from './teamName'
 
 const categories: TrainingGroupCategory[] = [
   { name: 'Perspektivkader', sort_order: 1 },
@@ -34,5 +34,32 @@ describe('compareAgeClass', () => {
   it('returns 0 for equal age classes', () => {
     expect(compareAgeClass('A-Jugend', 'A-Jugend', categories)).toBe(0)
     expect(compareAgeClass('Förderkader', 'Förderkader', categories)).toBe(0)
+  })
+})
+
+describe('buildTeamLongName', () => {
+  it('hängt bei mehreren Kadern der Kombination die Nummer ans Ende — auch bei Mannschaft 1', () => {
+    expect(buildTeamLongName({ age_class: 'C-Jugend', gender: 'm', team_number: 1 }, 2)).toBe('C-Jugend männlich 1')
+    expect(buildTeamLongName({ age_class: 'C-Jugend', gender: 'm', team_number: 2 }, 2)).toBe('C-Jugend männlich 2')
+  })
+
+  it('lässt die Nummer bei der einzigen Mannschaft der Kombination weg', () => {
+    expect(buildTeamLongName({ age_class: 'A-Jugend', gender: 'f', team_number: 1 }, 1)).toBe('A-Jugend weiblich')
+  })
+
+  it('beschriftet gemischte Teams', () => {
+    expect(buildTeamLongName({ age_class: 'E-Jugend', gender: 'mixed', team_number: 3 }, 3)).toBe('E-Jugend gemischt 3')
+  })
+})
+
+describe('countKaderGroups', () => {
+  it('zählt je Altersklasse und Geschlecht', () => {
+    const count = countKaderGroups([
+      { age_class: 'C-Jugend', gender: 'm' },
+      { age_class: 'C-Jugend', gender: 'm' },
+      { age_class: 'C-Jugend', gender: 'f' },
+    ])
+    expect(count({ age_class: 'C-Jugend', gender: 'm' })).toBe(2)
+    expect(count({ age_class: 'C-Jugend', gender: 'f' })).toBe(1)
   })
 })

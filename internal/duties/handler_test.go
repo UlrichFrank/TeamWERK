@@ -1960,7 +1960,7 @@ func TestListDutyTypes_SpielerForbidden(t *testing.T) {
 }
 
 // TestBoard_TeamNameUsesShortForm verifies that the duty-board group header
-// uses the team short form ("mA1") rather than the long form ("B-Jugend 1 männlich").
+// uses the team short form ("mA1") rather than the long form ("B-Jugend männlich 1").
 func TestBoard_TeamNameUsesShortForm(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")

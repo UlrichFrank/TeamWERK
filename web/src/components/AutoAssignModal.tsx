@@ -4,11 +4,13 @@ import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { buildTeamLongName, countKaderGroups } from '../lib/teamName'
 
 interface Kader {
   id: number
   age_class: string
   gender: string
+  team_number: number
   bracket_years: number[]
 }
 
@@ -17,8 +19,6 @@ interface Props {
   onDone: () => void
   onClose: () => void
 }
-
-const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
 
 export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
   const titleId = useId()
@@ -55,6 +55,8 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
       return next
     })
   }
+
+  const groupCount = countKaderGroups(kader)
 
   const handleConfirm = async () => {
     setSaving(true)
@@ -107,7 +109,7 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
                       onChange={() => toggleKader(k.id)}
                       className="accent-brand-yellow"
                     />
-                    <span className="font-medium text-brand-text">{k.age_class} {GENDER_LABEL[k.gender]}</span>
+                    <span className="font-medium text-brand-text">{buildTeamLongName(k, groupCount(k))}</span>
                     {k.bracket_years.length === 2 && (
                       <span className="text-brand-text-subtle text-xs">Jg. {k.bracket_years[0]}/{k.bracket_years[1]}</span>
                     )}
