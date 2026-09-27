@@ -1,6 +1,7 @@
 package teams_test
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -355,5 +356,126 @@ func TestGetRoster_NoExtendedPlayers(t *testing.T) {
 	json.Unmarshal(roster["extended_players"], &extended)
 	if len(extended) != 0 {
 		t.Errorf("expected empty extended_players, got %d", len(extended))
+	}
+}
+
+// mkJugendTeam legt ein Team samt Kader der aktiven Saison mit expliziter
+// Altersklasse, Geschlecht und Mannschaftsnummer an — CreateTeam/CreateKader
+// kennen nur "Erwachsene/mixed". Der gespeicherte Name folgt kader.teamLabel
+// (Nummer 1 ohne Suffix), damit der Test den Unterschied zu display_long sieht.
+func mkJugendTeam(t *testing.T, db *sql.DB, seasonID int, ageClass, gender, name string, number int) (teamID, kaderID int) {
+	t.Helper()
+	res, err := db.Exec(`INSERT INTO teams (name, age_class, gender) VALUES (?, ?, ?)`, name, ageClass, gender)
+	if err != nil {
+		t.Fatalf("insert team: %v", err)
+	}
+	tid, _ := res.LastInsertId()
+	res, err = db.Exec(`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, ?, ?, ?, ?)`,
+		seasonID, ageClass, gender, tid, number)
+	if err != nil {
+		t.Fatalf("insert kader: %v", err)
+	}
+	kid, _ := res.LastInsertId()
+	return int(tid), int(kid)
+}
+
+func listMyTeams(t *testing.T, srv *httptest.Server, token string) []map[string]any {
+	t.Helper()
+	res := testutil.Get(t, srv, "/api/teams", token)
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var teamList []map[string]any
+	json.NewDecoder(res.Body).Decode(&teamList)
+	return teamList
+}
+
+// TestListMyTeams_DisplayLongNummerAmEnde: bei zwei C-Jugenden männlich trägt
+// die eigene Mannschaft ihre Nummer am Ende — dieselbe Schreibweise, die der
+// Roster liefert, damit "Mein Team" eingeklappt und aufgeklappt übereinstimmt.
+func TestListMyTeams_DisplayLongNummerAmEnde(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	mkJugendTeam(t, db, seasonID, "C-Jugend", "m", "C-Jugend männlich", 1)
+	_, k2 := mkJugendTeam(t, db, seasonID, "C-Jugend", "m", "C-Jugend männlich 2", 2)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, k2, memberID)
+
+	srv := testServer(t, teams.NewHandler(db, hub.NewHub()))
+	teamList := listMyTeams(t, srv, testutil.Token(t, userID, "standard", nil))
+
+	if len(teamList) != 1 {
+		t.Fatalf("expected 1 team, got %d", len(teamList))
+	}
+	if got := teamList[0]["display_long"]; got != "C-Jugend männlich 2" {
+		t.Errorf("display_long = %v, want %q", got, "C-Jugend männlich 2")
+	}
+	if got := teamList[0]["display_short"]; got != "mC2" {
+		t.Errorf("display_short = %v, want %q", got, "mC2")
+	}
+}
+
+// TestListMyTeams_EinzigeMannschaftOhneNummer: ohne zweite Mannschaft derselben
+// Kombination entfällt die Nummer.
+func TestListMyTeams_EinzigeMannschaftOhneNummer(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	_, k := mkJugendTeam(t, db, seasonID, "A-Jugend", "f", "A-Jugend weiblich", 1)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, k, memberID)
+
+	srv := testServer(t, teams.NewHandler(db, hub.NewHub()))
+	teamList := listMyTeams(t, srv, testutil.Token(t, userID, "standard", nil))
+
+	if len(teamList) != 1 {
+		t.Fatalf("expected 1 team, got %d", len(teamList))
+	}
+	if got := teamList[0]["display_long"]; got != "A-Jugend weiblich" {
+		t.Errorf("display_long = %v, want %q", got, "A-Jugend weiblich")
+	}
+}
+
+// TestListMyTeams_OhneToken: ohne Anmeldung gibt es keine Teamliste.
+func TestListMyTeams_OhneToken(t *testing.T) {
+	db := testutil.NewDB(t)
+	srv := testServer(t, teams.NewHandler(db, hub.NewHub()))
+	res := testutil.Get(t, srv, "/api/teams", "")
+	res.Body.Close()
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", res.StatusCode)
+	}
+}
+
+// TestGetRoster_DisplayLongNummerAmEnde: auch Mannschaft 1 trägt ihre Nummer,
+// sobald eine zweite derselben Kombination existiert — am Ende, nicht in der Mitte.
+func TestGetRoster_DisplayLongNummerAmEnde(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	t1, k1 := mkJugendTeam(t, db, seasonID, "C-Jugend", "m", "C-Jugend männlich", 1)
+	mkJugendTeam(t, db, seasonID, "C-Jugend", "m", "C-Jugend männlich 2", 2)
+
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, k1, memberID)
+
+	srv := testServer(t, teams.NewHandler(db, hub.NewHub()))
+	res := testutil.Get(t, srv, "/api/teams/"+strconv.Itoa(t1)+"/roster", testutil.Token(t, userID, "standard", nil))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var roster struct {
+		Team struct {
+			DisplayLong string `json:"display_long"`
+		} `json:"team"`
+	}
+	json.NewDecoder(res.Body).Decode(&roster)
+	if roster.Team.DisplayLong != "C-Jugend männlich 1" {
+		t.Errorf("display_long = %q, want %q", roster.Team.DisplayLong, "C-Jugend männlich 1")
 	}
 }

@@ -280,7 +280,10 @@ func (h *Handler) ListMyTeams(w http.ResponseWriter, r *http.Request) {
 	// Erweiterter Kader (ohne Stammzugang) → isExtended=true
 	// UNION deduplicates: if a team appears in both selects, is_extended=0 wins.
 	rows, err := h.db.QueryContext(ctx, `
-		SELECT t.id, t.name, 0 AS is_extended
+		SELECT t.id, t.name,
+		       COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) AS display_short,
+		       COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) AS display_long,
+		       0 AS is_extended
 		FROM user_accessible_teams uat
 		JOIN teams t ON t.id = uat.team_id
 		JOIN seasons s ON s.id = uat.season_id
@@ -300,7 +303,10 @@ func (h *Handler) ListMyTeams(w http.ResponseWriter, r *http.Request) {
 		              WHERE fl.parent_user_id = ? AND k.team_id = t.id AND k.season_id = s.id)
 		  )
 		UNION
-		SELECT t.id, t.name, 1 AS is_extended
+		SELECT t.id, t.name,
+		       COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name) AS display_short,
+		       COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) AS display_long,
+		       1 AS is_extended
 		FROM kader_extended_members kem
 		JOIN kader k ON k.id = kem.kader_id
 		JOIN teams t ON t.id = k.team_id
@@ -324,7 +330,7 @@ func (h *Handler) ListMyTeams(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var t Team
 		var isExtended int
-		rows.Scan(&t.ID, &t.Name, &isExtended)
+		rows.Scan(&t.ID, &t.Name, &t.DisplayShort, &t.DisplayLong, &isExtended)
 		t.IsExtended = isExtended == 1
 		teams = append(teams, t)
 	}
