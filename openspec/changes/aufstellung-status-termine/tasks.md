@@ -11,7 +11,7 @@
 
 ## 2. Backend — Lese-Routen
 
-- [x] 2.1 `internal/games/handler.go` `GetParticipants`: `lineup` je Spielerzeile (Trainerzeilen/generisch ohne Feld) und `lineup_count` in `participantsResponse`; Tests `TestGetParticipants_LineupOpen`, `TestGetParticipants_LineupOutTrotzVerborgenerZeilen` (Aufstellung nur aus Zeilen eines fremden Teams → eigene Zeile `out`, `lineup_count` korrekt), bestehender 404-Test grün; verifiziert mit `go test ./internal/games/...`
+- [x] 2.1 `internal/games/handler.go` `GetParticipants`: `lineup` je Spielerzeile (Trainerzeilen ohne Feld, auch bei „Sonstiges“) und `lineup_count` in `participantsResponse`; Tests `TestGetParticipants_LineupOpen`, `TestGetParticipants_LineupOutTrotzVerborgenerZeilen` (Aufstellung nur aus Zeilen eines fremden Teams → eigene Zeile `out`, `lineup_count` korrekt), bestehender 404-Test grün; verifiziert mit `go test ./internal/games/...`
 - [x] 2.2 `ListMyGames`: `my_lineup` für Stamm-/erweiterten Kader, nicht für reine Trainer und generische Events; `attachChildrenRSVPToGames`: `lineup` in beiden `UNION`-Zweigen; Tests `TestListMyGames_MyLineup_{Open,In,Out}`, `TestListMyGames_MyLineup_TrainerOhneFeld`, `TestListMyGames_ChildLineup`, 401-Fall; verifiziert mit `go test ./internal/games/...`
 - [x] 2.3 `internal/attendance/matrix.go`: gebündelter `game_lineup`-Lookup für Spielspalten, `matrixCell.Lineup` (design.md §4); Tests: Spielspalte mit Aufstellung → `in`/`out`, ohne → `open`, Trainingsspalte ohne Feld, 403 unverändert, plus Deckungsgleichheits-Test Matrix ↔ `LineupStateSQL` auf derselben Fixture; verifiziert mit `go test ./internal/attendance/...`
 - [x] 2.4 `internal/calendar/handler.go`: `kaderMembership` mit `kind` (0 Stamm, 1 Trainer, 2 erweitert), `lineup_exists`/`in_lineup` durch das Fragment ersetzen, `resolveLineupState` → Mapping Code → Kennwort/Satz für `kind IN (0,2)`, `kaderLabel` hängt das Kennwort auch ohne `erw. Kader` an; Tests für die Szenarien „Stammspieler bekommt den Status", „Stammspieler bei offener Aufstellung", „Doppelte Zugehörigkeit", „Trainer bekommt keinen Status"; bestehende Tests des erweiterten Kaders unverändert grün; verifiziert mit `go test ./internal/calendar/...`
@@ -29,7 +29,7 @@
 
 ## 5. Doku
 
-- [ ] 5.1 `docs/anleitung-trainer.md`, `web/public/benutzerhandbuch.html`, `docs/schulung/folien.txt`: Bezeichnungen „aufgestellt / nicht aufgestellt / Aufstellung offen" statt „nominiert", Hinweis auf Anzeige in Liste/Tabelle/Kalender-Abo (jetzt auch Stammkader), überholte Aussage „Änderung verschickt keine Benachrichtigung" korrigieren; `make folien` läuft durch; `grep -rn -i nominier docs web/public web/src internal` liefert nur noch Code-Kommentare ohne Nutzerwirkung
+- [x] 5.1 `docs/anleitung-trainer.md`, `web/public/benutzerhandbuch.html`, `docs/schulung/folien.txt`: Bezeichnungen „aufgestellt / nicht aufgestellt / Aufstellung offen" statt „nominiert", Hinweis auf Anzeige in Liste/Tabelle/Kalender-Abo (jetzt auch Stammkader), überholte Aussage „Änderung verschickt keine Benachrichtigung" korrigieren; `make folien` läuft durch; `grep -rn -i nominier docs web/public web/src internal` liefert nur noch Code-Kommentare ohne Nutzerwirkung
 
 ## 6. Abschluss
 

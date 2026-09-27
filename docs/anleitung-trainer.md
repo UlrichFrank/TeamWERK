@@ -186,17 +186,28 @@ Die Liste ist ein **Verteiler mit Wirkung**, keine Merkliste:
 
 ## Aufstellung
 
-Für jedes Spiel könnt ihr festhalten, wer nominiert ist. Die Aufstellung ist **eine Liste pro Spiel** — bei Terminen mit mehreren Mannschaften teilen sich diese die Liste.
+Für jedes Spiel könnt ihr festhalten, wer aufgestellt ist. Die Aufstellung ist **eine Liste pro Spiel** — bei Terminen mit mehreren Mannschaften teilen sich diese die Liste.
+
+Jeder Spieler hat dabei einen von drei Zuständen, überall mit denselben Worten und Farben:
+
+| Zustand | Bedeutung | Darstellung |
+|---|---|---|
+| **aufgestellt** | steht in der gespeicherten Aufstellung | grün |
+| **nicht aufgestellt** | es gibt eine Aufstellung, er steht nicht darin | grau |
+| **Aufstellung offen** | für das Spiel ist noch niemand aufgestellt | grau gestrichelt umrandet |
+
+Spieler und Eltern sehen den Zustand in der Terminliste (neben den Zu-/Absage-Knöpfen), in der Tabellenansicht, auf der Detailseite und im Kalender-Abo — bei Heim- und Auswärtsspielen. Bei „Sonstiges" steht die Aufstellung nur auf der Detailseite.
 
 1. Termin unter **„Termine"** öffnen
 2. In der Teilnahme-Tabelle die Spalte **„Aufstellung"** ankreuzen
-3. Jedes Häkchen wird sofort gespeichert
+3. Jedes Häkchen wird sofort gespeichert; der Kopf der Tabelle zeigt „Aufstellung offen" bzw. „N aufgestellt"
 
 Setzen dürfen die Häkchen nur Trainer (und Admin). Drei Dinge, die man nicht sieht und wissen muss:
 
 - **Die Aufstellung ist für alle sichtbar,** die den Termin sehen — Spieler, erweiterter Kader und Eltern. Sie ist keine interne Notiz.
-- **Eine Änderung verschickt keine Benachrichtigung.** Wer nachträglich rein- oder herausfällt, erfährt es nur, wenn ihr es ihm sagt.
-- **Eine leere Aufstellung heißt „noch nicht festgelegt"**, nicht „niemand ist aufgestellt". Einen Zustand „bewusst leer" gibt es nicht.
+- **Wer aufgenommen oder herausgenommen wird, bekommt eine Meldung** (samt Eltern). Alle anderen nicht — auch nicht beim ersten Häkchen, obwohl der Rest der Mannschaft dadurch von „Aufstellung offen" zu „nicht aufgestellt" wechselt.
+- **Setzt die Aufstellung am Stück.** Schon das erste Häkchen macht alle anderen sichtbar zu „nicht aufgestellt".
+- **Eine leere Aufstellung heißt „Aufstellung offen"**, nicht „niemand ist aufgestellt". Einen Zustand „bewusst leer" gibt es nicht.
 
 ### Der Aufstellungsstatus im Kalender
 
@@ -289,7 +300,7 @@ Prüfe die Belegungsliste aller Slots und ob die Dienste korrekt als erfüllt ma
 Prüfe zuerst, ob er im erweiterten Kader **der aktuellen Saison** steht — beim Kopieren aus der Vorsaison wird diese Liste nicht übernommen. Steht er drin, prüfe seine Benachrichtigungs-Einstellungen (Profil → Sonstiges); im Nachrichten-Verlauf auf seinem Dashboard steht die Meldung auch dann, wenn Push abgeschaltet ist.
 
 **Ich habe die Aufstellung geändert — merkt das jemand?**
-Nein. Eine geänderte Aufstellung verschickt keine Benachrichtigung. Im Kalender-Abo wird der Stand beim nächsten Abgleich sichtbar (etwa stündlich), in der App sofort. Bei kurzfristigen Nachnominierungen also zusätzlich persönlich Bescheid geben.
+Wer aufgenommen oder herausgenommen wurde, bekommt samt Eltern eine Meldung; in der App sieht jeder den Stand sofort. Im Kalender-Abo wird er erst beim nächsten Abgleich sichtbar (etwa stündlich). Bei kurzfristigen Änderungen trotzdem persönlich Bescheid geben.
 
 **Ich möchte ein Mitglied vollständig anlegen oder löschen.**
 Das ist eine Vorstand-Funktion. Als Trainer kannst du nur Einladungen versenden und Beitrittsanträge bearbeiten. Sprich den Vorstand an.

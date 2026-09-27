@@ -205,10 +205,11 @@ hinweis: Beispieldaten
 typ: funktion
 weg: Termine › Termin öffnen
 titel: Aufstellung
-absicht: Wer ist nominiert?
+absicht: Wer ist aufgestellt?
 - Häkchen setzen, wird sofort gespeichert
-- Team und Eltern sehen die Aufstellung
-- Eine Änderung verschickt keine Meldung
+- Drei Zustände: aufgestellt · nicht aufgestellt · Aufstellung offen
+- Team und Eltern sehen sie in Liste, Tabelle und Kalender-Abo
+- Aufgenommene und Herausgenommene bekommen eine Meldung
 rollen: Trainer
 bild: tr-termin_detail | /termine/spiel/…
 

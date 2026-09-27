@@ -661,20 +661,20 @@
           <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
             <li>Menü → <strong>Spielbetrieb → Termine</strong> öffnen und den vergangenen Trainings- oder Spieltermin anklicken.</li>
             <li>In der Teilnahme-Tabelle erscheint bei vergangenen Terminen die Spalte <strong>Anwesend</strong> — Häkchen pro Mitglied setzen; gespeichert wird sofort bei jedem Klick.</li>
-            <li>Bei Spielen zusätzlich die Spalte <strong>Aufstellung</strong> nutzen, um die nominierten Spieler zu markieren.</li>
+            <li>Bei Spielen zusätzlich die Spalte <strong>Aufstellung</strong> nutzen, um die aufgestellten Spieler zu markieren.</li>
             <li>Team-Statistik: Menü → <strong>Spielbetrieb → Anwesenheit</strong> zeigt Trainings-/Spiel-Quoten je Mitglied inkl. Team-Durchschnitt.</li>
             <li>Offene Erfassungen listet dieselbe Seite oben unter „X offene Erfassungen" — pro Eintrag direkt zum Termin springen oder per Augen-Symbol aus der Statistik ausschließen.</li>
             <li>Eine bereits erfasste Anwesenheit lässt sich über den Link „Anwesenheits-Erfassung zurücksetzen" oberhalb der Teilnahme-Tabelle zurücksetzen.</li>
           </ol></div></details>
         </li>
-        <li><strong>Spiele verwalten:</strong> Heim-, Auswärts- und generische Events; Aufstellung/Kader-Nominierung, Spiel-Notizen, Spielorte.
+        <li><strong>Spiele verwalten:</strong> Heim-, Auswärts- und generische Events; Aufstellung, Spiel-Notizen, Spielorte.
           <details class="howto"><summary>So geht's</summary><div class="howto-body"><ol>
             <li>Menü → <strong>Spielbetrieb → Kalender</strong> → Plus-Symbol auf dem Zieltag → <strong>Heimspiel</strong>, <strong>Auswärtsspiel</strong> oder <strong>Sonstiges Event</strong> wählen.</li>
             <li>Datum, Uhrzeit, Gegner (bzw. Event-Name), Ort und Mannschaft(en) eintragen; bei „Sonstiges Event" zusätzlich Ende, Enddatum und mehrere Mannschaften möglich.</li>
             <li>Im nächsten Schritt optional eine Dienstplan-Vorlage wählen — die daraus erzeugten Dienst-Slots lassen sich vor dem endgültigen Anlegen einzeln abwählen.</li>
             <li>Zum Bearbeiten: Spiel-Kachel im Kalender anklicken → Stift-Symbol <strong>Bearbeiten</strong> öffnet Gegner/Termin/Ort/Mannschaften/Dienstplan-Vorlage; das Mülleimer-Symbol löscht das Event samt verknüpfter Dienste.</li>
-            <li>Aufstellung/Kader-Nominierung: den Termin unter <strong>Termine</strong> öffnen und in der Teilnahme-Tabelle die Spalte „Aufstellung" ankreuzen; jedes Häkchen wird sofort gespeichert. Drei Dinge dazu: die Aufstellung ist für <strong>alle sichtbar</strong>, die den Termin sehen; eine Änderung verschickt <strong>keine</strong> Benachrichtigung (bei kurzfristigen Nachnominierungen zusätzlich persönlich Bescheid geben); eine leere Aufstellung heißt „noch nicht festgelegt", nicht „niemand ist aufgestellt".</li>
-            <li>Spieler des <strong>erweiterten Kaders</strong> sehen den Stand zusätzlich im Kalender-Abo — im Titel als <code>· erw. Kader · aufgestellt</code>, <code>· nicht aufgestellt</code> bzw. <code>· Aufstellung offen</code> und in der Terminbeschreibung als ganzer Satz. Kalender-Apps holen den Feed nur etwa stündlich ab; die App bleibt die aktuelle Quelle.</li>
+            <li>Aufstellung: den Termin unter <strong>Termine</strong> öffnen und in der Teilnahme-Tabelle die Spalte „Aufstellung" ankreuzen; jedes Häkchen wird sofort gespeichert. Jeder Spieler hat einen von drei Zuständen: <strong>aufgestellt</strong> (grün), <strong>nicht aufgestellt</strong> (grau) oder <strong>Aufstellung offen</strong> (grau gestrichelt umrandet, solange noch niemand aufgestellt ist). Die Aufstellung ist für <strong>alle sichtbar</strong>, die den Termin sehen — in der Terminliste, der Tabellenansicht, auf der Detailseite und im Kalender-Abo. Wer aufgenommen oder herausgenommen wird, bekommt samt Eltern eine Meldung; schon das erste Häkchen macht alle anderen zu „nicht aufgestellt", deshalb die Aufstellung am Stück setzen.</li>
+            <li>Spieler (Stamm- und erweiterter Kader) sehen den Stand zusätzlich im Kalender-Abo — im Titel als <code>· aufgestellt</code>, <code>· nicht aufgestellt</code> bzw. <code>· Aufstellung offen</code> (beim erweiterten Kader mit <code>· erw. Kader</code> davor) und in der Terminbeschreibung als ganzer Satz. Kalender-Apps holen den Feed nur etwa stündlich ab; die App bleibt die aktuelle Quelle.</li>
             <li>Spiel-Notizen pflegst du im Kalender-Infofenster unter „Hinweis".</li>
           </ol></div></details>
         </li>
@@ -1036,7 +1036,7 @@
         <li><strong>Nicht erfüllte Dienste / fehlende Zusagen:</strong> Werden Dienstbörse oder RSVP nicht ernst genommen, verlieren sie ihren Nutzen. → Verbindlichkeit ist Voraussetzung.</li>
         <li><strong>Benachrichtigungen aus:</strong> Wer Push/E-Mail deaktiviert, verpasst kurzfristige Änderungen. Die Meldung steht trotzdem im Nachrichten-Verlauf auf dem Dashboard – abgeschaltet wird der Zustellweg, nicht die Information.</li>
         <li><strong>Ungepflegter erweiterter Kader:</strong> Die Liste ist ein Verteiler mit Wirkung. Wer dort aus alter Gewohnheit steht, bekommt zu jedem Termin der Mannschaft Meldungen; wer fehlt, erfährt von einem Spiel gar nichts. → Trainer sehen die Liste zu Saisonbeginn und bei Kaderwechseln durch.</li>
-        <li><strong>Ungepflegte Aufstellung:</strong> Für Spieler des erweiterten Kaders steht im Kalender dann dauerhaft „Aufstellung offen". Das ist ehrlich, aber unbefriedigend. → Aufstellung früh setzen; sie verschickt keine eigene Benachrichtigung.</li>
+        <li><strong>Ungepflegte Aufstellung:</strong> Für alle Spieler steht in Liste, Tabelle und Kalender dann dauerhaft „Aufstellung offen". Das ist ehrlich, aber unbefriedigend. → Aufstellung früh und am Stück setzen.</li>
         <li><strong>Verlust der Tresor-Passphrase:</strong> Ohne Passphrase sind alle Bankdaten verloren – kein Wiederherstellen. → Mehrere Verantwortliche, sichere Hinterlegung.</li>
         <li><strong>Mobile / PWA nicht installiert:</strong> Auf iOS funktionieren Push-Benachrichtigungen nur als installierte App.</li>
       </ul>
