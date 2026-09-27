@@ -412,7 +412,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		    g.id, g.date, g.time, g.end_time, g.end_date,
 		    g.opponent, g.event_type, g.is_home, g.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
-		    t.name, mem.is_extended, g.created_at, mem.kind,
+		    `+appdb.TeamLongName("t")+`, mem.is_extended, g.created_at, mem.kind,
 		    `+appdb.LineupStateSQL("g.event_type", "g.id", "mem.member_id")+` AS lineup
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
@@ -514,7 +514,7 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int, includeTeams, incl
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT DISTINCT
 		    ts.id, ts.date, ts.start_time, ts.end_time,
-		    COALESCE(t.name, k.name, ''), ts.note,
+		    COALESCE(`+appdb.TeamLongName("t")+`, k.name, ''), ts.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
 		    mem.is_extended, ts.created_at
 		FROM training_sessions ts

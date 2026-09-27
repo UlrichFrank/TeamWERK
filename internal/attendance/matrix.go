@@ -132,7 +132,7 @@ func (h *Handler) GetTeamRSVPMatrix(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := matrixResponse{TeamID: teamID, Events: []matrixEvent{}, Members: []matrixMember{}}
-	err := h.db.QueryRowContext(r.Context(), `SELECT name FROM teams WHERE id = ?`, teamID).Scan(&resp.TeamName)
+	err := h.db.QueryRowContext(r.Context(), `SELECT `+appdb.TeamLongName("t")+` FROM teams t WHERE t.id = ?`, teamID).Scan(&resp.TeamName)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpx.WriteError(w, r, http.StatusNotFound, httpx.CodeNotFound, nil)
 		return

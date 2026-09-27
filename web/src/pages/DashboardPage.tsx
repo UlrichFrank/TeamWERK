@@ -522,7 +522,7 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
 }
 
 function MeinTeamSection() {
-  const [teams, setTeams] = useState<{ id: number; name: string; isExtended: boolean }[]>([])
+  const [teams, setTeams] = useState<{ id: number; name: string; display_long?: string; isExtended: boolean }[]>([])
 
   useEffect(() => {
     api.get('/teams/my').then(r => setTeams(r.data ?? [])).catch(() => {})
@@ -541,7 +541,7 @@ function MeinTeamSection() {
             className="flex items-center justify-between py-1.5 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors"
           >
             <span className="flex items-center gap-2 text-sm font-medium text-brand-text">
-              {t.name}
+              {t.display_long || t.name}
               {t.isExtended && <AushilfeBadge />}
             </span>
             <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />

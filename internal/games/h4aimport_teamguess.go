@@ -3,6 +3,7 @@ package games
 import (
 	"context"
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"sort"
 	"strings"
 
@@ -20,9 +21,10 @@ type staffelKey struct {
 // teamCandidate ist eine TeamWERK-Mannschaft als Zuordnungskandidat.
 type teamCandidate struct {
 	id      int
-	name    string
-	besetzt int // Kader-Mitglieder in der aktiven Saison
-	spiele  int // bereits zugeordnete Spiele (Tiebreak bei Namensdubletten)
+	name    string // gespeicherter teams.name — Abgleich der Mannschaftsnummer
+	label   string // Anzeigename (appdb.TeamLongName)
+	besetzt int    // Kader-Mitglieder in der aktiven Saison
+	spiele  int    // bereits zugeordnete Spiele (Tiebreak bei Namensdubletten)
 }
 
 // suggestStaffelTeams schlägt für jede (Staffel, Verein)-Kombination des Abrufs eine
@@ -181,7 +183,7 @@ func candidatesWithNumber(cands []teamCandidate, wantNo int, vergeben map[int]bo
 func namesOf(cands []teamCandidate) []string {
 	out := make([]string, len(cands))
 	for i, c := range cands {
-		out[i] = c.name
+		out[i] = c.label
 	}
 	return out
 }
@@ -190,7 +192,7 @@ func namesOf(cands []teamCandidate) []string {
 // Spielhistorie sind keine Filter, sondern Tiebreak-Merkmale zwischen Namensdubletten.
 func (h *Handler) teamCandidates(ctx context.Context, ageClass, gender string) []teamCandidate {
 	rows, err := h.db.QueryContext(ctx, `
-		SELECT t.id, t.name,
+		SELECT t.id, t.name, `+appdb.TeamLongName("t")+`,
 		       (SELECT COUNT(*) FROM kader k
 		          JOIN kader_members km ON km.kader_id = k.id
 		         WHERE k.team_id = t.id
@@ -207,7 +209,7 @@ func (h *Handler) teamCandidates(ctx context.Context, ageClass, gender string) [
 	var out []teamCandidate
 	for rows.Next() {
 		var c teamCandidate
-		if err := rows.Scan(&c.id, &c.name, &c.besetzt, &c.spiele); err != nil {
+		if err := rows.Scan(&c.id, &c.name, &c.label, &c.besetzt, &c.spiele); err != nil {
 			return nil
 		}
 		out = append(out, c)

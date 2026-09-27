@@ -184,7 +184,7 @@ func (h *Handler) roleUploadTeams(userID int, bypass, isTrainer bool) (map[int]s
 		return names, order, nil
 	}
 	const activeSeasonSub = `(SELECT id FROM seasons WHERE is_active = 1 LIMIT 1)`
-	q := `SELECT DISTINCT t.id, t.name, ` + appdb.AgeClassSortKey("t.age_class") + ` AS ak, t.gender, k.team_number
+	q := `SELECT DISTINCT t.id, COALESCE(` + appdb.TeamDisplayName("t") + `, t.name), ` + appdb.AgeClassSortKey("t.age_class") + ` AS ak, t.gender, k.team_number
 	      FROM teams t
 	      JOIN kader k ON k.team_id = t.id AND k.season_id = ` + activeSeasonSub
 	var args []any
@@ -223,7 +223,7 @@ func (h *Handler) roleUploadTeams(userID int, bypass, isTrainer bool) (map[int]s
 // die Namen aller beteiligten Teams für die teams-Liste.
 func (h *Handler) eligibleSeasonGames(bypass bool, roleTeams map[int]string, dutyGames map[int]bool) ([]eligibleGame, map[int]string, error) {
 	rows, err := h.db.Query(`
-		SELECT g.id, g.date, g.opponent, g.event_type, g.season_id, gt.team_id, t.name
+		SELECT g.id, g.date, g.opponent, g.event_type, g.season_id, gt.team_id, COALESCE(` + appdb.TeamDisplayName("t") + `, t.name)
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
 		JOIN teams t ON t.id = gt.team_id

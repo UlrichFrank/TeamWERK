@@ -198,7 +198,7 @@ func (h *Handler) assemblePublishRequest(reportID int) (*PublishRequest, error) 
 	        r.home_goals, r.away_goals, r.home_goals_ht, r.away_goals_ht,
 	        g.opponent, g.date,
 	        ` + db.TeamDisplayShort("t") + ` AS team_short_name,
-	        t.name,
+	        ` + db.TeamLongName("t") + `,
 	        COALESCE((SELECT name FROM clubs LIMIT 1), 'Team Stuttgart')
 	 FROM match_reports r
 	 JOIN games g ON g.id = r.game_id

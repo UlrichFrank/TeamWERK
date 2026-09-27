@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"net/http"
 	"sort"
 	"strconv"
@@ -114,8 +115,8 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		query string
 		args  []any
 	)
-	const selectCols = `SELECT g.id, g.date, COALESCE(g.time, '') AS time, g.opponent,
-				       GROUP_CONCAT(t.name, ', ') AS team_names,
+	selectCols := `SELECT g.id, g.date, COALESCE(g.time, '') AS time, g.opponent,
+				       GROUP_CONCAT(` + appdb.TeamLongName("t") + `, ', ') AS team_names,
 				       GROUP_CONCAT(t.id) AS team_ids,
 				       g.event_type`
 	if restricted {

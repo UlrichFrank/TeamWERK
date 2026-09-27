@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -331,7 +332,7 @@ func (wk *Worker) fail(id int, reason string) {
 func (wk *Worker) notifyReady(id int) {
 	var title, teamName string
 	if err := wk.db.QueryRow(
-		`SELECT v.title, t.name FROM videos v JOIN teams t ON t.id = v.team_id WHERE v.id=?`,
+		`SELECT v.title, COALESCE(`+appdb.TeamDisplayName("t")+`, t.name) FROM videos v JOIN teams t ON t.id = v.team_id WHERE v.id=?`,
 		id).Scan(&title, &teamName); err != nil {
 		slog.Error("video worker: load push meta failed", "video_id", id, "error", err)
 		return

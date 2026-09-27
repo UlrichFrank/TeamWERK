@@ -74,7 +74,9 @@ Die Seite „Mein Team" SHALL den Kartentitel jedes Teams aus dessen Langform re
 
 ### Requirement: Kader-Verwaltung folgt demselben Namensschema
 
-Oberflächen, die den Namen einer Mannschaft aus Kader-Feldern (Altersklasse, Geschlecht, Mannschaftsnummer) selbst zusammensetzen — Kader-Verwaltung inklusive Lösch-Bestätigung, Kader-Kopieren und automatische Zuordnung — SHALL dasselbe Schema wie die Langform verwenden: Nummer am Ende, angehängt genau dann, wenn in der angezeigten Saison mehr als ein Kader derselben Altersklasse und desselben Geschlechts existiert.
+Oberflächen, die den Namen einer Mannschaft aus Kader-Feldern (Altersklasse, Geschlecht, Mannschaftsnummer) selbst zusammensetzen — Kader-Verwaltung inklusive Lösch-Bestätigung und automatische Zuordnung — SHALL dasselbe Schema wie die Langform verwenden: Nummer am Ende, angehängt genau dann, wenn in der angezeigten Saison mehr als ein Kader derselben Altersklasse und desselben Geschlechts existiert.
+
+Der Dialog „Aus vorheriger Saison kopieren" SHALL je Kombination aus Altersklasse und Geschlecht genau eine Zeile ohne Mannschaftsnummer zeigen, weil der Kopiervorgang je Kombination arbeitet und in der Zielsaison genau eine Mannschaft anlegt. Hatte die Quellsaison mehrere Mannschaften dieser Kombination, SHALL die Zeile darauf hinweisen, dass nur eine angelegt wird.
 
 #### Scenario: Kader-Karte bei zwei Mannschaften
 - **WHEN** die Kader-Verwaltung einer Saison mit zwei männlichen C-Jugenden angezeigt wird
@@ -84,6 +86,42 @@ Oberflächen, die den Namen einer Mannschaft aus Kader-Feldern (Altersklasse, Ge
 - **WHEN** der Nutzer die Löschung der Mannschaft 1 von zwei männlichen C-Jugenden anstößt
 - **THEN** nennt die Bestätigung „C-Jugend männlich 1" (nicht „C-Jugend männlich")
 
-#### Scenario: Kader kopieren bei zwei Mannschaften
-- **WHEN** der Kopier-Dialog Kader einer Saison mit zwei männlichen C-Jugenden auflistet
+#### Scenario: Automatische Zuordnung bei zwei Mannschaften
+- **WHEN** der Dialog zur automatischen Zuordnung die Kader einer Saison mit zwei männlichen C-Jugenden auflistet
 - **THEN** sind die beiden Einträge als „C-Jugend männlich 1" und „C-Jugend männlich 2" unterscheidbar
+
+#### Scenario: Kader kopieren bei zwei Mannschaften
+- **WHEN** der Kopier-Dialog eine Quellsaison mit zwei männlichen C-Jugenden auflistet
+- **THEN** erscheint „C-Jugend männlich" genau einmal, mit dem Hinweis „2 Mannschaften in der Quellsaison – es wird eine angelegt"
+
+### Requirement: Dashboard-Kachel „Mein Team" nennt die Langform
+
+Die Kachel „Mein Team" auf dem Dashboard SHALL jedes eigene Team mit seiner Langform (`display_long` aus `GET /api/teams/my`) nennen und nur ohne Langform auf `teams.name` zurückfallen — dieselbe Schreibweise wie die Seite „Mein Team", auf die sie verlinkt.
+
+#### Scenario: Zwei C-Jugenden auf dem Dashboard
+- **WHEN** ein Nutzer mit Zugang zu beiden männlichen C-Jugenden das Dashboard öffnet
+- **THEN** nennt die Kachel „C-Jugend männlich 1" und „C-Jugend männlich 2"
+
+### Requirement: Videos nennen die Mannschaft in der Langform
+
+`GET /api/videos`, `GET /api/videos/{id}`, `GET /api/videos/upload-eligible-games` und die Push-Meldung „Video bereit" SHALL die Mannschaft mit ihrer Langform (Regel wie `display_long`, Fallback `teams.name`) benennen.
+
+#### Scenario: Video einer von zwei C-Jugenden
+- **WHEN** ein Video der Mannschaft 1 von zwei männlichen C-Jugenden der aktiven Saison gelistet oder im Detail abgerufen wird
+- **THEN** ist `team_name` „C-Jugend männlich 1"
+
+### Requirement: Jede Ausgabe an Menschen nennt die Mannschaft in der Langform
+
+Jede Stelle, die einen Mannschaftsnamen in Langform an Menschen ausgibt — API-Felder (Anwesenheit, Rückmelde-Matrix, Teamliste `GET /api/teams`, Mitfahrten, Spiel-Suche, Staffeln, Ordner-Rechte, H4A-Import-Vorschau), Kalender-Feed, Push-Erinnerungen, Dienst-Export und veröffentlichte Spielberichte — SHALL die Langform nach der Regel von `display_long` verwenden (Fallback `teams.name` ohne Kader in der aktiven Saison). Der gespeicherte `teams.name` SHALL nur noch als Identitätsschlüssel (Team-Anlage, H4A-Nummernabgleich) und in der Stammdatenpflege der Teams verwendet werden. Kurzformen folgen weiterhin `display_short`.
+
+#### Scenario: Anwesenheit einer von zwei C-Jugenden
+- **WHEN** ein Trainer `GET /api/teams/{id}/attendance-stats` bzw. `GET /api/teams/{id}/rsvp-matrix` für Mannschaft 1 von zwei männlichen C-Jugenden abruft
+- **THEN** ist `team_name` „C-Jugend männlich 1"
+
+#### Scenario: Teamliste für Filter
+- **WHEN** `GET /api/teams` zwei männliche C-Jugenden der aktiven Saison liefert
+- **THEN** tragen sie `display_long` „C-Jugend männlich 1" bzw. „C-Jugend männlich 2"
+
+#### Scenario: Kalender-Feed
+- **WHEN** der persönliche Kalender-Feed ein Heimspiel der Mannschaft 1 von zwei männlichen C-Jugenden enthält
+- **THEN** nennt der Titel die Mannschaft als „C-Jugend männlich 1"

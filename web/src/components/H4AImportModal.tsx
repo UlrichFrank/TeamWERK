@@ -57,7 +57,7 @@ export interface H4AApplyResult {
   regen_summary?: unknown
 }
 
-interface Team { id: number; name: string; is_active?: boolean }
+interface Team { id: number; name: string; display_long?: string; is_active?: boolean }
 interface Template { id: number; name: string; template_type: string }
 
 interface Props {
@@ -509,7 +509,7 @@ function PlanSection({
                     >
                       <option value="">— zuordnen —</option>
                       {teams.map(tm => (
-                        <option key={tm.id} value={tm.id}>{tm.name}</option>
+                        <option key={tm.id} value={tm.id}>{tm.display_long || tm.name}</option>
                       ))}
                     </select>
 

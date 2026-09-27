@@ -889,3 +889,34 @@ func TestBugReport_BulkSaveDoesNotDowngradeDeclinedToMissed(t *testing.T) {
 		})
 	}
 }
+
+// TestGetTeamStats_TeamNameIstLangform: die Anwesenheitsseite nennt die
+// Mannschaft wie der Rest der App ("C-Jugend männlich 1"), nicht mit dem
+// gespeicherten teams.name, dem bei Mannschaft 1 die Nummer fehlt.
+func TestGetTeamStats_TeamNameIstLangform(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "C-Jugend männlich")
+	trainerUserID, kaderID := makeTrainer(t, db, teamID, seasonID)
+	db.Exec(`UPDATE kader SET age_class='C-Jugend', gender='m', team_number=1 WHERE id=?`, kaderID)
+	other := testutil.CreateTeam(t, db, "C-Jugend männlich 2")
+	db.Exec(`INSERT INTO kader (season_id, age_class, gender, team_id, team_number) VALUES (?, 'C-Jugend', 'm', ?, 2)`, seasonID, other)
+
+	srv := testServer(t, db)
+	token := testutil.Token(t, trainerUserID, "standard", []string{clubFnTrainr})
+	for _, path := range []string{"attendance-stats", "rsvp-matrix?from=2026-05-01&to=2026-05-31"} {
+		res := testutil.Get(t, srv, fmt.Sprintf("/api/teams/%d/%s", teamID, path), token)
+		if res.StatusCode != http.StatusOK {
+			res.Body.Close()
+			t.Fatalf("%s: expected 200, got %d", path, res.StatusCode)
+		}
+		var body struct {
+			TeamName string `json:"team_name"`
+		}
+		json.NewDecoder(res.Body).Decode(&body)
+		res.Body.Close()
+		if body.TeamName != "C-Jugend männlich 1" {
+			t.Errorf("%s: team_name = %q, want %q", path, body.TeamName, "C-Jugend männlich 1")
+		}
+	}
+}

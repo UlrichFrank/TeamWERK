@@ -30,3 +30,13 @@ func TeamDisplayName(teamAlias string) string {
 		LIMIT 1
 	)`
 }
+
+// TeamLongName ist der Anzeigename eines Teams für jede Ausgabe an Menschen
+// (API-Felder, Push-Texte, Exporte, Kalender): die Langform aus
+// TeamDisplayName, mit dem gespeicherten teams.name als Fallback für Teams ohne
+// Kader in der aktiven Saison. Der gespeicherte Name selbst ist
+// Identitätsschlüssel (kader.ensureTeam, H4A-Abgleich) und kein Anzeigewert —
+// bei Mannschaft 1 fehlt ihm die Nummer, sobald es eine zweite gibt.
+func TeamLongName(teamAlias string) string {
+	return `COALESCE(` + TeamDisplayName(teamAlias) + `, ` + teamAlias + `.name)`
+}

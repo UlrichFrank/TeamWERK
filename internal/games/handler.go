@@ -1655,6 +1655,10 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 		TeamNumber int    `json:"team_number"`
 		GroupCount int    `json:"group_count"`
 		IsActive   bool   `json:"is_active"`
+		// DisplayShort/DisplayLong: dieselben Anzeigeformen wie in allen
+		// anderen Team-Ausgaben ("mC1" / "C-Jugend männlich 1").
+		DisplayShort string `json:"display_short"`
+		DisplayLong  string `json:"display_long"`
 	}
 
 	const activeSeasonSub = `(SELECT id FROM seasons WHERE is_active=1 LIMIT 1)`
@@ -1680,7 +1684,8 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 		// Nur die eigenen Trainer-Teams — sonst zeigt der Selektor Teams an,
 		// für die derselbe Request danach mit 403 abgewiesen wird.
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active,
+			        COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), `+appdb.TeamLongName("t")+`
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 JOIN kader_trainers kt ON kt.kader_id = k.id
@@ -1689,7 +1694,8 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			 ORDER BY `+appdb.AgeClassSortKey("t.age_class")+`, t.gender, k.team_number`, claims.UserID)
 	} else if claims.Role == "admin" || claims.HasFunction("vorstand") {
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active,
+			        COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), `+appdb.TeamLongName("t")+`
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
@@ -1726,7 +1732,8 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 			teamArgs = append(appdb.UserArgs(appdb.TeamsStamm, claims.UserID), appdb.UserArgs(appdb.TeamsExtended, claims.UserID)...)
 		}
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
+			`SELECT DISTINCT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active,
+			        COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), `+appdb.TeamLongName("t")+`
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
@@ -1735,7 +1742,8 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 	} else {
 		// sportliche_leitung: all teams
 		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active
+			`SELECT t.id, t.name, t.age_class, t.gender, k.team_number, `+groupCountSub+`, t.is_active,
+			        COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name), `+appdb.TeamLongName("t")+`
 			 FROM teams t
 			 JOIN kader k ON k.team_id = t.id
 			 WHERE k.season_id = `+activeSeasonSub+`
@@ -1748,7 +1756,7 @@ func (h *Handler) ListTeamsForUser(w http.ResponseWriter, r *http.Request) {
 		for rows.Next() {
 			var t team
 			var active int
-			rows.Scan(&t.ID, &t.Name, &t.AgeClass, &t.Gender, &t.TeamNumber, &t.GroupCount, &active)
+			rows.Scan(&t.ID, &t.Name, &t.AgeClass, &t.Gender, &t.TeamNumber, &t.GroupCount, &active, &t.DisplayShort, &t.DisplayLong)
 			t.IsActive = active == 1
 			result = append(result, t)
 		}
@@ -2565,7 +2573,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT g.id, g.date, g.time, g.opponent, g.event_type, g.is_home, g.season_id,
-		       (SELECT GROUP_CONCAT(t.name, ', ') FROM game_teams gt2 JOIN teams t ON t.id = gt2.team_id WHERE gt2.game_id = g.id),
+		       (SELECT GROUP_CONCAT(`+appdb.TeamLongName("t")+`, ', ') FROM game_teams gt2 JOIN teams t ON t.id = gt2.team_id WHERE gt2.game_id = g.id),
 		       (SELECT GROUP_CONCAT(gt3.team_id) FROM game_teams gt3 WHERE gt3.game_id = g.id),
 		       (SELECT GROUP_CONCAT(s, ', ') FROM (
 		            SELECT COALESCE(`+appdb.TeamDisplayShort("t_s")+`, t_s.name) AS s

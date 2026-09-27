@@ -76,7 +76,7 @@ func fillLineup(t *testing.T, db *sql.DB, gameID, memberID int, fill lineupFill)
 // das im Titel und im Beschreibungstext.
 func TestFeed_ErwKader_Aufgestellt(t *testing.T) {
 	body := lineupFeed(t, "kader_extended_members", "heim", lineupWithMe, "")
-	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 · erw. Kader · aufgestellt) – Test Opponent") {
+	if !strings.Contains(body, "SUMMARY:Heim: Team (Erwachsene gemischt · erw. Kader · aufgestellt) – Test Opponent") {
 		t.Errorf("Titel muss den Status 'aufgestellt' tragen, body:\n%s", body)
 	}
 	if !strings.Contains(body, "DESCRIPTION:Du bist für das Spiel aufgestellt.") {
@@ -117,7 +117,7 @@ func TestFeed_ErwKader_KeineAufstellungGespeichert(t *testing.T) {
 // ohne „erw. Kader"-Zusatz, das Kennwort steht direkt hinter der Mannschaft.
 func TestFeed_Stammkader_Aufgestellt(t *testing.T) {
 	body := lineupFeed(t, "kader_members", "heim", lineupWithMe, "")
-	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 · aufgestellt) – Test Opponent") {
+	if !strings.Contains(body, "SUMMARY:Heim: Team (Erwachsene gemischt · aufgestellt) – Test Opponent") {
 		t.Errorf("Stammkader trägt den Status ohne Kader-Zusatz, body:\n%s", body)
 	}
 	if !strings.Contains(body, "DESCRIPTION:Du bist für das Spiel aufgestellt.") {
@@ -127,7 +127,7 @@ func TestFeed_Stammkader_Aufgestellt(t *testing.T) {
 
 func TestFeed_Stammkader_AufstellungOffen(t *testing.T) {
 	body := lineupFeed(t, "kader_members", "heim", lineupEmpty, "")
-	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 · Aufstellung offen) – Test Opponent") {
+	if !strings.Contains(body, "SUMMARY:Heim: Team (Erwachsene gemischt · Aufstellung offen) – Test Opponent") {
 		t.Errorf("Stammkader bei leerer Aufstellung: 'Aufstellung offen', body:\n%s", body)
 	}
 	if strings.Contains(body, "NICHT aufgestellt") {
@@ -137,7 +137,7 @@ func TestFeed_Stammkader_AufstellungOffen(t *testing.T) {
 
 func TestFeed_Stammkader_NichtAufgestellt(t *testing.T) {
 	body := lineupFeed(t, "kader_members", "auswärts", lineupWithoutMe, "")
-	if !strings.Contains(body, "(mB1 · nicht aufgestellt)") {
+	if !strings.Contains(body, "(Erwachsene gemischt · nicht aufgestellt)") {
 		t.Errorf("Stammkader ohne eigenes Mitglied in der Aufstellung: 'nicht aufgestellt', body:\n%s", body)
 	}
 }
@@ -145,7 +145,7 @@ func TestFeed_Stammkader_NichtAufgestellt(t *testing.T) {
 // Trainer stehen in ihrer Funktion am Spiel, nicht als Spieler — kein Status.
 func TestFeed_Trainer_OhneStatus(t *testing.T) {
 	body := lineupFeed(t, "kader_trainers", "heim", lineupWithoutMe, "")
-	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1) – Test Opponent") {
+	if !strings.Contains(body, "SUMMARY:Heim: Team (Erwachsene gemischt) – Test Opponent") {
 		t.Errorf("Titel des Trainers bleibt ohne Zusatz, body:\n%s", body)
 	}
 	if strings.Contains(body, "aufgestellt") || strings.Contains(body, "Aufstellung offen") {
@@ -180,7 +180,7 @@ func TestFeed_DoppelteZugehoerigkeit_RegulaerSchlaegtErweitert(t *testing.T) {
 	if strings.Contains(body, "erw. Kader") {
 		t.Errorf("reguläre Zugehörigkeit schlägt die erweiterte — kein Kader-Zusatz, body:\n%s", body)
 	}
-	if !strings.Contains(body, "(mB1 · nicht aufgestellt)") {
+	if !strings.Contains(body, "(Erwachsene gemischt · nicht aufgestellt)") {
 		t.Errorf("Status bleibt auch bei doppelter Zugehörigkeit, body:\n%s", body)
 	}
 }

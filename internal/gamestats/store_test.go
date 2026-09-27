@@ -142,7 +142,9 @@ func TestListStaffelnWithTeam_ZeigtZuordnungOhneAbruf(t *testing.T) {
 	seasonID := testutil.CreateSeason(t, db, "26/27")
 	teamID := testutil.CreateTeam(t, db, "B-Jugend männlich")
 	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
-	if _, err := db.Exec(`UPDATE kader SET staffel = 'mB-RL-BW' WHERE id = ?`, kaderID); err != nil {
+	// Der Anzeigename kommt aus dem Kader der aktiven Saison (appdb.TeamLongName),
+	// nicht aus teams.name — Altersklasse und Geschlecht müssen also stimmen.
+	if _, err := db.Exec(`UPDATE kader SET staffel = 'mB-RL-BW', age_class = 'B-Jugend', gender = 'm' WHERE id = ?`, kaderID); err != nil {
 		t.Fatal(err)
 	}
 	// Bewusst KEINE bwhv_staffeln-Zeile: es lief noch kein Abruf.
