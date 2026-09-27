@@ -74,7 +74,9 @@ Die Seite „Mein Team" SHALL den Kartentitel jedes Teams aus dessen Langform re
 
 ### Requirement: Kader-Verwaltung folgt demselben Namensschema
 
-Oberflächen, die den Namen einer Mannschaft aus Kader-Feldern (Altersklasse, Geschlecht, Mannschaftsnummer) selbst zusammensetzen — Kader-Verwaltung inklusive Lösch-Bestätigung, Kader-Kopieren und automatische Zuordnung — SHALL dasselbe Schema wie die Langform verwenden: Nummer am Ende, angehängt genau dann, wenn in der angezeigten Saison mehr als ein Kader derselben Altersklasse und desselben Geschlechts existiert.
+Oberflächen, die den Namen einer Mannschaft aus Kader-Feldern (Altersklasse, Geschlecht, Mannschaftsnummer) selbst zusammensetzen — Kader-Verwaltung inklusive Lösch-Bestätigung und automatische Zuordnung — SHALL dasselbe Schema wie die Langform verwenden: Nummer am Ende, angehängt genau dann, wenn in der angezeigten Saison mehr als ein Kader derselben Altersklasse und desselben Geschlechts existiert.
+
+Der Dialog „Aus vorheriger Saison kopieren" SHALL je Kombination aus Altersklasse und Geschlecht genau eine Zeile ohne Mannschaftsnummer zeigen, weil der Kopiervorgang je Kombination arbeitet und in der Zielsaison genau eine Mannschaft anlegt. Hatte die Quellsaison mehrere Mannschaften dieser Kombination, SHALL die Zeile darauf hinweisen, dass nur eine angelegt wird.
 
 #### Scenario: Kader-Karte bei zwei Mannschaften
 - **WHEN** die Kader-Verwaltung einer Saison mit zwei männlichen C-Jugenden angezeigt wird
@@ -84,6 +86,10 @@ Oberflächen, die den Namen einer Mannschaft aus Kader-Feldern (Altersklasse, Ge
 - **WHEN** der Nutzer die Löschung der Mannschaft 1 von zwei männlichen C-Jugenden anstößt
 - **THEN** nennt die Bestätigung „C-Jugend männlich 1" (nicht „C-Jugend männlich")
 
-#### Scenario: Kader kopieren bei zwei Mannschaften
-- **WHEN** der Kopier-Dialog Kader einer Saison mit zwei männlichen C-Jugenden auflistet
+#### Scenario: Automatische Zuordnung bei zwei Mannschaften
+- **WHEN** der Dialog zur automatischen Zuordnung die Kader einer Saison mit zwei männlichen C-Jugenden auflistet
 - **THEN** sind die beiden Einträge als „C-Jugend männlich 1" und „C-Jugend männlich 2" unterscheidbar
+
+#### Scenario: Kader kopieren bei zwei Mannschaften
+- **WHEN** der Kopier-Dialog eine Quellsaison mit zwei männlichen C-Jugenden auflistet
+- **THEN** erscheint „C-Jugend männlich" genau einmal, mit dem Hinweis „2 Mannschaften in der Quellsaison – es wird eine angelegt"

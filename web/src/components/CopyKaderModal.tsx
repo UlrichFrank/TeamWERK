@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { GENDER_LABEL } from '../lib/teamName'
 
 interface Season {
   id: number
@@ -18,6 +19,30 @@ interface SourceKader {
   member_count: number
 }
 
+/**
+ * Eine Zeile des Kopier-Dialogs: eine Kombination aus Altersklasse und
+ * Geschlecht. Der Kopierer (`copyKader`) arbeitet pro Kombination und legt in
+ * der Zielsaison genau eine Mannschaft an — zwei C-Jugenden der Quellsaison
+ * sind deshalb eine Zeile, nicht zwei mit geteiltem Häkchen.
+ */
+interface SourceGroup {
+  key: string
+  age_class: string
+  gender: string
+  team_count: number
+}
+
+function groupSourceKader(kader: SourceKader[]): SourceGroup[] {
+  const groups = new Map<string, SourceGroup>()
+  for (const k of kader) {
+    const key = `${k.age_class}|${k.gender}`
+    const g = groups.get(key)
+    if (g) g.team_count++
+    else groups.set(key, { key, age_class: k.age_class, gender: k.gender, team_count: 1 })
+  }
+  return [...groups.values()]
+}
+
 interface Assignment {
   age_class: string
   gender: string
@@ -30,8 +55,6 @@ interface Props {
   onDone: () => void
   onClose: () => void
 }
-
-const GENDER_LABEL: Record<string, string> = { m: 'männlich', f: 'weiblich', mixed: 'gemischt' }
 
 export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClose }: Props) {
   const titleId = useId()
@@ -168,8 +191,8 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
             <div className="space-y-4">
               <p className="text-sm text-brand-text-muted">Welche Kader sollen kopiert werden?</p>
               <div className="space-y-3">
-                {sourceKader.map(k => {
-                  const key = `${k.age_class}|${k.gender}`
+                {groupSourceKader(sourceKader).map(g => {
+                  const key = g.key
                   return (
                     <div key={key} className="border border-brand-border-subtle rounded-lg p-3 space-y-2">
                       <label className="flex items-center gap-3 cursor-pointer">
@@ -179,7 +202,12 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
                           onChange={() => toggleKader(key)}
                           className="accent-brand-yellow"
                         />
-                        <span className="font-medium text-sm text-brand-text">{k.age_class} {GENDER_LABEL[k.gender]}</span>
+                        <span className="font-medium text-sm text-brand-text">{g.age_class} {GENDER_LABEL[g.gender] ?? g.gender}</span>
+                        {g.team_count > 1 && (
+                          <span className="text-xs text-brand-text-muted">
+                            {g.team_count} Mannschaften in der Quellsaison – es wird eine angelegt
+                          </span>
+                        )}
                       </label>
                       {selectedKader.has(key) && (
                         <label className="flex items-center gap-3 cursor-pointer ml-6 text-sm">

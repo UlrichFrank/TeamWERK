@@ -11,6 +11,9 @@
 | `GET /api/teams/{id}/roster` | `TestGetRoster_DisplayLongNummerAmEnde` | 200, `team.display_long = "C-Jugend männlich 1"` |
 | MeinTeamPage | `MeinTeamPage.teamname.test.tsx` | eingeklappt und aufgeklappt identischer Titel |
 | `buildTeamLongName` | `teamName.test.ts` | Nummer am Ende bei `groupCount > 1`, sonst ohne |
+| Kader-Verwaltung | `AdminKaderPage.teamname.test.tsx` | Titel und Lösch-Bestätigung „C-Jugend männlich 1“ |
+| Automatische Zuordnung | `AutoAssignModal.teamname.test.tsx` | „… 1“ / „… 2“ unterscheidbar |
+| Kader kopieren | `CopyKaderModal.teamname.test.tsx` | eine Zeile je Kombination + Hinweis |
 
 **Invariante:** Eine Schreibweise „<Altersklasse> <n> <Geschlecht>" wird von keinem Endpoint und keiner Oberfläche mehr erzeugt; `teams.name` bleibt unverändert.
 
@@ -35,7 +38,7 @@
 
 - [x] 4.1 `web/src/lib/teamName.ts`: `buildTeamLongName({age_class, gender, team_number}, groupCount)` exportieren (Nummer am Ende genau bei `groupCount > 1`), Tests in `teamName.test.ts` (1 von 2 → „C-Jugend männlich 1", einzige → „A-Jugend weiblich", gemischt); verifizieren mit `pnpm -C web test teamName`
 - [x] 4.2 `AdminKaderPage.tsx`: Kartentitel und Lösch-Bestätigung über `buildTeamLongName` (groupCount aus der Gruppe derselben age_class+gender), lokales `GENDER_LABEL` durch den Export ersetzen, sofern nur für Namen genutzt; verifizieren mit `pnpm -C web build` und bestehenden AdminKader-Tests
-- [ ] 4.3 `CopyKaderModal.tsx` und `AutoAssignModal.tsx`: `team_number` ins lokale Interface aufnehmen, Titel über `buildTeamLongName` mit groupCount aus der geladenen Kader-Liste; verifizieren mit `pnpm -C web build` und einem Test je Modal, der zwei gleichartige Kader als „… 1"/„… 2" unterscheidbar rendert
+- [x] 4.3 `AutoAssignModal.tsx`: `team_number` ins lokale Interface, Titel über `buildTeamLongName` mit groupCount aus der geladenen Kader-Liste; `CopyKaderModal.tsx`: eine Zeile je Kombination ohne Nummer, Hinweis bei mehreren Quell-Mannschaften (Entscheidung siehe design.md); verifizieren mit `AutoAssignModal.teamname.test.tsx` und `CopyKaderModal.teamname.test.tsx`
 
 ## 5. Dokumentation und Integration
 
