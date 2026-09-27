@@ -28,8 +28,8 @@
 
 ## 3. Frontend: „Mein Team" zeigt eingeklappt die Langform
 
-- [ ] 3.1 `MeinTeamPage.tsx`: `myTeams`-Typ um `display_short?`/`display_long?` erweitern, Kartentitel auf `roster?.team.display_long || team.display_long || team.name` umstellen; verifizieren mit `pnpm -C web build`
-- [ ] 3.2 `MeinTeamPage.teamname.test.tsx`: `/teams/my` liefert zwei C-Jugenden mit `display_long` „… männlich 1/2", `name` „C-Jugend männlich"/„C-Jugend männlich 2" → eingeklappte Titel sind „C-Jugend männlich 1/2"; nach Aufklappen (Roster mit gleichem `display_long`) bleibt der Titel gleich; verifizieren mit `pnpm -C web test MeinTeamPage.teamname`
+- [x] 3.1 `MeinTeamPage.tsx`: `myTeams`-Typ um `display_short?`/`display_long?` erweitern, Kartentitel auf `roster?.team.display_long || team.display_long || team.name` umstellen; verifizieren mit `pnpm -C web build`
+- [x] 3.2 `MeinTeamPage.teamname.test.tsx`: `/teams/my` liefert zwei C-Jugenden mit `display_long` „… männlich 1/2", `name` „C-Jugend männlich"/„C-Jugend männlich 2" → eingeklappte Titel sind „C-Jugend männlich 1/2"; nach Aufklappen (Roster mit gleichem `display_long`) bleibt der Titel gleich; verifizieren mit `pnpm -C web test MeinTeamPage.teamname`
 
 ## 4. Frontend: Kader-Oberflächen mit gemeinsamem Helfer
 
