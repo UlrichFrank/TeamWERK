@@ -40,7 +40,12 @@
 - [x] 4.2 `AdminKaderPage.tsx`: Kartentitel und Lösch-Bestätigung über `buildTeamLongName` (groupCount aus der Gruppe derselben age_class+gender), lokales `GENDER_LABEL` durch den Export ersetzen, sofern nur für Namen genutzt; verifizieren mit `pnpm -C web build` und bestehenden AdminKader-Tests
 - [x] 4.3 `AutoAssignModal.tsx`: `team_number` ins lokale Interface, Titel über `buildTeamLongName` mit groupCount aus der geladenen Kader-Liste; `CopyKaderModal.tsx`: eine Zeile je Kombination ohne Nummer, Hinweis bei mehreren Quell-Mannschaften (Entscheidung siehe design.md); verifizieren mit `AutoAssignModal.teamname.test.tsx` und `CopyKaderModal.teamname.test.tsx`
 
-## 5. Dokumentation und Integration
+## 5. Nachgemeldet: Dashboard und Videos
 
-- [ ] 5.1 Benutzerhandbuch/Schulungsfolien auf Beispiele der alten Reihenfolge prüfen (`grep -rn "Jugend [0-9] " web/public docs/schulung`) und ggf. anpassen; verifizieren durch leere Ausgabe
-- [ ] 5.2 Gesamt-Gate: `make test`, `pnpm -C web test`, `pnpm -C web lint`, `openspec validate teamname-nummer-am-ende --strict` grün
+- [x] 5.1 Dashboard-Kachel „Mein Team" rendert `display_long || name`; verifizieren mit `DashboardPage.teamname.test.tsx`
+- [x] 5.2 Videos (`crud.go` Liste/Detail, `worker.go` Push, `eligible_games.go` Teamnamen) liefern `COALESCE(TeamDisplayName, t.name)`; verifizieren mit `TestListVideos_TeamNameIstLangformMitNummerAmEnde`
+
+## 6. Dokumentation und Integration
+
+- [x] 6.1 Benutzerhandbuch/Schulungsfolien auf Beispiele der alten Reihenfolge prüfen (`grep -rn "Jugend [0-9] " web/public docs/schulung`) und ggf. anpassen; verifizieren durch leere Ausgabe
+- [ ] 6.2 Gesamt-Gate: `make test`, `pnpm -C web test`, `pnpm -C web lint`, `openspec validate teamname-nummer-am-ende --strict` grün

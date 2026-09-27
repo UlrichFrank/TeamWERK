@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"log/slog"
 	"net/http"
 	"os"
@@ -165,7 +166,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.Query(`
-		SELECT v.id, v.title, v.description, v.team_id, t.name, v.season_id,
+		SELECT v.id, v.title, v.description, v.team_id, COALESCE(`+appdb.TeamDisplayName("t")+`, t.name), v.season_id,
 		       v.game_id, v.status, v.duration_sec, v.created_by, v.created_at, v.ready_at,
 		       v.size_bytes, v.disk_bytes
 		FROM videos v
@@ -246,7 +247,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	var desc, readyAt, uploadID, failureReason sql.NullString
 	var gameID, durationSec, sizeBytes, diskBytes sql.NullInt64
 	err = h.db.QueryRow(`
-		SELECT v.id, v.title, v.description, v.team_id, t.name, v.season_id,
+		SELECT v.id, v.title, v.description, v.team_id, COALESCE(`+appdb.TeamDisplayName("t")+`, t.name), v.season_id,
 		       v.game_id, v.status, v.duration_sec, v.created_by, v.created_at, v.ready_at,
 		       v.upload_id, v.size_bytes, v.failure_reason, v.disk_bytes
 		FROM videos v

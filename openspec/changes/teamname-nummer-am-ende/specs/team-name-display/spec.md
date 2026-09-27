@@ -93,3 +93,19 @@ Der Dialog „Aus vorheriger Saison kopieren" SHALL je Kombination aus Alterskla
 #### Scenario: Kader kopieren bei zwei Mannschaften
 - **WHEN** der Kopier-Dialog eine Quellsaison mit zwei männlichen C-Jugenden auflistet
 - **THEN** erscheint „C-Jugend männlich" genau einmal, mit dem Hinweis „2 Mannschaften in der Quellsaison – es wird eine angelegt"
+
+### Requirement: Dashboard-Kachel „Mein Team" nennt die Langform
+
+Die Kachel „Mein Team" auf dem Dashboard SHALL jedes eigene Team mit seiner Langform (`display_long` aus `GET /api/teams/my`) nennen und nur ohne Langform auf `teams.name` zurückfallen — dieselbe Schreibweise wie die Seite „Mein Team", auf die sie verlinkt.
+
+#### Scenario: Zwei C-Jugenden auf dem Dashboard
+- **WHEN** ein Nutzer mit Zugang zu beiden männlichen C-Jugenden das Dashboard öffnet
+- **THEN** nennt die Kachel „C-Jugend männlich 1" und „C-Jugend männlich 2"
+
+### Requirement: Videos nennen die Mannschaft in der Langform
+
+`GET /api/videos`, `GET /api/videos/{id}`, `GET /api/videos/upload-eligible-games` und die Push-Meldung „Video bereit" SHALL die Mannschaft mit ihrer Langform (Regel wie `display_long`, Fallback `teams.name`) benennen.
+
+#### Scenario: Video einer von zwei C-Jugenden
+- **WHEN** ein Video der Mannschaft 1 von zwei männlichen C-Jugenden der aktiven Saison gelistet oder im Detail abgerufen wird
+- **THEN** ist `team_name` „C-Jugend männlich 1"
