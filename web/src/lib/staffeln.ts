@@ -1,4 +1,5 @@
 import { api } from './api'
+import { openBlobNatively } from './openFileNatively'
 
 // Die Typen spiegeln die Antworten von internal/gamestats. Feldnamen sind dort
 // per JSON-Tag festgelegt und folgen camelCase.
@@ -321,6 +322,13 @@ export const fetchReport = (bwhvGameId: number) =>
 // Spieldetail-Ansicht kennt eine games.id, nicht die BWHV-Begegnung.
 export const fetchReportForGame = (gameId: number) =>
   api.get<ReportDetail>(`/games/${gameId}/bwhv-report`).then((r) => r.data)
+// Das PDF liegt hinter der Anmeldung. Ein nacktes <a href> schickt keinen
+// Bearer-Token mit (der lebt nur im Speicher) und endet in 401 — deshalb über
+// api als Blob holen und dann nativ öffnen.
+export async function downloadReportPDF(reportId: number) {
+  const res = await api.get<Blob>(`/bwhv-reports/${reportId}/pdf`, { responseType: 'blob' })
+  openBlobNatively(res.data, `spielbericht-${reportId}.pdf`)
+}
 export const fetchMemberStats = (memberId: number) =>
   api.get<PlayerStat[]>(`/members/${memberId}/saisonstatistik`).then((r) => r.data)
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Download, Users, Activity, TrendingUp, CircleDot } from 'lucide-react'
 import {
   ReportDetail, PlayerLine, EventLine,
-  fetchReport, fetchReportForGame, gameClock, sevenMeterRate,
+  fetchReport, fetchReportForGame, downloadReportPDF, gameClock, sevenMeterRate,
 } from '../lib/staffeln'
 import { HEADER_CTRL, HEADER_PRIMARY, HEADER_NEUTRAL } from '../lib/buttonStyles'
 import TorMomentum from './staffeln/TorMomentum'
@@ -25,6 +25,7 @@ interface Props {
 export default function SpielberichtPanel({ bwhvGameId, gameId, halfDurationMinutes = null }: Props) {
   const [report, setReport] = useState<ReportDetail | null>(null)
   const [state, setState] = useState<'laden' | 'da' | 'fehlt' | 'fehler'>('laden')
+  const [pdfState, setPdfState] = useState<'bereit' | 'laden' | 'fehler'>('bereit')
 
   useEffect(() => {
     let active = true
@@ -62,6 +63,13 @@ export default function SpielberichtPanel({ bwhvGameId, gameId, halfDurationMinu
   // Vereinsname in der Oberfläche.
   const { homeTeam, guestTeam } = report
 
+  const openPdf = () => {
+    setPdfState('laden')
+    downloadReportPDF(report.reportId)
+      .then(() => setPdfState('bereit'))
+      .catch(() => setPdfState('fehler'))
+  }
+
   return (
     <div className="space-y-4">
       {report.warnings.length > 0 && (
@@ -85,12 +93,17 @@ export default function SpielberichtPanel({ bwhvGameId, gameId, halfDurationMinu
             <span><span className="text-brand-text-muted">Schiedsrichter:</span> {report.referees}</span>
           )}
           {report.hasPdf && (
-            <a
-              href={`/api/bwhv-reports/${report.reportId}/pdf`}
-              className="inline-flex items-center gap-1 text-brand-text hover:text-brand-blue transition-colors"
+            <button
+              type="button"
+              onClick={openPdf}
+              disabled={pdfState === 'laden'}
+              className="inline-flex items-center gap-1 text-brand-text hover:text-brand-blue transition-colors disabled:opacity-40"
             >
               <Download className="w-4 h-4" /> Bericht als PDF
-            </a>
+            </button>
+          )}
+          {pdfState === 'fehler' && (
+            <span className="text-brand-danger">PDF konnte nicht geladen werden.</span>
           )}
         </div>
       </div>
