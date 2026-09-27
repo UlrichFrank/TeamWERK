@@ -67,8 +67,8 @@ func TestCompute_AushilfeAendertSollNicht(t *testing.T) {
 	if after.Total != total || after.Soll != soll || after.PlayerCount != count {
 		t.Errorf("Total/Soll/PlayerCount = %v/%v/%d, want %v/%v/%d", after.Total, after.Soll, after.PlayerCount, total, soll, count)
 	}
-	for _, m := range after.Members {
-		if m.MemberID == hm {
+	for _, p := range after.Members {
+		if p.Member.MemberID == hm {
 			t.Error("Aushilfe darf nicht in Team.Members stehen (Rangliste)")
 		}
 	}

@@ -111,16 +111,16 @@ func (h *Handler) Rangliste(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		block := ranglisteBlock{TeamID: t.TeamID, TeamLabel: t.Label, Soll: Round2(t.Soll), Rows: []ranglisteRow{}, Aushilfen: []aushilfeRow{}}
-		for i, m := range t.Ranked() {
+		for i, p := range t.Ranked() {
 			row := ranglisteRow{
 				Rank:       i + 1,
-				IsOwn:      linked[m.MemberID],
-				Geleistet:  Round2(m.Geleistet),
-				Vorhersage: Round2(m.Vorhersage),
+				IsOwn:      linked[p.Member.MemberID],
+				Geleistet:  Round2(p.Geleistet),
+				Vorhersage: Round2(p.Vorhersage),
 			}
 			if privileged || row.IsOwn {
-				row.MemberID = &m.MemberID
-				row.Name = &m.Name
+				row.MemberID = &p.Member.MemberID
+				row.Name = &p.Member.Name
 			}
 			block.Rows = append(block.Rows, row)
 		}

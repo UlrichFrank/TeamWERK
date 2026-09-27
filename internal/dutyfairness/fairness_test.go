@@ -102,11 +102,11 @@ func (f *fixture) compute() *dutyfairness.Snapshot {
 	return snap
 }
 
-func member(t *testing.T, team *dutyfairness.Team, memberID int) *dutyfairness.Member {
+func member(t *testing.T, team *dutyfairness.Team, memberID int) *dutyfairness.Position {
 	t.Helper()
-	for _, m := range team.Members {
-		if m.MemberID == memberID {
-			return m
+	for _, p := range team.Members {
+		if p.Member.MemberID == memberID {
+			return p
 		}
 	}
 	t.Fatalf("member %d not in team %d", memberID, team.TeamID)

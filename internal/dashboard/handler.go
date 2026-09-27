@@ -623,8 +623,8 @@ func (h *Handler) queryDutyAccount(ctx context.Context, userID, seasonID int) ([
 			Name:       p.Member.Name,
 			TeamID:     p.Team.TeamID,
 			TeamLabel:  p.Team.Label,
-			Geleistet:  dutyfairness.Round2(p.Member.Geleistet),
-			Vorhersage: dutyfairness.Round2(p.Member.Vorhersage),
+			Geleistet:  dutyfairness.Round2(p.Geleistet),
+			Vorhersage: dutyfairness.Round2(p.Vorhersage),
 			Soll:       dutyfairness.Round2(p.Team.Soll),
 		})
 	}

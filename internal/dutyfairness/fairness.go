@@ -23,15 +23,24 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/timez"
 )
 
-// Member ist ein Kader-Mitglied der aktiven Saison samt seiner Dienst-Zählung.
-// Die Zählung hängt am Mitglied, nicht am Kader: steht ein Kind in zwei
-// Mannschaften, erscheint es in beiden Ranglisten mit denselben Zahlen.
+// Member ist ein Kader-Mitglied der aktiven Saison. Die Dienst-Zählung hängt
+// nicht am Mitglied, sondern an seiner Position je Stammteam: steht ein Kind in
+// zwei Mannschaften, hat es in jeder Rangliste eigene Zahlen
+// (Change dienst-bilanz-je-kader).
 type Member struct {
 	MemberID int
 	Name     string
 	// UserID ist der eigene Account des Mitglieds (0 = keiner). Kinder-
 	// Proxy-Accounts sind ebenfalls eigene Accounts.
-	UserID     int
+	UserID int
+}
+
+// Position ist ein Mitglied in einem seiner Stammteams samt der Dienste, die
+// diesem Team zugerechnet sind — eine Zeile der Rangliste und der
+// Dashboard-Kachel.
+type Position struct {
+	Member     *Member
+	Team       *Team
 	Geleistet  float64
 	Vorhersage float64
 }
@@ -46,8 +55,9 @@ type Team struct {
 	// Spieleranzahl anteilige Teil der generischen Slots (Bruchzahl möglich).
 	Total float64
 	// Soll ist der Fair-Anteil je Kind = Total / PlayerCount (0 ohne Spieler).
-	Soll    float64
-	Members []*Member
+	Soll float64
+	// Members hält je Stammkader-Mitglied genau eine Position.
+	Members []*Position
 	// Aushilfe listet die Mitglieder, die diesem Team nur über den erweiterten
 	// Kader verbunden sind und hier Dienste übernommen haben (Wert > 0). Sie
 	// gehen weder in PlayerCount noch in Total/Soll noch in die Rangfolge ein
@@ -73,6 +83,8 @@ type Snapshot struct {
 
 	members     map[int]*Member
 	memberTeams map[int][]int
+	// positions: (member_id, team_id) → Stammposition.
+	positions map[[2]int]*Position
 	// linked: user_id → Mitglieder, mit denen der Account verbunden ist (eigenes
 	// Mitglied oder Kind via family_links), jeweils nur Mitglieder mit Kader.
 	ownByUser      map[int][]int
@@ -112,6 +124,7 @@ func Compute(ctx context.Context, db *sql.DB, seasonID int) (*Snapshot, error) {
 		Teams:          map[int]*Team{},
 		members:        map[int]*Member{},
 		memberTeams:    map[int][]int{},
+		positions:      map[[2]int]*Position{},
 		ownByUser:      map[int][]int{},
 		childrenByUser: map[int][]int{},
 
@@ -158,7 +171,7 @@ func (s *Snapshot) loadTeams(ctx context.Context, db *sql.DB, seasonID int) erro
 	}
 	defer rows.Close()
 	for rows.Next() {
-		t := &Team{Members: []*Member{}}
+		t := &Team{Members: []*Position{}}
 		if err := rows.Scan(&t.TeamID, &t.Label); err != nil {
 			return fmt.Errorf("dutyfairness teams scan: %w", err)
 		}
@@ -203,7 +216,9 @@ func (s *Snapshot) loadMembers(ctx context.Context, db *sql.DB, seasonID int) er
 				s.ownByUser[userID] = append(s.ownByUser[userID], memberID)
 			}
 		}
-		t.Members = append(t.Members, m)
+		pos := &Position{Member: m, Team: t}
+		s.positions[[2]int{memberID, teamID}] = pos
+		t.Members = append(t.Members, pos)
 		t.PlayerCount++
 		s.memberTeams[memberID] = append(s.memberTeams[memberID], teamID)
 	}
@@ -399,6 +414,10 @@ func (s *Snapshot) loadSlots(ctx context.Context, db *sql.DB, seasonID int) (map
 // Slot, zu dem kein Kind passt, zählt für niemanden (Team-Match); geteilt wird
 // nur zwischen Geschwistern, zu denen der Slot passt — so bleibt die Summe
 // einer Familie gleich der Zahl ihrer tatsächlichen Dienste.
+//
+// Der Anteil eines Mitglieds wird danach auf seine Stammpositionen verteilt
+// (addToPositions): erst zwischen Geschwistern, dann zwischen Kadern — so
+// bleibt die Summe der Positionen eines Kindes gleich seinem Anteil.
 func (s *Snapshot) countAssignments(ctx context.Context, db *sql.DB, seasonID int, slots map[int]slotInfo) error {
 	rows, err := db.QueryContext(ctx, `
 		SELECT da.duty_slot_id, da.user_id
@@ -435,15 +454,37 @@ func (s *Snapshot) countAssignments(ctx context.Context, db *sql.DB, seasonID in
 		}
 		weight := 1.0 / float64(len(targets))
 		for _, memberID := range targets {
-			m := s.members[memberID]
-			if slot.date < now {
-				m.Geleistet += weight
-			} else {
-				m.Vorhersage += weight
-			}
+			s.addToPositions(memberID, slot, weight, slot.date < now)
 		}
 	}
 	return rows.Err()
+}
+
+// addToPositions verteilt den Anteil eines Mitglieds gleichmäßig auf seine
+// Stammpositionen, zu denen der Slot passt: bei einem team-gebundenen Slot die
+// Stammteams unter den Slot-Teams (ein Spiel nur einer Mannschaft zählt also
+// voll für diese), bei einem generischen Slot und im Rückfall Stufe 5 (kein
+// Slot-Team ist Stammteam) alle Stammteams. Gleichmäßig statt nach Soll
+// gewichtet, weil es kein fachliches Signal gibt, welcher Mannschaft ein
+// solcher Dienst gehört (design.md Entscheidung 1).
+func (s *Snapshot) addToPositions(memberID int, slot slotInfo, weight float64, past bool) {
+	teams := s.memberTeams[memberID]
+	if !slot.generic {
+		if hit := slices.DeleteFunc(slices.Clone(teams), func(tid int) bool {
+			return !slices.Contains(slot.teams, tid)
+		}); len(hit) > 0 {
+			teams = hit
+		}
+	}
+	share := weight / float64(len(teams))
+	for _, tid := range teams {
+		pos := s.positions[[2]int{memberID, tid}]
+		if past {
+			pos.Geleistet += share
+		} else {
+			pos.Vorhersage += share
+		}
+	}
 }
 
 // countAushilfe prüft die Stufen 3/4 und zählt bei Treffer. Liefert true,
@@ -524,7 +565,7 @@ func (s *Snapshot) LinkedMembers(userID int) map[int]bool {
 func (s *Snapshot) TeamsFor(memberIDs map[int]bool) []int {
 	var out []int
 	for _, tid := range s.TeamOrder {
-		inKader := slices.ContainsFunc(s.Teams[tid].Members, func(m *Member) bool { return memberIDs[m.MemberID] })
+		inKader := slices.ContainsFunc(s.Teams[tid].Members, func(p *Position) bool { return memberIDs[p.Member.MemberID] })
 		inExt := false
 		for id := range memberIDs {
 			inExt = inExt || slices.Contains(s.extTeams[id], tid)
@@ -536,17 +577,10 @@ func (s *Snapshot) TeamsFor(memberIDs map[int]bool) []int {
 	return out
 }
 
-// Position ist eine Zeile der Dashboard-Kachel: ein verbundenes Mitglied in
-// einem seiner Teams.
-type Position struct {
-	Member *Member
-	Team   *Team
-}
-
 // PositionsFor liefert eine Position je (verbundenes Mitglied × Team): das
 // eigene Mitglied zuerst, dann die Kinder, jeweils nach Name und Team-Label.
-func (s *Snapshot) PositionsFor(userID int) []Position {
-	var out []Position
+func (s *Snapshot) PositionsFor(userID int) []*Position {
+	var out []*Position
 	add := func(memberIDs []int) {
 		ids := slices.Clone(memberIDs)
 		slices.SortFunc(ids, func(a, b int) int {
@@ -554,8 +588,8 @@ func (s *Snapshot) PositionsFor(userID int) []Position {
 		})
 		for _, id := range slices.Compact(ids) {
 			for _, tid := range s.TeamOrder {
-				if slices.Contains(s.memberTeams[id], tid) {
-					out = append(out, Position{Member: s.members[id], Team: s.Teams[tid]})
+				if pos := s.positions[[2]int{id, tid}]; pos != nil {
+					out = append(out, pos)
 				}
 			}
 		}
@@ -606,17 +640,17 @@ func (t *Team) Aushilfen() []*AushilfePosition {
 	return out
 }
 
-// Ranked liefert die Mitglieder eines Teams in Ranglisten-Reihenfolge:
+// Ranked liefert die Positionen eines Teams in Ranglisten-Reihenfolge:
 // geleistet+vorhersage absteigend, bei Gleichstand member_id aufsteigend —
 // jede Zeile bekommt einen eindeutigen Platz (design.md Entscheidung 7).
 // Verglichen wird auf zwei Nachkommastellen gerundet, damit geteilte Anteile
 // (1/3 + 2/3) nicht an Float-Rauschen einen Gleichstand verlieren.
-func (t *Team) Ranked() []*Member {
+func (t *Team) Ranked() []*Position {
 	out := slices.Clone(t.Members)
-	slices.SortFunc(out, func(a, b *Member) int {
+	slices.SortFunc(out, func(a, b *Position) int {
 		return cmp.Or(
 			cmp.Compare(Round2(b.Geleistet+b.Vorhersage), Round2(a.Geleistet+a.Vorhersage)),
-			cmp.Compare(a.MemberID, b.MemberID),
+			cmp.Compare(a.Member.MemberID, b.Member.MemberID),
 		)
 	})
 	return out
