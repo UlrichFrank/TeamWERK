@@ -3,7 +3,7 @@
 ## 1. Vorbereitung
 
 - [x] 1.1 Change `dienste-erweiterter-kader` archivieren (alle Tasks erledigt), damit das Delta dieses Changes auf dessen Requirement-Text aufsetzt; verifiziert durch `openspec validate dienst-bilanz-je-kader --strict` grün nach dem Archiv
-- [ ] 1.2 Prod-Zählquery der Mehrkader-Kinder aus `design.md` („Risks") dem Nutzer übergeben (nicht selbst ausführen); verifiziert durch Nennung in der Abschlussmeldung
+- [x] 1.2 Prod-Zählquery der Mehrkader-Kinder aus `design.md` („Risks") dem Nutzer übergeben (nicht selbst ausführen); verifiziert durch Nennung in der Abschlussmeldung
 
 ## 2. Dienst-Bilanz (`internal/dutyfairness`)
 
@@ -23,4 +23,4 @@
 
 ## 5. Abschluss
 
-- [ ] 5.1 `/verify-change` ausführen (Build, `make test`, Lint, `pnpm -C web test`, `openspec validate dienst-bilanz-je-kader --strict`); verifiziert durch grünes Gate
+- [x] 5.1 `/verify-change` ausführen (Build, `make test`, Lint, `pnpm -C web test`, `openspec validate dienst-bilanz-je-kader --strict`); verifiziert durch grünes Gate
