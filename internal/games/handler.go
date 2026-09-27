@@ -2920,17 +2920,20 @@ func (h *Handler) ListGameResponses(w http.ResponseWriter, r *http.Request) {
 }
 
 type participantItem struct {
-	MemberID         int     `json:"member_id"`
-	MemberName       string  `json:"member_name"`
-	UserID           int     `json:"user_id,omitempty"`
-	IsExtended       bool    `json:"is_extended"`
-	IsTrainer        bool    `json:"is_trainer"`
-	RsvpStatus       *string `json:"rsvp_status"`
-	RsvpIsDefault    bool    `json:"rsvp_is_default,omitempty"`
-	Reason           *string `json:"reason,omitempty"`
-	InLineup         bool    `json:"in_lineup"`
-	TeamID           int     `json:"team_id"`
-	crossTeamVisible bool    `json:"-"`
+	MemberID      int     `json:"member_id"`
+	MemberName    string  `json:"member_name"`
+	UserID        int     `json:"user_id,omitempty"`
+	IsExtended    bool    `json:"is_extended"`
+	IsTrainer     bool    `json:"is_trainer"`
+	RsvpStatus    *string `json:"rsvp_status"`
+	RsvpIsDefault bool    `json:"rsvp_is_default,omitempty"`
+	Reason        *string `json:"reason,omitempty"`
+	InLineup      bool    `json:"in_lineup"`
+	// Lineup ist der dreiwertige Aufstellungsstatus (in/out/open); fehlt bei
+	// Trainerzeilen und Terminen ohne Aufstellung.
+	Lineup           string `json:"lineup,omitempty"`
+	TeamID           int    `json:"team_id"`
+	crossTeamVisible bool   `json:"-"`
 }
 
 // participantsResponse erlaubt es, neben den sichtbaren Items zusätzlich pro
@@ -2941,6 +2944,9 @@ type participantsResponse struct {
 	Items         []participantItem `json:"items"`
 	Total         int               `json:"total"`
 	HiddenTeamIDs []int             `json:"hidden_team_ids"`
+	// LineupCount zählt die gesamte gespeicherte Aufstellung — auch Zeilen, die
+	// dem Aufrufer nicht ausgeliefert werden.
+	LineupCount int `json:"lineup_count"`
 }
 
 // GET /api/games/{id}/participants
@@ -3014,10 +3020,16 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	// Rollen-Voreinstellungen des Spiels; werden für Zeilen ohne Response virtuell
 	// angewandt (Stammkader → rsvp_default_players, Erweiterter Kader →
 	// rsvp_default_extended, Trainer immer 'confirmed').
-	var defPlayers, defExtended string
+	// Aufstellungsstatus: über die GESAMTE Aufstellung des Spiels abgeleitet,
+	// nicht über die ausgelieferten Zeilen — ein Spieler, dem nur fremde Teams
+	// verborgen sind, darf sonst „offen" statt „nicht aufgestellt" sehen.
+	var defPlayers, defExtended, eventType string
+	var lineupCount int
 	h.db.QueryRowContext(r.Context(),
-		`SELECT rsvp_default_players, rsvp_default_extended FROM games WHERE id = ?`, gameID).
-		Scan(&defPlayers, &defExtended)
+		`SELECT rsvp_default_players, rsvp_default_extended, event_type,
+		        (SELECT COUNT(*) FROM game_lineup WHERE game_id = games.id)
+		 FROM games WHERE id = ?`, gameID).
+		Scan(&defPlayers, &defExtended, &eventType, &lineupCount)
 
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT member_id, member_name, user_id, is_extended, is_trainer, rsvp_status, reason, in_lineup, team_id, cross_team_visible
@@ -3098,6 +3110,9 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		p.IsExtended = isExtended == 1
 		p.IsTrainer = isTrainer == 1
 		p.InLineup = inLineup == 1
+		if !p.IsTrainer {
+			p.Lineup = appdb.ResolveLineupState(eventType, lineupCount > 0, p.InLineup)
+		}
 		p.crossTeamVisible = ctv == 1
 		canSeeReason := bypass ||
 			(callerMemberID > 0 && p.MemberID == callerMemberID) ||
@@ -3147,7 +3162,7 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	}
 	items = items[offset:end]
 
-	httpx.WriteJSON(w, http.StatusOK, participantsResponse{Items: items, Total: total, HiddenTeamIDs: hidden})
+	httpx.WriteJSON(w, http.StatusOK, participantsResponse{Items: items, Total: total, HiddenTeamIDs: hidden, LineupCount: lineupCount})
 }
 
 // myTeamsInEvent liefert die Menge der team_ids im Event gameID, in deren
