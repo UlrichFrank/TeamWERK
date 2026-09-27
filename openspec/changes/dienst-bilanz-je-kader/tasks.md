@@ -18,7 +18,7 @@
 
 ## 4. Doku
 
-- [ ] 4.1 Gotcha „Dienst-Bilanz je Kind" in `docs/agent/06-gotchas.md` auf Zählung je (Kind, Stammkader) und die zweistufige Teilung umschreiben; verifiziert durch Review des Absatzes
+- [x] 4.1 Gotcha „Dienst-Bilanz je Kind" in `docs/agent/06-gotchas.md` auf Zählung je (Kind, Stammkader) und die zweistufige Teilung umschreiben; verifiziert durch Review des Absatzes
 - [ ] 4.2 Benutzerhandbuch (`web/public/benutzerhandbuch.html`, Dashboard/Dienste): ein Satz, dass ein Kind in zwei Mannschaften je Mannschaft eigene Zahlen hat und nicht zuordenbare Dienste (Vereinsfest, gemeinsames Spiel) geteilt werden; verifiziert durch Sichtprüfung im Browser
 
 ## 5. Abschluss
