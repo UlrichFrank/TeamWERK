@@ -2938,7 +2938,7 @@ type participantItem struct {
 	Reason        *string `json:"reason,omitempty"`
 	InLineup      bool    `json:"in_lineup"`
 	// Lineup ist der dreiwertige Aufstellungsstatus (in/out/open); fehlt bei
-	// Trainerzeilen und Terminen ohne Aufstellung.
+	// Trainerzeilen. Anders als in Liste/Tabelle auch bei „Sonstiges".
 	Lineup           string `json:"lineup,omitempty"`
 	TeamID           int    `json:"team_id"`
 	crossTeamVisible bool   `json:"-"`
@@ -3031,13 +3031,13 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 	// Aufstellungsstatus: über die GESAMTE Aufstellung des Spiels abgeleitet,
 	// nicht über die ausgelieferten Zeilen — ein Spieler, dem nur fremde Teams
 	// verborgen sind, darf sonst „offen" statt „nicht aufgestellt" sehen.
-	var defPlayers, defExtended, eventType string
+	var defPlayers, defExtended string
 	var lineupCount int
 	h.db.QueryRowContext(r.Context(),
-		`SELECT rsvp_default_players, rsvp_default_extended, event_type,
+		`SELECT rsvp_default_players, rsvp_default_extended,
 		        (SELECT COUNT(*) FROM game_lineup WHERE game_id = games.id)
 		 FROM games WHERE id = ?`, gameID).
-		Scan(&defPlayers, &defExtended, &eventType, &lineupCount)
+		Scan(&defPlayers, &defExtended, &lineupCount)
 
 	rows, err := h.db.QueryContext(r.Context(), `
 		SELECT member_id, member_name, user_id, is_extended, is_trainer, rsvp_status, reason, in_lineup, team_id, cross_team_visible
@@ -3118,8 +3118,10 @@ func (h *Handler) GetParticipants(w http.ResponseWriter, r *http.Request) {
 		p.IsExtended = isExtended == 1
 		p.IsTrainer = isTrainer == 1
 		p.InLineup = inLineup == 1
+		// Die Detailseite zeigt die Aufstellung bei jedem Termin, auch bei
+		// „Sonstiges" — anders als Liste, Tabelle und Kalender-Abo.
 		if !p.IsTrainer {
-			p.Lineup = appdb.ResolveLineupState(eventType, lineupCount > 0, p.InLineup)
+			p.Lineup = appdb.LineupFromFacts(lineupCount > 0, p.InLineup)
 		}
 		p.crossTeamVisible = ctv == 1
 		canSeeReason := bypass ||

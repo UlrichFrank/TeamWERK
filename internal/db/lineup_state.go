@@ -42,6 +42,13 @@ func ResolveLineupState(eventType string, lineupExists, inLineup bool) string {
 	if eventType != "heim" && eventType != "auswärts" {
 		return ""
 	}
+	return LineupFromFacts(lineupExists, inLineup)
+}
+
+// LineupFromFacts ist die Regel ohne Typ-Gate. Die Detailseite zeigt die
+// Aufstellung auch bei generischen Terminen („Sonstiges"), Liste, Tabelle und
+// Kalender-Abo dagegen nur bei Heim-/Auswärtsspielen.
+func LineupFromFacts(lineupExists, inLineup bool) string {
 	switch {
 	case inLineup:
 		return LineupIn

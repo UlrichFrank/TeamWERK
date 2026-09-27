@@ -15,9 +15,11 @@ Aus einer leeren Aufstellung SHALL das System an keiner Stelle „nicht aufgeste
 ableiten. Die Ableitung SHALL für alle Mannschaften des Spiels gemeinsam gelten
 (`game_lineup` hängt am Spiel, nicht an der Mannschaft).
 
-Der Status SHALL nur für Spiele vom Typ `heim` oder `auswärts` und nur für Spieler des
-Stamm- oder erweiterten Kaders gelten. Für Trainer, Trainings und Termine vom Typ
-`generisch` SHALL kein Status ausgewiesen werden; die API lässt das Feld dann weg.
+Der Status SHALL nur für Spieler des Stamm- oder erweiterten Kaders gelten, nie für
+Trainer und nie für Trainings. Liste, Tabelle und iCal-Feed SHALL ihn nur bei Spielen
+vom Typ `heim` oder `auswärts` ausweisen; die Spieldetailseite SHALL ihn bei jedem
+Termin aus `games` zeigen, also auch bei `generisch` („Sonstiges"), weil Trainer dort
+ebenfalls eine Aufstellung pflegen können. Wo kein Status gilt, lässt die API das Feld weg.
 
 Die Oberfläche SHALL die drei Zustände überall mit genau diesen Bezeichnungen und
 derselben Darstellung zeigen (aufgestellt vollflächig in Markengrün mit weißer Schrift
@@ -43,14 +45,15 @@ Spaltenüberschrift heißt „Aufstellung" (mobil „Aufst.").
 
 #### Scenario: Generisches Event
 
-- **WHEN** ein Termin vom Typ `generisch` abgefragt wird
-- **THEN** trägt er keinen Aufstellungsstatus
+- **WHEN** ein Termin vom Typ `generisch` in Liste, Tabelle oder iCal-Feed erscheint
+- **THEN** trägt er dort keinen Aufstellungsstatus
+- **AND** zeigt seine Detailseite die Spalte „Aufstellung" mit denselben drei Zuständen wie ein Spiel
 
 ## MODIFIED Requirements
 
 ### Requirement: Aufstellung ist per Participants-Endpoint abrufbar
 
-Das System SHALL `GET /api/games/{id}/participants` bereitstellen, der alle regulären und erweiterten Kader-Mitglieder des Teams zurückgibt, jeweils mit RSVP-Status (`rsvp_status`, nullable), Lineup-Status (`in_lineup: bool`) und dem dreiwertigen Aufstellungsstatus (`lineup`: `in` | `out` | `open`). Der Aufstellungsstatus SHALL serverseitig über die gesamte Aufstellung des Spiels abgeleitet werden — auch über Zeilen, die dem Aufrufer nicht ausgeliefert werden. Trainerzeilen und Spiele vom Typ `generisch` SHALL kein `lineup`-Feld tragen. Die Antwort SHALL zusätzlich `lineup_count` liefern — die Zahl der Mitglieder in der gespeicherten Aufstellung des Spiels, ebenfalls unabhängig davon, welche Zeilen ausgeliefert werden.
+Das System SHALL `GET /api/games/{id}/participants` bereitstellen, der alle regulären und erweiterten Kader-Mitglieder des Teams zurückgibt, jeweils mit RSVP-Status (`rsvp_status`, nullable), Lineup-Status (`in_lineup: bool`) und dem dreiwertigen Aufstellungsstatus (`lineup`: `in` | `out` | `open`). Der Aufstellungsstatus SHALL serverseitig über die gesamte Aufstellung des Spiels abgeleitet werden — auch über Zeilen, die dem Aufrufer nicht ausgeliefert werden. Trainerzeilen SHALL kein `lineup`-Feld tragen; Termine vom Typ `generisch` tragen es wie Spiele. Die Antwort SHALL zusätzlich `lineup_count` liefern — die Zahl der Mitglieder in der gespeicherten Aufstellung des Spiels, ebenfalls unabhängig davon, welche Zeilen ausgeliefert werden.
 
 #### Scenario: Participant-Liste enthält reguläre und erweiterte Mitglieder
 

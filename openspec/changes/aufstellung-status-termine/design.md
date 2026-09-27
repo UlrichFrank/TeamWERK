@@ -125,6 +125,13 @@ Entschieden am 27.09.2026 als „Variante 3" des Entwurfs; die beiden anderen Va
   bedienbar (Hover/Fokus `ring-2 ring-brand-yellow` wie in der Matrix). Kartenkopf:
   Kennzeichen „Aufstellung offen" bzw. „N aufgestellt".
 
+**„Sonstiges" (generische Termine):** die Detailseite behält die Spalte
+„Aufstellung" (Entscheidung 27.09.2026 — Trainer pflegen dort teils eine Aufstellung).
+`GetParticipants` leitet den Status deshalb über `appdb.LineupFromFacts` ohne Typ-Gate
+ab; Liste, Tabelle und Kalender-Abo nutzen `LineupStateSQL`/`ResolveLineupState` mit
+Gate und zeigen bei „Sonstiges" nichts — sonst stünde an jeder Vereinsfeier
+„Aufstellung offen".
+
 *Warum eine eigene Checkbox statt `<input type="checkbox">`:* `@tailwindcss/forms` füllt
 eine angehakte Checkbox vollfarbig mit weißem Haken — das wäre ein zweites, kräftigeres
 Grün neben dem 30-%-Grün der Kennzeichen. Das eigene Element braucht Tastaturbedienung

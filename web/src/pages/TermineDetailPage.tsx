@@ -10,6 +10,9 @@ import EventNoteIndicator from '../components/EventNoteIndicator'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import LineupBadge from '../components/LineupBadge'
+import LineupCheckbox from '../components/LineupCheckbox'
+import type { LineupState } from '../lib/lineup'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
@@ -54,12 +57,16 @@ interface ParticipantItem {
   rsvp_is_default?: boolean
   reason?: string | null
   in_lineup: boolean
+  /** Aufstellungsstatus, serverseitig über die ganze Aufstellung abgeleitet. */
+  lineup?: LineupState
   team_id: number
 }
 
 interface ParticipantsResponse {
   items: ParticipantItem[]
   hidden_team_ids: number[]
+  /** Größe der gespeicherten Aufstellung, auch über nicht ausgelieferte Zeilen. */
+  lineup_count?: number
 }
 
 interface VenueRef {
@@ -169,6 +176,7 @@ interface TableRow {
   is_extended?: boolean
   is_trainer?: boolean
   in_lineup?: boolean
+  lineup?: LineupState
   team_id?: number
   unavailable?: UnavailableInfo | null
 }
@@ -190,6 +198,7 @@ export default function TermineDetailPage() {
   const [game, setGame] = useState<GameDetail | null>(null)
   const [participants, setParticipants] = useState<ParticipantItem[]>([])
   const [hiddenTeamIds, setHiddenTeamIds] = useState<number[]>([])
+  const [lineupCount, setLineupCount] = useState(0)
   const [attendances, setAttendances] = useState<AttendanceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [attendanceMap, setAttendanceMap] = useState<Record<number, boolean>>({})
@@ -260,6 +269,7 @@ export default function TermineDetailPage() {
           const hidden: number[] = Array.isArray(data) ? [] : (data.hidden_team_ids ?? [])
           setParticipants(items)
           setHiddenTeamIds(hidden)
+          setLineupCount(Array.isArray(data) ? 0 : (data.lineup_count ?? 0))
           const map: Record<number, boolean> = {}
           for (const p of items) map[p.member_id] = p.in_lineup
           setLineupMap(map)
@@ -520,6 +530,7 @@ export default function TermineDetailPage() {
     is_extended: p.is_extended,
     is_trainer: p.is_trainer,
     in_lineup: p.in_lineup,
+    lineup: p.lineup,
     team_id: p.team_id,
   })
 
@@ -629,6 +640,7 @@ export default function TermineDetailPage() {
         onDismissError={() => setAttendanceError(null)}
         lineupMap={lineupMap}
         onToggleLineup={isTrainer ? saveLineup : undefined}
+        lineupCount={isTrainer ? Object.values(lineupMap).filter(Boolean).length : lineupCount}
         onSetRsvp={isTrainer ? setRsvpForMember : undefined}
         onDeclineRsvp={isTrainer ? openDecline : undefined}
       />
@@ -646,6 +658,8 @@ interface RowActions {
   onToggleAttendance: (memberId: number, value: boolean) => Promise<void>
   lineupMap?: Record<number, boolean>
   onToggleLineup?: (memberId: number, value: boolean) => void
+  // Trainer-Sicht: mindestens ein Häkchen gesetzt (sonst ist die Aufstellung offen).
+  lineupAnySet?: boolean
   // Nur für Trainings mit Serie gesetzt: Trainer-Aktion Ab-/Wieder-Anmelden.
   seriesId?: number | null
   onSetUnavailable?: (memberId: number) => void
@@ -701,17 +715,17 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
         {a.lineupMap !== undefined && (
           <td className="px-2 sm:px-4 py-3 text-center">
             {row.is_trainer ? null : a.onToggleLineup ? (
-              <input
-                type="checkbox"
-                checked={a.lineupMap[row.member_id] ?? false}
-                onChange={e => a.onToggleLineup!(row.member_id, e.target.checked)}
-                className="w-4 h-4 rounded border-brand-border"
+              // Trainer: Zustand aus dem optimistisch geführten lineupMap, damit
+              // die Anzeige dem Klick sofort folgt (design.md §2). Er sieht alle
+              // Zeilen seines Teams, „offen" ist hier also sicher ableitbar.
+              <LineupCheckbox
+                state={a.lineupMap[row.member_id] ? 'in' : a.lineupAnySet ? 'out' : 'open'}
+                memberName={row.member_name}
+                onToggle={checked => a.onToggleLineup!(row.member_id, checked)}
               />
-            ) : (
-              a.lineupMap[row.member_id]
-                ? <Check className="w-4 h-4 text-green-600 mx-auto" />
-                : <span className="text-brand-text-muted text-sm">–</span>
-            )}
+            ) : row.lineup ? (
+              <LineupCheckbox state={row.lineup} memberName={row.member_name} />
+            ) : null}
           </td>
         )}
         {a.showAttendanceCol && (
@@ -767,7 +781,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
   )
 }
 
-function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp }: {
+function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup, lineupCount, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp }: {
   rows: TableRow[]
   sections?: TableSection[]
   showAttendanceCol: boolean
@@ -780,13 +794,16 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
   onDismissError: () => void
   lineupMap?: Record<number, boolean>
   onToggleLineup?: (memberId: number, value: boolean) => void
+  /** Größe der Aufstellung für den Kartenkopf; nur zusammen mit lineupMap. */
+  lineupCount?: number
   seriesId?: number | null
   onSetUnavailable?: (memberId: number) => void
   onClearUnavailable?: (uid: number) => void
   onSetRsvp?: (memberId: number, status: 'confirmed' | 'declined' | 'maybe') => void
   onDeclineRsvp?: (memberId: number, memberName: string) => void
 }) {
-  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp }
+  const lineupAnySet = (lineupCount ?? 0) > 0
+  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup, lineupAnySet, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp }
 
   // Ohne explizite Sektionen: drei benannte Sektionen Trainer / Spieler / Erweiterter Kader
   // in dieser Reihenfolge; leere Sektionen werden weggelassen.
@@ -801,8 +818,14 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
   return (
     <div className="bg-brand-surface-card rounded-xl shadow overflow-hidden">
       <div className="h-1 bg-brand-yellow" />
-      <div className="px-6 py-4 border-b border-brand-border-subtle">
+      <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between gap-3 flex-wrap">
         <h2 className="font-semibold text-brand-text">Teilnahme</h2>
+        {lineupMap !== undefined && (
+          <LineupBadge
+            state={lineupAnySet ? 'in' : 'open'}
+            text={lineupAnySet ? `${lineupCount} aufgestellt` : undefined}
+          />
+        )}
       </div>
       {isEmpty ? (
         <p className="px-6 py-4 text-sm text-brand-text-muted">

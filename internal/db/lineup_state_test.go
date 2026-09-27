@@ -85,4 +85,11 @@ func TestResolveLineupState(t *testing.T) {
 			t.Errorf("ResolveLineupState(%q, %v, %v) = %q, want %q", c.eventType, c.exists, c.inLineup, got, c.want)
 		}
 	}
+	// Ohne Typ-Gate (Detailseite, auch „Sonstiges"): dieselbe Regel.
+	if got := appdb.LineupFromFacts(false, false); got != appdb.LineupOpen {
+		t.Errorf("LineupFromFacts(false, false) = %q, want open", got)
+	}
+	if got := appdb.LineupFromFacts(true, false); got != appdb.LineupOut {
+		t.Errorf("LineupFromFacts(true, false) = %q, want out", got)
+	}
 }

@@ -112,16 +112,17 @@ func TestGetParticipants_LineupOutTrotzVerborgenerZeilen(t *testing.T) {
 	}
 }
 
-// Generische Termine haben keine Aufstellung.
-func TestGetParticipants_LineupFehltBeiGenerischemEvent(t *testing.T) {
+// Auf der Detailseite behält „Sonstiges" die Aufstellung — mit denselben drei
+// Zuständen wie ein Spiel.
+func TestGetParticipants_LineupAuchBeiGenerischemEvent(t *testing.T) {
 	db := testutil.NewDB(t)
 	fx := newCrossTeamFixture(t, db) // Event ist generisch
 	srv := testServer(t, db)
 	got := getLineupParticipants(t, testutil.Get(t, srv, fmt.Sprintf("/api/games/%d/participants", fx.gameID),
 		testutil.Token(t, fx.userOfMemberA, "standard", nil)))
 	for _, it := range got.Items {
-		if it.Lineup != "" {
-			t.Errorf("Mitglied %d: lineup=%q bei generischem Event", it.MemberID, it.Lineup)
+		if !it.IsTrainer && it.Lineup != "open" {
+			t.Errorf("Mitglied %d: lineup=%q bei generischem Event ohne Aufstellung, want open", it.MemberID, it.Lineup)
 		}
 	}
 }
