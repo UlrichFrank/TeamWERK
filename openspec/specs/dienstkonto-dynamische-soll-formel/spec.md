@@ -8,14 +8,18 @@ Diese Spezifikation beschreibt die Capability `dienstkonto-dynamische-soll-forme
 
 ### Requirement: Dynamische soll-Berechnung für Elternteil
 Der `/api/dashboard`-Endpoint MUST `dutyAccount` für Elternteile als Liste liefern
-— eine Position pro verknüpftem Kind mit aktiver Kader-Mitgliedschaft in der
-aktiven Saison — statt eines einzelnen aggregierten Werts. Ist der Nutzer selbst
-Spieler ohne verknüpftes Kind, enthält die Liste genau eine Position für ihn
+— eine Position pro verknüpftem Kind und Stammkader mit aktiver Kader-Mitgliedschaft
+in der aktiven Saison — statt eines einzelnen aggregierten Werts. Ist der Nutzer selbst
+Spieler ohne verknüpftes Kind, enthält die Liste je Stammkader eine Position für ihn
 selbst.
+
+Jede Position MUST `geleistet` und `vorhersage` **dieses Kaders** tragen (Zählung je
+Position gemäß `dienste-familien-rangliste`), nicht die Summe des Kindes über alle
+seine Kader — dieselben Werte, die die Rangliste dieses Kaders für das Kind zeigt.
 
 Für jede Position gilt:
 ```
-soll(Kind) = Gesamtsumme(Kader des Kindes) / Anzahl Spieler im Kader
+soll(Kind, Kader) = Gesamtsumme(Kader) / Anzahl Spieler im Kader
 ```
 wobei `Gesamtsumme(Kader)` die Summe aller team-gebundenen `duty_slots` der Saison
 (über `game_id`→`game_teams` oder direkte `team_id`) zuzüglich des anteiligen,
@@ -65,6 +69,13 @@ gepflegten Spielanzahl-Schätzung.
 - **WHEN** ein Elternteil hat zwei Kinder, je eines in Kader K1 und Kader K2
 - **THEN** liefert `/api/dashboard` zwei Positionen in `dutyAccount`, eine pro
   Kind, mit je eigenem `soll` aus dem jeweiligen Kader
+
+#### Scenario: Ein Kind in zwei Kadern hat zwei Positionen mit eigenen Zahlen
+- **WHEN** ein Elternteil hat ein Kind im Stammkader von K1 und K2 und hat einen
+  vergangenen Dienst an einem Spiel nur von K1 belegt
+- **THEN** liefert `/api/dashboard` zwei Positionen für dieses Kind
+- **AND** trägt die Position für K1 `geleistet = 1` und das `soll` von K1
+- **AND** trägt die Position für K2 `geleistet = 0` und das `soll` von K2
 
 ### Requirement: Datenschutz
 Das System MUST sicherstellen, dass kein Elternteil das Dienstkonto oder den soll-Wert des anderen Elternteils sieht. Jedes Konto wird individuell berechnet und ausgegeben.
