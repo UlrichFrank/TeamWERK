@@ -1,0 +1,92 @@
+import { describe, test, expect, afterEach } from 'vitest'
+import { render, screen, cleanup } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
+import TerminMatrix from './TerminMatrix'
+import type { RsvpMatrix } from '../lib/terminMatrix'
+
+// Change aufstellung-status-termine: Spielzellen tragen den Aufstellungsstatus
+// als Fläche hinter dem Rückmeldesymbol; Trainings bleiben ohne Fläche.
+
+afterEach(cleanup)
+
+const ev = (kind: 'training' | 'game', id: number, date: string, event_type: 'training' | 'heim') =>
+  ({ kind, id, date, time: '18:00', event_type, title: '', cancelled: false, rsvp_require_reason: false })
+
+function matrix(): RsvpMatrix {
+  return {
+    team_id: 1,
+    team_name: 'mB1',
+    events: [ev('training', 1, '2099-05-01', 'training'), ev('game', 2, '2099-05-02', 'heim'), ev('game', 3, '2099-05-09', 'heim')],
+    members: [
+      {
+        member_id: 10, name: 'Luca Brenner', extended: false, is_self: false, can_respond: false,
+        cells: [
+          { status: 'confirmed', is_default: false },
+          { status: 'confirmed', is_default: false, lineup: 'in' },
+          { status: 'confirmed', is_default: false, lineup: 'open' },
+        ],
+      },
+      {
+        member_id: 11, name: 'Paul Hahn', extended: false, is_self: false, can_respond: false,
+        cells: [
+          { status: null, is_default: false },
+          { status: null, is_default: false, lineup: 'out' },
+          { status: null, is_default: false, lineup: 'open' },
+        ],
+      },
+    ],
+  }
+}
+
+function renderMatrix() {
+  render(
+    <MemoryRouter>
+      <TerminMatrix matrix={matrix()} columns={[0, 1, 2]} today="2099-01-01" />
+    </MemoryRouter>,
+  )
+}
+
+function cellBox(title: string) {
+  const td = screen.getAllByTitle(title)[0]
+  return td.querySelector('[data-lineup], span') as HTMLElement
+}
+
+describe('TerminMatrix — Aufstellung', () => {
+  test('aufgestellt: grüne Fläche, Symbol weiß', () => {
+    renderMatrix()
+    const box = cellBox('zugesagt · aufgestellt')
+    expect(box.dataset.lineup).toBe('in')
+    expect(box.className).toContain('bg-brand-green')
+    expect(box.querySelector('svg')!.getAttribute('class')).toContain('text-white')
+  })
+
+  test('nicht aufgestellt: graue Fläche, Kreis dunkler als auf weißem Grund', () => {
+    renderMatrix()
+    const box = cellBox('keine Rückmeldung · nicht aufgestellt')
+    expect(box.className).toContain('bg-brand-border')
+    expect(box.querySelector('svg')!.getAttribute('class')).toContain('text-brand-text-muted')
+  })
+
+  test('offen: nur gestrichelter Rahmen, innen transparent', () => {
+    renderMatrix()
+    const box = cellBox('zugesagt · Aufstellung offen')
+    expect(box.className).toContain('border-dashed')
+    expect(box.className).toContain('bg-transparent')
+  })
+
+  test('Trainingszelle ohne Aufstellungsfläche', () => {
+    renderMatrix()
+    const td = screen.getAllByTitle('zugesagt')[0]
+    const box = td.querySelector('span') as HTMLElement
+    expect(box.dataset.lineup).toBeUndefined()
+    expect(box.className).toContain('border-transparent')
+  })
+
+  test('Legende nennt alle drei Zustände', () => {
+    renderMatrix()
+    const legend = screen.getByRole('list', { name: 'Legende' })
+    for (const label of ['aufgestellt', 'nicht aufgestellt', 'Aufstellung offen']) {
+      expect(legend.textContent).toContain(label)
+    }
+  })
+})

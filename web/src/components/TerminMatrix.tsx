@@ -2,7 +2,10 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Calendar, Circle, Dumbbell, HelpCircle, Home, Minus, Plane, ThumbsDown, ThumbsUp, UserCheck, UserX } from 'lucide-react'
 import { getEventColors } from '../lib/eventColors'
+import { LINEUP_LABEL, LINEUP_SHAPE, LINEUP_SURFACE, type LineupState } from '../lib/lineup'
 import {
+  cellTitle,
+  iconToneOnLineup,
   formatColumnDate,
   formatParticipation,
   isCellRespondable,
@@ -26,24 +29,40 @@ const TYPE_LABEL = {
   generisch: 'Sonstiges',
 } as const
 
-/** Symbol + Beschriftung einer Zelle. Anwesenheit (Trainer-Sicht) geht vor der Rückmeldung. */
+/**
+ * Symbol + Beschriftung einer Zelle. Anwesenheit (Trainer-Sicht) geht vor der
+ * Rückmeldung. Die Symbolfarbe richtet sich nach der Aufstellungsfläche dahinter.
+ */
 function cellView(cell: MatrixCell): { icon: ReactNode; label: string } {
   const cls = 'w-4 h-4 mx-auto'
-  if (cell.present === true) return { icon: <UserCheck className={`${cls} text-brand-green`} />, label: 'anwesend' }
-  if (cell.present === false) return { icon: <UserX className={`${cls} text-brand-danger`} />, label: 'gefehlt' }
-  if (cell.unavailable) return { icon: <Minus className={`${cls} text-brand-text-subtle`} />, label: 'für die Serie abgemeldet' }
-  const faded = cell.is_default ? ' opacity-40' : ''
+  const tone = (base: string) => iconToneOnLineup(base, cell.lineup)
+  if (cell.present === true) return { icon: <UserCheck className={`${cls} ${tone('text-brand-green')}`} />, label: 'anwesend' }
+  if (cell.present === false) return { icon: <UserX className={`${cls} ${tone('text-brand-danger')}`} />, label: 'gefehlt' }
+  if (cell.unavailable) return { icon: <Minus className={`${cls} ${tone('text-brand-text-subtle')}`} />, label: 'für die Serie abgemeldet' }
+  const faded = cell.is_default ? (cell.lineup === 'in' ? ' opacity-60' : ' opacity-40') : ''
   const suffix = cell.is_default ? ' (Voreinstellung)' : ''
   switch (cell.status) {
     case 'confirmed':
-      return { icon: <ThumbsUp className={`${cls} text-brand-green${faded}`} />, label: `zugesagt${suffix}` }
+      return { icon: <ThumbsUp className={`${cls} ${tone('text-brand-green')}${faded}`} />, label: `zugesagt${suffix}` }
     case 'declined':
-      return { icon: <ThumbsDown className={`${cls} text-brand-danger${faded}`} />, label: `abgesagt${suffix}` }
+      return { icon: <ThumbsDown className={`${cls} ${tone('text-brand-danger')}${faded}`} />, label: `abgesagt${suffix}` }
     case 'maybe':
-      return { icon: <HelpCircle className={`${cls} text-brand-warning`} />, label: 'vielleicht' }
+      return { icon: <HelpCircle className={`${cls} ${tone('text-brand-warning')}`} />, label: 'vielleicht' }
     default:
-      return { icon: <Circle className={`${cls} text-brand-text-subtle`} />, label: 'keine Rückmeldung' }
+      return { icon: <Circle className={`${cls} ${tone('text-brand-text-subtle')}`} />, label: 'keine Rückmeldung' }
   }
+}
+
+/** Box gleicher Geometrie in jeder Zelle; ohne Aufstellung unsichtbar. */
+function LineupBox({ lineup, children }: { lineup: LineupState | undefined; children: ReactNode }) {
+  return (
+    <span
+      data-lineup={lineup}
+      className={`w-full min-w-[2.75rem] h-8 flex items-center justify-center ${LINEUP_SHAPE} ${lineup ? LINEUP_SURFACE[lineup] : 'border-transparent'}`}
+    >
+      {children}
+    </span>
+  )
 }
 
 interface Props {
@@ -111,7 +130,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
                     <th
                       key={`${ev.kind}-${ev.id}`}
                       scope="col"
-                      className="bg-brand-surface-card px-2 py-2 border-b border-brand-border-subtle font-normal"
+                      className="bg-brand-surface-card px-1 py-2 border-b border-brand-border-subtle font-normal"
                     >
                       <Link
                         to={terminDetailPath(ev)}
@@ -153,10 +172,13 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
                     {columns.map(i => {
                       const ev = events[i]
                       const cell = m.cells[i]
-                      const { icon, label } = ev.cancelled
+                      const view = ev.cancelled
                         ? { icon: null, label: 'Termin abgesagt' }
                         : cellView(cell)
-                      const tdClass = `px-2 py-2.5 text-center border-b border-brand-border-subtle group-hover:bg-brand-table-select ${groupBorder}`
+                      const lineup = ev.cancelled ? undefined : cell.lineup
+                      const icon = <LineupBox lineup={lineup}>{view.icon}</LineupBox>
+                      const label = cellTitle(view.label, lineup)
+                      const tdClass = `px-1 py-1 text-center border-b border-brand-border-subtle group-hover:bg-brand-table-select ${groupBorder}`
                       if (onCellClick && isCellRespondable(m, ev, cell, canOverrideCutoff)) {
                         return (
                           <td key={`${ev.kind}-${ev.id}`} className={`${tdClass} bg-brand-yellow/10`}>
@@ -165,7 +187,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
                               onClick={() => onCellClick(rowIdx, i)}
                               title={`${label} – ändern`}
                               aria-label={`${m.name}, ${formatColumnDate(ev.date)}: ${label} – ändern`}
-                              className="w-full min-h-[28px] flex items-center justify-center rounded-md hover:ring-2 hover:ring-brand-yellow focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                              className="w-full flex items-center justify-center rounded-md hover:ring-2 hover:ring-brand-yellow focus:outline-none focus:ring-2 focus:ring-brand-yellow"
                             >
                               {icon}
                             </button>
@@ -199,6 +221,11 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
         {onCellClick && members.some(m => m.can_respond) && (
           <li className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-brand-yellow/30" /> antippen zum Zu-/Absagen</li>
         )}
+        {(['in', 'out', 'open'] as const).map(state => (
+          <li key={state} className="flex items-center gap-1">
+            <span className={`inline-block w-5 h-4 ${LINEUP_SHAPE} ${LINEUP_SURFACE[state]}`} /> {LINEUP_LABEL[state]}
+          </li>
+        ))}
         {withPresence && (
           <>
             <li className="flex items-center gap-1"><UserCheck className="w-4 h-4 text-brand-green" /> anwesend</li>
