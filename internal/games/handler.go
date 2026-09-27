@@ -2418,6 +2418,7 @@ type childRSVP struct {
 	RSVP     *string `json:"rsvp"`
 	Reason   *string `json:"reason,omitempty"`
 	Locked   bool    `json:"rsvp_locked"`
+	Lineup   string  `json:"lineup,omitempty"`
 }
 
 type gameVenueRef struct {
@@ -2430,24 +2431,27 @@ type gameVenueRef struct {
 }
 
 type gameListItem struct {
-	ID                  int           `json:"id"`
-	Date                string        `json:"date"`
-	Time                string        `json:"time"`
-	Opponent            string        `json:"opponent"`
-	EventType           string        `json:"event_type"`
-	IsHome              bool          `json:"is_home"`
-	SeasonID            int           `json:"season_id"`
-	TeamNames           string        `json:"team_names"`
-	TeamIDs             []int         `json:"team_ids"`
-	TeamDisplayShortCSV string        `json:"team_display_short_csv"`
-	TeamDisplayLongCSV  string        `json:"team_display_long_csv"`
-	ConfirmedCount      int           `json:"confirmed_count"`
-	DeclinedCount       int           `json:"declined_count"`
-	MaybeCount          int           `json:"maybe_count"`
-	MyRSVP              *string       `json:"my_rsvp"`
-	MyRSVPIsDefault     bool          `json:"my_rsvp_is_default,omitempty"`
-	MyRSVPLocked        bool          `json:"my_rsvp_locked"`
-	MyReason            *string       `json:"my_reason,omitempty"`
+	ID                  int     `json:"id"`
+	Date                string  `json:"date"`
+	Time                string  `json:"time"`
+	Opponent            string  `json:"opponent"`
+	EventType           string  `json:"event_type"`
+	IsHome              bool    `json:"is_home"`
+	SeasonID            int     `json:"season_id"`
+	TeamNames           string  `json:"team_names"`
+	TeamIDs             []int   `json:"team_ids"`
+	TeamDisplayShortCSV string  `json:"team_display_short_csv"`
+	TeamDisplayLongCSV  string  `json:"team_display_long_csv"`
+	ConfirmedCount      int     `json:"confirmed_count"`
+	DeclinedCount       int     `json:"declined_count"`
+	MaybeCount          int     `json:"maybe_count"`
+	MyRSVP              *string `json:"my_rsvp"`
+	MyRSVPIsDefault     bool    `json:"my_rsvp_is_default,omitempty"`
+	MyRSVPLocked        bool    `json:"my_rsvp_locked"`
+	MyReason            *string `json:"my_reason,omitempty"`
+	// MyLineup: Aufstellungsstatus (in/out/open) des Aufrufers als Spieler;
+	// fehlt für reine Trainer, Nicht-Teilnehmer und generische Events.
+	MyLineup            string        `json:"my_lineup,omitempty"`
 	AmIParticipant      bool          `json:"am_i_participant"`
 	ChildrenRSVP        []childRSVP   `json:"children_rsvp,omitempty"`
 	RsvpDefaultPlayers  string        `json:"rsvp_default_players"`
@@ -2554,9 +2558,9 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Args order: memberID (my_rsvp), memberID (my_rsvp_locked), memberID (my_reason),
-	// memberID (in_regular_kader), memberID (in_extended_kader), memberID (in_trainer_kader),
-	// teamArgs, from, to
-	args := append([]any{memberID, memberID, memberID, memberID, memberID, memberID}, teamArgs...)
+	// memberID (my_lineup), memberID (in_regular_kader), memberID (in_extended_kader),
+	// memberID (in_trainer_kader), teamArgs, from, to
+	args := append([]any{memberID, memberID, memberID, memberID, memberID, memberID, memberID}, teamArgs...)
 	args = append(args, from, to)
 
 	query := fmt.Sprintf(`
@@ -2576,6 +2580,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		       (SELECT absence_id IS NOT NULL FROM game_responses WHERE game_id=g.id AND member_id=? LIMIT 1),
 		       (SELECT reason FROM game_responses WHERE game_id=g.id AND member_id=?),
 		       g.rsvp_default_players, g.rsvp_default_extended, g.rsvp_require_reason, g.note,
+		       `+appdb.LineupStateSQL("g.event_type", "g.id", "?")+`,
 		       EXISTS(SELECT 1 FROM game_teams gt_r
 		              JOIN kader k_r ON k_r.team_id = gt_r.team_id AND k_r.season_id = g.season_id
 		              JOIN kader_members km_r ON km_r.kader_id = k_r.id AND km_r.member_id = ?
@@ -2606,20 +2611,23 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var g gameListItem
 		var isHome, inRegularKader, inExtendedKader, inTrainerKader int
-		var myRSVP, myReason sql.NullString
+		var myRSVP, myReason, myLineup sql.NullString
 		var myRSVPLocked sql.NullInt64
 		var teamNames, teamIDsCSV, teamShortCSV, teamLongCSV sql.NullString
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
 			&teamNames, &teamIDsCSV, &teamShortCSV, &teamLongCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked, &myReason,
-			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note, &inRegularKader, &inExtendedKader, &inTrainerKader,
+			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note, &myLineup, &inRegularKader, &inExtendedKader, &inTrainerKader,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListMyGames scan: %w", err))
 			return
 		}
 		g.IsHome = isHome == 1
 		g.AmIParticipant = inRegularKader == 1 || inExtendedKader == 1 || inTrainerKader == 1
+		if inRegularKader == 1 || inExtendedKader == 1 {
+			g.MyLineup = myLineup.String
+		}
 		g.TeamNames = teamNames.String
 		g.TeamDisplayShortCSV = teamShortCSV.String
 		g.TeamDisplayLongCSV = teamLongCSV.String
@@ -3466,7 +3474,8 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 	// applies (rsvp_default_players for regular, rsvp_default_extended for
 	// extended); 'none' leaves the RSVP empty.
 	rows, err := h.db.QueryContext(ctx, fmt.Sprintf(`
-		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_players, gr.reason, gr.absence_id IS NOT NULL AS locked
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_players, gr.reason, gr.absence_id IS NOT NULL AS locked,
+		       `+appdb.LineupStateSQL("g.event_type", "g.id", "m.id")+`
 		FROM game_teams gt
 		JOIN games g ON g.id = gt.game_id
 		JOIN kader k ON k.team_id = gt.team_id
@@ -3479,7 +3488,8 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 
 		UNION
 
-		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_extended, gr.reason, gr.absence_id IS NOT NULL AS locked
+		SELECT DISTINCT gt.game_id, m.id, m.first_name || ' ' || m.last_name, gr.status, g.rsvp_default_extended, gr.reason, gr.absence_id IS NOT NULL AS locked,
+		       `+appdb.LineupStateSQL("g.event_type", "g.id", "m.id")+`
 		FROM game_teams gt
 		JOIN games g ON g.id = gt.game_id
 		JOIN kader k ON k.team_id = gt.team_id
@@ -3510,7 +3520,9 @@ func (h *Handler) attachChildrenRSVPToGames(ctx context.Context, parentUserID in
 		var rsvp, reason sql.NullString
 		var roleDefault string
 		var locked sql.NullInt64
-		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &roleDefault, &reason, &locked)
+		var lineup sql.NullString
+		rows.Scan(&gid, &c.MemberID, &c.Name, &rsvp, &roleDefault, &reason, &locked, &lineup)
+		c.Lineup = lineup.String
 		c.Locked = locked.Valid && locked.Int64 == 1
 		if rsvp.Valid {
 			s := rsvp.String
