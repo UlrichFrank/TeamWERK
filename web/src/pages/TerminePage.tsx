@@ -733,7 +733,7 @@ export default function TerminePage() {
                     {s.status === 'active' && (
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
-                          <Check className="w-3 h-3 text-green-600" />{s.confirmed_count}
+                          <Check className="w-3 h-3 text-brand-green" />{s.confirmed_count}
                         </span>
                         <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
                           <X className="w-3 h-3 text-brand-danger" />{s.declined_count}
@@ -762,7 +762,7 @@ export default function TerminePage() {
                               <span className="text-xs font-medium text-brand-text-muted">Ich</span>
                             )}
                             <div className="flex gap-2">
-                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondTraining(s.id, s.my_rsvp_is_default ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondTraining(s.id, s.my_rsvp_is_default ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
                               <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'maybe') : respondTraining(s.id, 'maybe')} />
                               <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'declined') : respondTraining(s.id, 'declined')} />
                             </div>
@@ -789,7 +789,7 @@ export default function TerminePage() {
                             <div key={child.member_id} className="space-y-1.5">
                               <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
                               <div className="flex gap-2">
-                                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={childDisabled || rsvpLoading === childKey} onClick={() => respondTraining(s.id, 'confirmed', '', child.member_id)} />
+                                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={childDisabled || rsvpLoading === childKey} onClick={() => respondTraining(s.id, 'confirmed', '', child.member_id)} />
                                 <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
                                 <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
                               </div>
@@ -856,7 +856,7 @@ export default function TerminePage() {
 
                   <div className="flex items-center gap-1 shrink-0">
                     <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
-                      <Check className="w-3 h-3 text-green-600" />{g.confirmed_count}
+                      <Check className="w-3 h-3 text-brand-green" />{g.confirmed_count}
                     </span>
                     <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
                       <X className="w-3 h-3 text-brand-danger" />{g.declined_count}
@@ -881,7 +881,7 @@ export default function TerminePage() {
                             <span className="text-xs font-medium text-brand-text-muted">Ich</span>
                           )}
                           <div className="flex flex-wrap gap-2">
-                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondGame(g.id, g.my_rsvp_is_default ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondGame(g.id, g.my_rsvp_is_default ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
                             <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'maybe') : respondGame(g.id, 'maybe')} />
                             <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'declined') : respondGame(g.id, 'declined')} />
                             <LineupBadge state={g.my_lineup} inRow />
@@ -909,7 +909,7 @@ export default function TerminePage() {
                           <div key={child.member_id} className="space-y-1.5">
                             <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
                             <div className="flex flex-wrap gap-2">
-                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={childDisabled || rsvpLoading === childKey} onClick={() => respondGame(g.id, 'confirmed', '', child.member_id)} />
+                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={childDisabled || rsvpLoading === childKey} onClick={() => respondGame(g.id, 'confirmed', '', child.member_id)} />
                               <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
                               <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
                               <LineupBadge state={child.lineup} inRow />
@@ -993,7 +993,7 @@ export default function TerminePage() {
                 </button>
               </div>
               <div className="flex gap-2">
-                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={status === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={disabled} onClick={() => respond(nextConfirmStatus(cell, m.is_self))} />
+                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={status === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={disabled} onClick={() => respond(nextConfirmStatus(cell, m.is_self))} />
                 <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={status === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={disabled} onClick={() => decline('maybe')} />
                 <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={status === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={disabled} onClick={() => decline('declined')} />
               </div>

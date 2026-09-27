@@ -110,7 +110,8 @@ Quelle (`lib/lineup.ts`), und alle Elemente folgen denselben Regeln:
 
 **Grün der Rückmeldung auf `/termine`:** das bisherige Roh-Grün `green-600` (aktiver
 „Zusagen“-Knopf in Liste und Tabellen-Dialog, Zusage-Zähler auf den Karten, Zusage-Haken
-in der Rückmelde-Spalte der Detailseite) wird durch `brand-green` ersetzt — ein Grün für
+in der Rückmelde-Spalte der Detailseite; dazu der Zusage-Zähler im Kopf der Detailseite,
+bisher `green-100`/`green-700`, jetzt `bg-brand-green text-white`) wird durch `brand-green` ersetzt — ein Grün für
 Zusage und Aufstellung. Andere Seiten mit `green-600` bleiben unberührt.
 
 Entschieden am 27.09.2026 als „Variante 3" des Entwurfs; die beiden anderen Varianten

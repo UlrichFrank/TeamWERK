@@ -32,7 +32,7 @@ function fmtDate(iso: string) {
 }
 
 function RsvpIcon({ status }: { status: string | null }) {
-  if (status === 'confirmed') return <Check className="w-4 h-4 text-green-600" />
+  if (status === 'confirmed') return <Check className="w-4 h-4 text-brand-green" />
   if (status === 'declined') return <X className="w-4 h-4 text-brand-danger" />
   if (status === 'maybe') return <HelpCircle className="w-4 h-4 text-brand-text-subtle" />
   return <span className="text-brand-text-muted text-sm">–</span>
@@ -458,7 +458,7 @@ export default function TermineDetailPage() {
               </div>
               <RsvpConfigBadges defaultPlayers={session.rsvp_default_players} defaultExtended={session.rsvp_default_extended} requireReason={session.rsvp_require_reason} />
               <div className="mt-4 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-green text-white">
                   <Check className="w-3 h-3" /> {session.confirmed_count}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-danger-light text-brand-danger">
@@ -587,7 +587,7 @@ export default function TermineDetailPage() {
             <MapsLink venue={g.venue} className="mt-1.5" />
             <RsvpConfigBadges defaultPlayers={g.rsvp_default_players} defaultExtended={g.rsvp_default_extended} requireReason={g.rsvp_require_reason} />
             <div className="mt-4 flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-green text-white">
                 <Check className="w-3 h-3" /> {confirmedCount}
               </span>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-danger-light text-brand-danger">
