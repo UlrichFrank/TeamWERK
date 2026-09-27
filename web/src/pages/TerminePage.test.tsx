@@ -443,3 +443,75 @@ describe('TerminePage — Deep-Link auf einen Termin jenseits des Saisonendes', 
     expect(screen.queryByText('Dieser Termin ist nicht verfügbar.')).toBeNull()
   })
 })
+
+function game(overrides: Record<string, unknown>) {
+  return {
+    id: 200,
+    date: '2026-05-02',
+    time: '14:00',
+    opponent: 'SG Weinstadt',
+    event_type: 'heim',
+    is_home: true,
+    season_id: 7,
+    team_names: 'mB1',
+    team_ids: [1],
+    confirmed_count: 0,
+    declined_count: 0,
+    maybe_count: 0,
+    my_rsvp: null,
+    am_i_participant: true,
+    rsvp_default_players: 'none',
+    rsvp_default_extended: 'none',
+    rsvp_require_reason: 0,
+    ...overrides,
+  }
+}
+
+// Change aufstellung-status-termine: Spielkarten zeigen den Aufstellungsstatus
+// je Person als Text-Kennzeichen; leere Aufstellung heißt „offen", nie „nicht
+// aufgestellt".
+describe('TerminePage — Aufstellungsstatus auf Spielkarten', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    authState.is_parent = false
+  })
+
+  test('eigener Status „aufgestellt"', async () => {
+    seedRoutes([], [game({ my_lineup: 'in' })])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('aufgestellt')).toBeTruthy())
+    expect(screen.queryByText('nicht aufgestellt')).toBeNull()
+  })
+
+  test('leere Aufstellung zeigt „Aufstellung offen"', async () => {
+    seedRoutes([], [game({ my_lineup: 'open' })])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Aufstellung offen')).toBeTruthy())
+    expect(screen.queryByText('nicht aufgestellt')).toBeNull()
+  })
+
+  test('Elternteil sieht den Status je Kind getrennt', async () => {
+    authState.is_parent = true
+    seedRoutes([], [game({
+      am_i_participant: false,
+      children_rsvp: [
+        { member_id: 1, name: 'Emil', rsvp: 'confirmed', lineup: 'in' },
+        { member_id: 2, name: 'Mia', rsvp: null, lineup: 'out' },
+      ],
+    })])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Emil')).toBeTruthy())
+    const emilRow = screen.getByText('Emil').parentElement!
+    const miaRow = screen.getByText('Mia').parentElement!
+    expect(emilRow.textContent).toContain('aufgestellt')
+    expect(emilRow.textContent).not.toContain('nicht aufgestellt')
+    expect(miaRow.textContent).toContain('nicht aufgestellt')
+  })
+
+  test('ohne my_lineup (Trainer, generisches Event) kein Kennzeichen', async () => {
+    seedRoutes([], [game({})])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Zusagen')).toBeTruthy())
+    expect(document.querySelector('[data-lineup]')).toBeNull()
+  })
+})

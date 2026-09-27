@@ -14,6 +14,8 @@ import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, se
 import { isoDaysFrom, terminLoadWindow, type SeasonWindow } from '../lib/terminWindow'
 import { useAuth } from '../contexts/AuthContext'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import LineupBadge from '../components/LineupBadge'
+import type { LineupState } from '../lib/lineup'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
 import EventSearchInput from '../components/EventSearchInput'
@@ -35,6 +37,8 @@ interface ChildRSVP {
   rsvp: string | null
   reason?: string
   rsvp_locked?: boolean
+  /** Aufstellungsstatus des Kindes — nur bei Heim-/Auswärtsspielen. */
+  lineup?: LineupState
 }
 
 interface VenueRef {
@@ -95,6 +99,8 @@ interface Game {
   my_rsvp_is_default?: boolean
   my_rsvp_locked?: boolean
   my_reason?: string
+  /** Eigener Aufstellungsstatus als Spieler; fehlt für Trainer und generische Events. */
+  my_lineup?: LineupState
   am_i_participant: boolean
   children_rsvp?: ChildRSVP[]
   rsvp_default_players: RsvpDefault
@@ -874,10 +880,11 @@ export default function TerminePage() {
                           {childRows.length > 0 && (
                             <span className="text-xs font-medium text-brand-text-muted">Ich</span>
                           )}
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondGame(g.id, g.my_rsvp_is_default ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
                             <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'maybe') : respondGame(g.id, 'maybe')} />
                             <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'declined') : respondGame(g.id, 'declined')} />
+                            <LineupBadge state={g.my_lineup} inRow />
                           </div>
                           {absenceLocked && (
                             <p className="text-xs text-brand-text-muted">Durch Abwesenheit gesperrt — Urlaub bearbeiten</p>
@@ -901,10 +908,11 @@ export default function TerminePage() {
                         return (
                           <div key={child.member_id} className="space-y-1.5">
                             <span className="text-xs font-medium text-brand-text-muted">{child.name}</span>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                               <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={child.rsvp === 'confirmed'} activeClass="bg-green-600 text-white border-green-600" disabled={childDisabled || rsvpLoading === childKey} onClick={() => respondGame(g.id, 'confirmed', '', child.member_id)} />
                               <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={child.rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('maybe')} />
                               <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={child.rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={childDisabled || rsvpLoading === childKey} onClick={() => handleChildDecline('declined')} />
+                              <LineupBadge state={child.lineup} inRow />
                             </div>
                             {childAbsenceLocked && (
                               <p className="text-xs text-brand-text-muted">Durch Abwesenheit gesperrt — Urlaub bearbeiten</p>
