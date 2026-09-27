@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/timez"
 )
 
@@ -383,11 +384,20 @@ func parseStamp(s string) time.Time {
 // is_extended=1 nur beim erweiterten Kader — es steuert allein die
 // Kennzeichnung im Titel. Trainer zählen wie reguläre Mitglieder.
 const kaderMembership = `
-	SELECT kader_id, member_id, 0 AS is_extended FROM kader_members
+	SELECT kader_id, member_id, 0 AS is_extended, ` + kindRegular + ` AS kind FROM kader_members
 	UNION ALL
-	SELECT kader_id, member_id, 0 FROM kader_trainers
+	SELECT kader_id, member_id, 0, ` + kindTrainer + ` FROM kader_trainers
 	UNION ALL
-	SELECT kader_id, member_id, 1 FROM kader_extended_members`
+	SELECT kader_id, member_id, 1, ` + kindExtended + ` FROM kader_extended_members`
+
+// Art der Kader-Zugehörigkeit in kaderMembership. Die Zahlen sind zugleich die
+// Rangfolge, wenn ein Nutzer mehrfach an einem Termin hängt: Stammkader vor
+// Trainer vor erweitertem Kader (ORDER BY mem.kind).
+const (
+	kindRegular  = "0"
+	kindTrainer  = "1"
+	kindExtended = "2"
+)
 
 func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) ([]calEvent, error) {
 	placeholders := strings.Repeat("?,", len(eventTypes))
@@ -402,10 +412,8 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		    g.id, g.date, g.time, g.end_time, g.end_date,
 		    g.opponent, g.event_type, g.is_home, g.note,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
-		    t.name, mem.is_extended, g.created_at,
-		    EXISTS(SELECT 1 FROM game_lineup gl WHERE gl.game_id = g.id) AS lineup_exists,
-		    EXISTS(SELECT 1 FROM game_lineup gl2
-		           WHERE gl2.game_id = g.id AND gl2.member_id = mem.member_id) AS in_lineup
+		    t.name, mem.is_extended, g.created_at, mem.kind,
+		    `+appdb.LineupStateSQL("g.event_type", "g.id", "mem.member_id")+` AS lineup
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
 		JOIN teams t ON t.id = gt.team_id
@@ -414,7 +422,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		JOIN members m ON m.id = mem.member_id
 		LEFT JOIN venues v ON v.id = g.venue_id
 		WHERE m.user_id = ? AND g.event_type IN (`+placeholders+`)
-		ORDER BY g.date, g.time, mem.is_extended`, args...)
+		ORDER BY g.date, g.time, mem.kind`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -434,12 +442,13 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		var isHome, isExtended bool
 		var note string
 		var vName, vStreet, vPostal, vCity, teamName string
-		var lineupExists, inLineup bool
+		var kind string
+		var lineup sql.NullString
 		var createdAt string
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &endDate,
 			&opponent, &eventType, &isHome, &note,
 			&vName, &vStreet, &vPostal, &vCity, &teamName, &isExtended, &createdAt,
-			&lineupExists, &inLineup); err != nil {
+			&kind, &lineup); err != nil {
 			continue
 		}
 		if seen[id] {
@@ -447,7 +456,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		}
 		seen[id] = true
 
-		state := resolveLineupState(isExtended, eventType, lineupExists, inLineup)
+		state := lineupStateFor(kind, lineup.String)
 		summary := gameTitle(eventType, isHome, opponent,
 			kaderLabel(teamName, isExtended, state))
 
@@ -515,7 +524,7 @@ func (h *Handler) fetchTrainings(r *http.Request, userID int, includeTeams, incl
 		JOIN members m ON m.id = mem.member_id
 		LEFT JOIN venues v ON v.id = ts.venue_id
 		WHERE m.user_id = ? AND ts.status = 'active' `+kindFilter+`
-		ORDER BY ts.date, ts.start_time, mem.is_extended`, userID)
+		ORDER BY ts.date, ts.start_time, mem.kind`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -773,7 +782,7 @@ func joinDescription(parts ...string) string {
 
 // lineupState ist der Aufstellungsstatus eines Feed-Nutzers für ein Spiel. Der
 // leere Wert heißt „gilt hier nicht" — er steht für alle Termine, an denen kein
-// Status auszuweisen ist (regulärer Kader, Trainer, generische Events).
+// Status auszuweisen ist (Trainer, Trainings, generische Events).
 type lineupState string
 
 const (
@@ -791,25 +800,25 @@ const (
 	lineupSentenceUndecided = "Die Aufstellung für dieses Spiel steht noch nicht fest."
 )
 
-// resolveLineupState leitet den Status EINMAL aus den beiden EXISTS-Spalten ab.
-// Die Regel „keine Zeile für das Spiel ≠ nicht nominiert" lebt allein hier: an
-// zwei Stellen ausgewertet würde aus einer ungepflegten Aufstellung früher oder
-// später eine Absage, die niemand ausgesprochen hat.
+// lineupStateFor übersetzt den Code aus appdb.LineupStateSQL in Kennwort und
+// Satz des Feeds. Die Ableitung selbst (leere Aufstellung ist offen, nie „nicht
+// aufgestellt") lebt im SQL-Fragment, nicht hier.
 //
-// Der Status gilt nur für Spieler des erweiterten Kaders an Heim-/Auswärtsspielen.
-// Für den Stammkader ist die Teilnahme der Regelfall, generische Events haben
-// keine Aufstellung.
-func resolveLineupState(isExtended bool, eventType string, lineupExists, inLineup bool) lineupState {
-	if !isExtended || (eventType != "heim" && eventType != "auswärts") {
+// Der Status gilt für Spieler — Stamm- und erweiterter Kader —, nicht für
+// Trainer; generische Events liefern keinen Code und damit keinen Status.
+func lineupStateFor(kind, code string) lineupState {
+	if kind == kindTrainer {
 		return lineupNone
 	}
-	switch {
-	case inLineup:
+	switch code {
+	case appdb.LineupIn:
 		return lineupIn
-	case lineupExists:
+	case appdb.LineupOut:
 		return lineupOut
-	default:
+	case appdb.LineupOpen:
 		return lineupUndecided
+	default:
+		return lineupNone
 	}
 }
 
@@ -829,8 +838,8 @@ func (l lineupState) sentence() string {
 
 // kaderLabel benennt die Mannschaft, über die der Feed-Nutzer am Termin hängt
 // (z. B. "mA1"). Hängt er nur über den erweiterten Kader daran, sagt das Label
-// das dazu — der Termin gehört dann nicht zur eigenen Stammmannschaft — und bei
-// Spielen zusätzlich, ob er aufgestellt ist.
+// das dazu — der Termin gehört dann nicht zur eigenen Stammmannschaft —, und bei
+// Spielen steht am Ende der Aufstellungsstatus (Stamm- wie erweiterter Kader).
 //
 // Der Zusatz ist auf "erw. Kader" gekürzt, damit Mannschaft, Kader und Status
 // zusammen in die Titel-Klammer passen; der Mittelpunkt trennt sie stärker als
@@ -838,10 +847,13 @@ func (l lineupState) sentence() string {
 // Trainings rufen denselben Helfer mit lineupNone auf — derselbe Zusatz darf im
 // Kalender nicht in zwei Schreibweisen auftauchen.
 func kaderLabel(teamName string, isExtended bool, state lineupState) string {
-	if teamName == "" || !isExtended {
+	if teamName == "" {
 		return teamName
 	}
-	label := teamName + " · erw. Kader"
+	label := teamName
+	if isExtended {
+		label += " · erw. Kader"
+	}
 	if state != lineupNone {
 		label += " · " + string(state)
 	}

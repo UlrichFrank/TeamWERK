@@ -113,20 +113,48 @@ func TestFeed_ErwKader_KeineAufstellungGespeichert(t *testing.T) {
 	}
 }
 
-// Wer im Stammkader steht, bekommt keinen Status — für ihn ist die Teilnahme
-// der Regelfall, ein Vermerk an jedem Spiel wäre Rauschen.
-func TestFeed_Stammkader_OhneStatus(t *testing.T) {
-	body := lineupFeed(t, "kader_members", "heim", lineupWithoutMe, "")
+// Seit aufstellung-status-termine bekommt auch der Stammkader den Status —
+// ohne „erw. Kader"-Zusatz, das Kennwort steht direkt hinter der Mannschaft.
+func TestFeed_Stammkader_Aufgestellt(t *testing.T) {
+	body := lineupFeed(t, "kader_members", "heim", lineupWithMe, "")
+	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 · aufgestellt) – Test Opponent") {
+		t.Errorf("Stammkader trägt den Status ohne Kader-Zusatz, body:\n%s", body)
+	}
+	if !strings.Contains(body, "DESCRIPTION:Du bist für das Spiel aufgestellt.") {
+		t.Errorf("Beschreibung muss den Aufstellungssatz tragen, body:\n%s", body)
+	}
+}
+
+func TestFeed_Stammkader_AufstellungOffen(t *testing.T) {
+	body := lineupFeed(t, "kader_members", "heim", lineupEmpty, "")
+	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 · Aufstellung offen) – Test Opponent") {
+		t.Errorf("Stammkader bei leerer Aufstellung: 'Aufstellung offen', body:\n%s", body)
+	}
+	if strings.Contains(body, "NICHT aufgestellt") {
+		t.Errorf("ohne gepflegte Aufstellung darf der Feed keine Absage melden, body:\n%s", body)
+	}
+}
+
+func TestFeed_Stammkader_NichtAufgestellt(t *testing.T) {
+	body := lineupFeed(t, "kader_members", "auswärts", lineupWithoutMe, "")
+	if !strings.Contains(body, "(mB1 · nicht aufgestellt)") {
+		t.Errorf("Stammkader ohne eigenes Mitglied in der Aufstellung: 'nicht aufgestellt', body:\n%s", body)
+	}
+}
+
+// Trainer stehen in ihrer Funktion am Spiel, nicht als Spieler — kein Status.
+func TestFeed_Trainer_OhneStatus(t *testing.T) {
+	body := lineupFeed(t, "kader_trainers", "heim", lineupWithoutMe, "")
 	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1) – Test Opponent") {
-		t.Errorf("Titel des Stammkaders bleibt ohne Zusatz, body:\n%s", body)
+		t.Errorf("Titel des Trainers bleibt ohne Zusatz, body:\n%s", body)
 	}
 	if strings.Contains(body, "aufgestellt") || strings.Contains(body, "Aufstellung offen") {
-		t.Errorf("Stammkader bekommt keinen Aufstellungshinweis, body:\n%s", body)
+		t.Errorf("Trainer bekommt keinen Aufstellungshinweis, body:\n%s", body)
 	}
 }
 
 // Hängt ein Nutzer regulär UND erweitert am selben Spiel, gewinnt die reguläre
-// Zugehörigkeit — und damit entfällt auch der Status.
+// Zugehörigkeit: kein „erw. Kader"-Zusatz, wohl aber der Status.
 func TestFeed_DoppelteZugehoerigkeit_RegulaerSchlaegtErweitert(t *testing.T) {
 	db := testutil.NewDB(t)
 	seasonID := testutil.CreateSeason(t, db, "2025/26")
@@ -149,8 +177,11 @@ func TestFeed_DoppelteZugehoerigkeit_RegulaerSchlaegtErweitert(t *testing.T) {
 	if n := strings.Count(body, "UID:game-"); n != 1 {
 		t.Errorf("erwartet genau ein Spiel-VEVENT, bekommen %d, body:\n%s", n, body)
 	}
-	if strings.Contains(body, "erw. Kader") || strings.Contains(body, "aufgestellt") {
-		t.Errorf("reguläre Zugehörigkeit schlägt die erweiterte — kein Zusatz, body:\n%s", body)
+	if strings.Contains(body, "erw. Kader") {
+		t.Errorf("reguläre Zugehörigkeit schlägt die erweiterte — kein Kader-Zusatz, body:\n%s", body)
+	}
+	if !strings.Contains(body, "(mB1 · nicht aufgestellt)") {
+		t.Errorf("Status bleibt auch bei doppelter Zugehörigkeit, body:\n%s", body)
 	}
 }
 

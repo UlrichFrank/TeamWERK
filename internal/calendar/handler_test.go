@@ -337,17 +337,18 @@ func TestCalendarFeed_KeinFunktionstraegerBypass(t *testing.T) {
 
 // TestCalendarFeed_GameSummaryNamesOwnTeam: der Spieltitel nennt die eigene
 // Mannschaft ("Team (mA1)") statt eines pauschalen Vereinsnamens — bei
-// Heimspielen vorn, bei Auswärtsspielen hinten.
+// Heimspielen vorn, bei Auswärtsspielen hinten. Seit aufstellung-status-termine
+// trägt die Klammer beim Spieler zusätzlich den Aufstellungsstatus.
 func TestCalendarFeed_GameSummaryNamesOwnTeam(t *testing.T) {
 	t.Run("heim", func(t *testing.T) {
 		body := gameSummaryFixture(t, "mA1", "heim")
-		if !strings.Contains(body, "SUMMARY:Heim: Team (mA1) – Test Opponent") {
+		if !strings.Contains(body, "SUMMARY:Heim: Team (mA1 · Aufstellung offen) – Test Opponent") {
 			t.Errorf("home game summary must name the own team, body:\n%s", body)
 		}
 	})
 	t.Run("auswärts", func(t *testing.T) {
 		body := gameSummaryFixture(t, "gD", "auswärts")
-		if !strings.Contains(body, "SUMMARY:Auswärts: Test Opponent – Team (gD)") {
+		if !strings.Contains(body, "SUMMARY:Auswärts: Test Opponent – Team (gD · Aufstellung offen)") {
 			t.Errorf("away game summary must name the own team, body:\n%s", body)
 		}
 	})
