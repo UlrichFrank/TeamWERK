@@ -22,9 +22,9 @@
 
 ## 4. Frontend — Ansichten
 
-- [ ] 4.1 `TerminePage.tsx` (Liste): Typen um `my_lineup`/`children_rsvp[].lineup` erweitern, `LineupBadge` in der Zeile „Ich" und je Kind-Zeile bei Heim-/Auswärtsspielen; Vitest: Stammspieler `in` → „aufgestellt", `open` → „Aufstellung offen", Kind-Zeilen getrennt, Trainer ohne Feld → kein Kennzeichen; Sichtprüfung mobil (Umbruch unter den Knöpfen)
-- [ ] 4.2 `terminMatrix.ts` + `TerminMatrix.tsx`: `MatrixCell.lineup`, Box gleicher Geometrie in jeder Zelle mit `LINEUP_SURFACE` (grün / grau / gestrichelt), unsichtbar für Trainings/Sonstige, Zelltitel „<Rückmeldung> · <Aufstellung>", drei Farbfelder in der Legende; Vitest für Flächenklasse je Zustand, Titel, Trainingsspalte ohne Fläche; Sichtprüfung gegen den Entwurf (Kontrast grüner Daumen auf grüner Fläche, gelbe Eigenzeile)
-- [ ] 4.3 `TermineDetailPage.tsx`: `LineupCheckbox` je Spielerzeile (grün mit Haken / grau gefüllt / gestrichelt), für Spieler/Eltern `disabled` aus `row.lineup`, für Trainer bedienbar mit `open` aus `lineupMap` abgeleitet (design.md §2); Kartenkopf `LineupBadge` „Aufstellung offen" bzw. „N aufgestellt" (`lineup_count`, beim Trainer nach optimistischem Update); Vitest: Spieler sieht bei leerer Aufstellung kein „nicht aufgestellt", Trainer-Klick wechselt Kopf von „Aufstellung offen" auf „1 aufgestellt"; Vitest für Tastaturbedienung der Trainer-Checkbox
+- [x] 4.1 `TerminePage.tsx` (Liste): Typen um `my_lineup`/`children_rsvp[].lineup` erweitern, `LineupBadge` in der Zeile „Ich" und je Kind-Zeile bei Heim-/Auswärtsspielen; Vitest: Stammspieler `in` → „aufgestellt", `open` → „Aufstellung offen", Kind-Zeilen getrennt, Trainer ohne Feld → kein Kennzeichen; Sichtprüfung mobil (Umbruch unter den Knöpfen)
+- [x] 4.2 `terminMatrix.ts` + `TerminMatrix.tsx`: `MatrixCell.lineup`, Box gleicher Geometrie in jeder Zelle mit `LINEUP_SURFACE` (grün / grau / gestrichelt), unsichtbar für Trainings/Sonstige, Zelltitel „<Rückmeldung> · <Aufstellung>", drei Farbfelder in der Legende; Vitest für Flächenklasse je Zustand, Titel, Trainingsspalte ohne Fläche; Sichtprüfung gegen den Entwurf (Kontrast grüner Daumen auf grüner Fläche, gelbe Eigenzeile)
+- [x] 4.3 `TermineDetailPage.tsx`: `LineupCheckbox` je Spielerzeile (grün mit Haken / grau gefüllt / gestrichelt), für Spieler/Eltern `disabled` aus `row.lineup`, für Trainer bedienbar mit `open` aus `lineupMap` abgeleitet (design.md §2); Kartenkopf `LineupBadge` „Aufstellung offen" bzw. „N aufgestellt" (`lineup_count`, beim Trainer nach optimistischem Update); Vitest: Spieler sieht bei leerer Aufstellung kein „nicht aufgestellt", Trainer-Klick wechselt Kopf von „Aufstellung offen" auf „1 aufgestellt"; Vitest für Tastaturbedienung der Trainer-Checkbox
 - [x] 4.4 Zusage-Grün auf `/termine`: `green-600` → `brand-green` für aktiven „Zusagen“-Knopf (Liste, Tabellen-Dialog), Zusage-Zähler der Karten, Zusage-Zähler im Kopf der Detailseite (`green-100/700` → `brand-green`/weiß) und `RsvpIcon` der Detailseite (design.md §4); `grep -n green-600 web/src/pages/TerminePage.tsx web/src/pages/TermineDetailPage.tsx` liefert nur noch Treffer außerhalb der Rückmeldung (oder keine); bestehende Vitest-Tests grün
 
 ## 5. Doku
@@ -33,5 +33,5 @@
 
 ## 6. Abschluss
 
-- [ ] 6.1 `make test`, `pnpm -C web build`, `pnpm -C web test`, `pnpm -C web lint`, `openspec validate aufstellung-status-termine` grün; `/verify-change` ohne Befund
-- [ ] 6.2 Live-Prüfung im Browser (lokal): Trainer setzt auf der Detailseite das erste Häkchen → Liste und Tabelle eines zweiten Spieler-Logins wechseln ohne Reload von „Aufstellung offen" auf „nicht aufgestellt"/„aufgestellt"
+- [x] 6.1 `make test`, `pnpm -C web build`, `pnpm -C web test`, `pnpm -C web lint`, `openspec validate aufstellung-status-termine` grün; `/verify-change` ohne Befund
+- [x] 6.2 Live-Prüfung im Browser (lokal): Trainer setzt auf der Detailseite das erste Häkchen → Liste und Tabelle eines zweiten Spieler-Logins wechseln ohne Reload von „Aufstellung offen" auf „nicht aufgestellt"/„aufgestellt"
