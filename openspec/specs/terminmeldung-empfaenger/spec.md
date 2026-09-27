@@ -4,7 +4,9 @@
 Legt fest, wer eine Benachrichtigung zu einem Mannschaftstermin bekommt — einmal, für
 alle Meldungen zu Spielen, Trainings, Erinnerungen und Termin-Hinweisen — und grenzt
 diese Menge gegen Dienstpflicht und Terminsichtbarkeit ab.
+
 ## Requirements
+
 ### Requirement: Empfängermenge einer Terminmeldung
 
 Das System SHALL für **jede** Benachrichtigung zu einem Mannschaftstermin dieselbe
@@ -64,10 +66,12 @@ dann nichts.
 ### Requirement: Abgrenzung zu Dienstmeldungen und Sichtbarkeit
 
 Die Empfängermenge einer Terminmeldung SHALL NICHT für Meldungen der Dienstbörse gelten.
-Dienstmeldungen (offene Dienste, Dienst-Erinnerungen, entfallene Dienste) SHALL weiterhin
-den Stammkader und dessen Eltern ansprechen: die Dienstpflicht folgt der
-Kader-Zugehörigkeit, und wer im erweiterten Kader aushilft, schuldet dem Verein keine
-Dienststunden.
+Dienstmeldungen über **offene** Dienste (neu ausgeschriebene Slots, Erinnerungen an noch
+offene Slots) SHALL weiterhin den Stammkader und dessen Eltern ansprechen: die Dienstpflicht
+folgt der Kader-Zugehörigkeit, und wer im erweiterten Kader aushilft, schuldet dem Verein
+keine Dienststunden. Die Meldung über einen **entfallenen** Dienst SHALL dagegen alle
+Eingetragenen des Slots erreichen — auch eine Aushilfe aus dem erweiterten Kader, die sich
+eingetragen hat.
 
 Die Empfängermenge SHALL NICHT als Sichtbarkeitsregel verwendet werden. Wer einen Termin
 sehen darf, entscheidet die bestehende Terminsichtbarkeit; die Empfängermenge entscheidet
@@ -81,3 +85,6 @@ ausschließlich, wer aktiv benachrichtigt wird.
 - **WHEN** ein Nutzer eine Terminmeldung erhält
 - **THEN** bleibt sein Zugriff auf den Termin und dessen Detaildaten unverändert an die bestehende Terminsichtbarkeit gebunden
 
+#### Scenario: Eingetragene Aushilfe erfährt von der Absage
+- **WHEN** ein Dienst-Slot gelöscht wird, auf dem ein Mitglied eingetragen ist, das nur im erweiterten Kader des Teams steht
+- **THEN** erhält dieses Mitglied die Meldung über den entfallenen Dienst

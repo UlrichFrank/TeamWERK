@@ -25,7 +25,7 @@ Die Sichtbarkeit der Gruppen wird wie folgt gefiltert:
 
 - System-Rolle `admin`: alle Gruppen aller Teams der aktiven Saison.
 - Vereinsfunktion `vorstand`: alle Gruppen aller Teams der aktiven Saison.
-- Alle anderen Rollen (Trainer, Sportliche Leitung, Spieler, Eltern): nur Gruppen, deren `team_id` einem Team entspricht, in dem der Nutzer als Spieler (`player_memberships`) ODER als Trainer (`trainer_memberships`) eingetragen ist oder ein verknüpftes Familienmitglied (`family_links`) als Spieler eingetragen ist; zusätzlich game-lose Gruppen, die zu einem Spiel eines dieser Teams gehören.
+- Alle anderen Rollen (Trainer, Sportliche Leitung, Spieler, Eltern): nur Gruppen, deren `team_id` einem Team entspricht, in dem der Nutzer als Spieler (Stammkader) ODER als Trainer (`trainer_memberships`) eingetragen ist, in dessen **erweitertem Kader** (`kader_extended_members`) er steht, oder in dem ein verknüpftes Familienmitglied (`family_links`) im Stammkader oder im erweiterten Kader eingetragen ist; zusätzlich game-lose Gruppen, die zu einem Spiel eines dieser Teams gehören. Alle Kader-Zugehörigkeiten gelten nur in der aktiven Saison. Für den erweiterten Kader SHALL als Statusfilter `members.status <> 'ausgetreten'` gelten (nicht `= 'aktiv'` — Förderkinder tragen `status = 'foerderkind'`).
 
 Die Audience-Filterung auf Slot-Ebene (`audiences`-JSON-Array mit `eltern`/Vereinsfunktionen) erfolgt nach folgender Regel:
 
@@ -34,7 +34,7 @@ Die Audience-Filterung auf Slot-Ebene (`audiences`-JSON-Array mit `eltern`/Verei
 
 Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden Elemente enthält:
 - eine der Vereinsfunktionen des Nutzers (`mcf.function`)
-- den Wert `'eltern'`, falls der Nutzer mindestens ein verknüpftes Kind (`family_links`) hat, das **im Team des Slots** spielt (`player_memberships.team_id = ds.team_id`); bei game-losen Slots reicht es, wenn das Kind in einem der teilnehmenden Teams des Spiels spielt.
+- den Wert `'eltern'`, falls der Nutzer mindestens ein verknüpftes Kind (`family_links`) hat, das **im Team des Slots** im Stammkader oder im erweiterten Kader steht; bei Slots mit Spiel reicht es, wenn das Kind in einem der teilnehmenden Teams des Spiels steht.
 
 #### Scenario: Gruppe trägt den Spielort
 - **WHEN** ein berechtigter Nutzer `GET /api/duty-board` aufruft und die Gruppe gehört zu einem Spiel mit gesetztem `venue_id`
@@ -135,6 +135,27 @@ Der Audience-Match prüft pro Slot, ob das `audiences`-Array eines der folgenden
 - **WHEN** der `/duty-board`-Endpoint einen Slot mit Assignees zurückgibt
 - **THEN** enthält jeder Assignee-Eintrag: `name` (immer), `photo_url` (nur wenn `photo_visible=1`), `phones` (nur wenn `phones_visible=1`, sonst leeres Array), `address` (nur wenn `address_visible=1`, sonst null)
 - **THEN** haben Proxy-Account-Assignees keine `phones` und keine `address` (da Proxy-Accounts diese Daten nicht haben)
+
+#### Scenario: Spieler des erweiterten Kaders sieht die Dienste des Teams
+- **WHEN** ein Spieler ohne privilegierte Funktion im Stammkader von Team A und im erweiterten Kader von Team B der aktiven Saison steht und `GET /api/duty-board` aufruft
+- **THEN** enthält die Antwort die Gruppen von Team A **und** Team B
+
+#### Scenario: Eltern eines Kindes im erweiterten Kader sehen die Dienste
+- **WHEN** ein Elternteil ohne eigene Kader-Zugehörigkeit ein Kind hat, das nur im erweiterten Kader von Team B steht
+- **THEN** enthält die Antwort die Gruppen von Team B
+- **AND** ist ein Slot von Team B mit `audiences=["eltern"]` darin enthalten
+
+#### Scenario: Förderkind im erweiterten Kader
+- **WHEN** ein Mitglied mit `status = 'foerderkind'` im erweiterten Kader von Team B steht
+- **THEN** sehen es und seine Eltern die Gruppen von Team B
+
+#### Scenario: Ausgetretenes Mitglied im erweiterten Kader
+- **WHEN** ein Mitglied mit `status = 'ausgetreten'` noch im erweiterten Kader von Team B steht
+- **THEN** begründet diese Zeile keine Sichtbarkeit der Gruppen von Team B
+
+#### Scenario: Erweiterter Kader aus inaktiver Saison
+- **WHEN** ein Spieler nur im erweiterten Kader von Team B einer **inaktiven** Saison steht
+- **THEN** enthält die Antwort keine Gruppen von Team B
 
 ### Requirement: Spielbericht-Slot wird auto-regeneriert
 Das System SHALL bei jedem Anlegen oder Update eines Spiels mit `event_type IN ('heim','auswärts')` und gesetztem `template_id` automatisch einen Duty-Slot vom Typ „Spielbericht" erzeugen, wenn noch keiner existiert. Slot-`due_at` wird als `game.end_time + 24h` gesetzt (oder `game.date 23:59 + 24h` falls kein end_time). Custom-editierte Slots (`is_custom=1`) werden nicht überschrieben.

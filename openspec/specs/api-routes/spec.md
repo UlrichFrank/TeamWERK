@@ -26,9 +26,10 @@ Kinder.
 
 Der Query-Parameter `?scope` engt die Antwort für bestimmte Aufrufer ein:
 
-- `?scope=duties` (Dienstbörse): Stammkader von Nutzer und Kindern, vereinigt mit den
-  Trainer-Teams des Nutzers. Der erweiterte Kader entfällt — er schuldet keine Dienststunden,
-  eine Filter-Option dafür bliebe immer leer.
+- `?scope=duties` (Dienstbörse): Stammkader und erweiterter Kader von Nutzer und Kindern,
+  vereinigt mit den Trainer-Teams des Nutzers — die Menge, aus der die Dienstbörse ihre
+  Gruppen bildet. Der erweiterte Kader belegt dort Dienste als Aushilfe; für ihn gilt der
+  Statusfilter `members.status <> 'ausgetreten'`.
 - `?scope=attendance-stats` und `?scope=diary-stats`: nur die eigenen Trainer-Teams, für
   Nutzer ohne `admin`/`sportliche_leitung` (bei `diary-stats` zusätzlich ohne `vorstand`).
   Diese beiden Scopes speisen eine **Navigation** statt einer Filterung: die Statistikseiten
@@ -58,9 +59,8 @@ Der Query-Parameter `?scope` engt die Antwort für bestimmte Aufrufer ein:
 #### Scenario: Derselbe Nutzer ruft den Dienst-Filter ab
 
 - **WHEN** derselbe User `GET /api/teams?scope=duties` aufruft
-- **THEN** enthält die Antwort seine Trainer-Mannschaft und die Stammkader-Mannschaft seines
-  Kindes
-- **AND** enthält sie nicht die Mannschaft, in der das Kind nur im erweiterten Kader steht
+- **THEN** enthält die Antwort seine Trainer-Mannschaft, die Stammkader-Mannschaft seines
+  Kindes und die Mannschaft, in der das Kind im erweiterten Kader steht
 
 #### Scenario: Spieler ruft Teams ab
 
@@ -73,6 +73,12 @@ Der Query-Parameter `?scope` engt die Antwort für bestimmte Aufrufer ein:
 - **WHEN** ein User mit Vereinsfunktion `trainer`, der zugleich Elternteil ist,
   `GET /api/teams?scope=attendance-stats` aufruft
 - **THEN** liefert der Endpoint nur seine Trainer-Teams
+
+#### Scenario: Ausgetretenes Mitglied im erweiterten Kader
+
+- **WHEN** ein User, dessen Mitglied mit `status = 'ausgetreten'` nur im erweiterten Kader
+  einer Mannschaft steht, `GET /api/teams?scope=duties` aufruft
+- **THEN** enthält die Antwort diese Mannschaft nicht
 
 ### Requirement: Keine /admin-Präfix-Routen
 

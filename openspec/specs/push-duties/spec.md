@@ -3,7 +3,9 @@
 ## Purpose
 
 Diese Spezifikation beschreibt die Capability `push-duties`. (Automatisch normalisiert; Purpose bei Bedarf verfeinern.)
+
 ## Requirements
+
 ### Requirement: Push bei Dienst-Ereignissen
 
 Das System SHALL berechtigten Nutzern eine Push Notification senden, wenn neue Dienst-Slots
@@ -11,9 +13,11 @@ verfügbar sind oder ein Slot gelöscht wird, dem sie zugeteilt sind — sofern 
 Kategorie `duties` nicht deaktiviert ist und die Benachrichtigung nicht per `silent`-Flag
 unterdrückt wurde.
 
-Die Empfängermenge bei einem neu angelegten Slot (`POST /api/duty-slots`) SHALL der
-Sichtbarkeit in der Dienstbörse folgen und dazu **beide** Filter anlegen, die
-`GET /api/duty-board` für nicht privilegierte Nutzer anlegt:
+Die Empfängermenge bei einem neu angelegten Slot (`POST /api/duty-slots`) SHALL eine
+**Teilmenge** der Sichtbarkeit in der Dienstbörse sein und dazu **beide** Filter anlegen, die
+`GET /api/duty-board` für nicht privilegierte Nutzer anlegt — mit einer bewussten Ausnahme:
+der **erweiterte Kader** und dessen Eltern sehen die Dienste des Teams (Aushilfe), werden
+über neue Slots aber **nicht** benachrichtigt, weil sie dem Team keine Dienste schulden.
 
 1. **Team-Scope** — bei gesetztem `game_id` alle Teams des Spiels (`game_teams`),
    `team_id` bleibt dort unbeachtet; bei einem Slot ohne Spiel dessen `team_id`; ohne
@@ -85,6 +89,16 @@ Löschung, und der Empfänger kann sich dort neu eintragen.
 - **WHEN** ein Dienst-Ereignis eintritt und der Nutzer hat `push_enabled=0` für `duties`
 - **THEN** erhält dieser Nutzer keine Push Notification
 
+#### Scenario: Erweiterter Kader wird über neue Slots nicht benachrichtigt
+- **WHEN** ein Slot für Team B angelegt wird und ein Spieler nur im erweiterten Kader von Team B steht
+- **THEN** erhält dieser Spieler keine Push Notification „Neuer Dienst verfügbar"
+- **AND** erhält auch ein Elternteil, dessen Kind nur im erweiterten Kader von Team B steht, keine
+- **AND** sehen beide den Slot trotzdem in `GET /api/duty-board`
+
+#### Scenario: Aushilfe-Zusage wird bei Löschung benachrichtigt
+- **WHEN** ein Slot gelöscht wird, auf dem ein Spieler des erweiterten Kaders eingetragen war
+- **THEN** erhält er die Push Notification „Dienst abgesagt" wie jeder andere Eingetragene
+
 ### Requirement: Notification an Dienst-Zugewiesene bei Event-Löschung
 
 Beim Löschen eines Spiels oder generischen Ereignisses (`DELETE /api/games/{id}`) SHALL das
@@ -132,4 +146,3 @@ Wird die Löschung per `silent`-Flag von einem Nutzer mit Capability
 
 - **WHEN** ein Dienst-Zugewiesener `email_enabled=1` für `duties` hat und sein Event gelöscht wird
 - **THEN** erhält der Nutzer eine Email mit dem persönlich formulierten Body und dem Direktlink
-
