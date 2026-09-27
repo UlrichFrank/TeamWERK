@@ -32,6 +32,7 @@ type matrixBody struct {
 			Present     *bool   `json:"present"`
 			Locked      bool    `json:"locked"`
 			Reason      *string `json:"reason"`
+			Lineup      string  `json:"lineup"`
 		} `json:"cells"`
 	} `json:"members"`
 }

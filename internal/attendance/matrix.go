@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/httpx"
 	"github.com/teamstuttgart/teamwerk/internal/policy"
 	"github.com/teamstuttgart/teamwerk/internal/timez"
@@ -49,6 +50,8 @@ type matrixCell struct {
 	Locked bool `json:"locked,omitempty"`
 	// Reason nur in Zeilen mit CanRespond (eigene, Kinder) — design.md §2.
 	Reason *string `json:"reason,omitempty"`
+	// Aufstellungsstatus (in/out/open) — nur in Spalten vom Typ heim/auswärts.
+	Lineup string `json:"lineup,omitempty"`
 }
 
 type matrixMember struct {
@@ -332,6 +335,10 @@ type matrixFacts struct {
 	responses   map[memberEventKey]matrixResponseRow
 	present     map[memberEventKey]bool
 	unavailable map[memberEventKey]bool
+	// inLineup: Mitglied steht in der Aufstellung des Spiels; lineupGames:
+	// Spiele mit mindestens einer Aufstellungszeile (auch fremder Mannschaften).
+	inLineup    map[memberEventKey]bool
+	lineupGames map[int]bool
 }
 
 // cell leitet den Zellwert ab — dieselbe Regel wie GetParticipants bzw.
@@ -362,6 +369,9 @@ func (f matrixFacts) cell(ev matrixEvent, memberID int, extended, withReason boo
 		c.Present = &b
 	}
 	c.Unavailable = f.unavailable[k]
+	if ev.Kind == "game" {
+		c.Lineup = appdb.ResolveLineupState(ev.EventType, f.lineupGames[ev.ID], f.inLineup[k])
+	}
 	return c
 }
 
@@ -377,6 +387,8 @@ func (h *Handler) loadMatrixFacts(ctx context.Context, teamID int, from, to stri
 		responses:   map[memberEventKey]matrixResponseRow{},
 		present:     map[memberEventKey]bool{},
 		unavailable: map[memberEventKey]bool{},
+		inLineup:    map[memberEventKey]bool{},
+		lineupGames: map[int]bool{},
 	}
 
 	// Jede Abfrage liefert (Termin-ID, Mitglied, Wert) und bindet dieselben drei
@@ -396,6 +408,15 @@ func (h *Handler) loadMatrixFacts(ctx context.Context, teamID int, from, to stri
 			 AND (msu.end_date   IS NULL OR msu.end_date   >= date(ts.date))
 			WHERE ts.team_id = ? AND date(ts.date) BETWEEN date(?) AND date(?)`,
 			func(k memberEventKey, _ string) { f.unavailable[k] = true }},
+		// Die ganze Aufstellung des Spiels, auch Mitglieder anderer Mannschaften:
+		// schon eine Zeile macht aus „offen" ein „nicht aufgestellt".
+		{"game", `
+			SELECT gl.game_id, gl.member_id, ''
+			FROM game_lineup gl
+			JOIN game_teams gt ON gt.game_id = gl.game_id AND gt.team_id = ?
+			JOIN games g ON g.id = gl.game_id
+			WHERE date(g.date) BETWEEN date(?) AND date(?)`,
+			func(k memberEventKey, _ string) { f.inLineup[k] = true; f.lineupGames[k.ev.id] = true }},
 	}
 	if withPresence {
 		queries = append(queries,
