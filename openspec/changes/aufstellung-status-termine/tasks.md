@@ -18,7 +18,7 @@
 
 ## 3. Frontend — gemeinsame Bausteine
 
-- [ ] 3.1 `web/src/lib/lineup.ts` (Typ, `LINEUP_LABEL`, `LINEUP_SURFACE`, `LINEUP_TEXT`, gemäß design.md §4, alle Elemente mit 1 px Rahmen und `rounded-md`), `web/src/components/LineupBadge.tsx` und `web/src/components/LineupCheckbox.tsx` (`role="checkbox"`, `aria-checked`, Leertaste/Enter, disabled-Variante) (Text-Kennzeichen ohne Symbol, Breite `w-32`, Höhe der Zu-/Absage-Knöpfe, optional freier Text für „N aufgestellt"); Vitest prüft alle drei Bezeichnungen/Flächenklassen und dass `undefined` nichts rendert; verifiziert mit `pnpm -C web test lineup`
+- [x] 3.1 `web/src/lib/lineup.ts` (Typ, `LINEUP_LABEL`, `LINEUP_SURFACE`, `LINEUP_TEXT`, gemäß design.md §4, alle Elemente mit 1 px Rahmen und `rounded-md`), `web/src/components/LineupBadge.tsx` und `web/src/components/LineupCheckbox.tsx` (`role="checkbox"`, `aria-checked`, Leertaste/Enter, disabled-Variante) (Text-Kennzeichen ohne Symbol, Breite `w-32`, Höhe der Zu-/Absage-Knöpfe, optional freier Text für „N aufgestellt"); Vitest prüft alle drei Bezeichnungen/Flächenklassen und dass `undefined` nichts rendert; verifiziert mit `pnpm -C web test lineup`
 
 ## 4. Frontend — Ansichten
 
