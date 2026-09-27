@@ -210,7 +210,7 @@ func TestCalendarFeed_IncludeTrainingTrue(t *testing.T) {
 	if !strings.Contains(body, "UID:training-") {
 		t.Error("feed must contain training_sessions when include_training=true")
 	}
-	if !strings.Contains(body, "Training: Team Alpha") {
+	if !strings.Contains(body, "Training: Erwachsene gemischt") {
 		t.Errorf("feed must contain training summary with team name, body: %s", body)
 	}
 }
@@ -251,7 +251,7 @@ func membershipFeed(t *testing.T, teamName, eventType, membershipTable string) s
 
 func gameSummaryFixture(t *testing.T, teamName, eventType string) string {
 	t.Helper()
-	return membershipFeed(t, teamName, eventType, "kader_members")
+	return unfoldICS(membershipFeed(t, teamName, eventType, "kader_members"))
 }
 
 // TestCalendarFeed_ErweiterterKaderIstGekennzeichnet: Wer im erweiterten Kader
@@ -261,10 +261,10 @@ func gameSummaryFixture(t *testing.T, teamName, eventType string) string {
 // Training denselben Kader-Zusatz ohne Status.
 func TestCalendarFeed_ErweiterterKaderIstGekennzeichnet(t *testing.T) {
 	body := unfoldICS(membershipFeed(t, "mB1", "heim", "kader_extended_members"))
-	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1 · erw. Kader · Aufstellung offen) – Test Opponent") {
+	if !strings.Contains(body, "SUMMARY:Heim: Team (Erwachsene gemischt · erw. Kader · Aufstellung offen) – Test Opponent") {
 		t.Errorf("game summary must mark the extended kader, body:\n%s", body)
 	}
-	if !strings.Contains(body, "SUMMARY:Training: mB1 · erw. Kader\r\n") {
+	if !strings.Contains(body, "SUMMARY:Training: Erwachsene gemischt · erw. Kader\r\n") {
 		t.Errorf("training summary must mark the extended kader without a lineup state, body:\n%s", body)
 	}
 }
@@ -273,10 +273,10 @@ func TestCalendarFeed_ErweiterterKaderIstGekennzeichnet(t *testing.T) {
 // ihrem Kader — ihre Termine kommen in den Feed, aber ohne Kader-Zusatz.
 func TestCalendarFeed_TrainerKaderOhneZusatz(t *testing.T) {
 	body := membershipFeed(t, "mB1", "heim", "kader_trainers")
-	if !strings.Contains(body, "SUMMARY:Heim: Team (mB1) – Test Opponent") {
+	if !strings.Contains(body, "SUMMARY:Heim: Team (Erwachsene gemischt) – Test Opponent") {
 		t.Errorf("trainer's game must appear without a kader suffix, body:\n%s", body)
 	}
-	if !strings.Contains(body, "SUMMARY:Training: mB1\r\n") {
+	if !strings.Contains(body, "SUMMARY:Training: Erwachsene gemischt\r\n") {
 		t.Errorf("trainer's training must appear without a kader suffix, body:\n%s", body)
 	}
 }
@@ -342,13 +342,13 @@ func TestCalendarFeed_KeinFunktionstraegerBypass(t *testing.T) {
 func TestCalendarFeed_GameSummaryNamesOwnTeam(t *testing.T) {
 	t.Run("heim", func(t *testing.T) {
 		body := gameSummaryFixture(t, "mA1", "heim")
-		if !strings.Contains(body, "SUMMARY:Heim: Team (mA1 · Aufstellung offen) – Test Opponent") {
+		if !strings.Contains(body, "SUMMARY:Heim: Team (Erwachsene gemischt · Aufstellung offen) – Test Opponent") {
 			t.Errorf("home game summary must name the own team, body:\n%s", body)
 		}
 	})
 	t.Run("auswärts", func(t *testing.T) {
 		body := gameSummaryFixture(t, "gD", "auswärts")
-		if !strings.Contains(body, "SUMMARY:Auswärts: Test Opponent – Team (gD · Aufstellung offen)") {
+		if !strings.Contains(body, "SUMMARY:Auswärts: Test Opponent – Team (Erwachsene gemischt · Aufstellung offen)") {
 			t.Errorf("away game summary must name the own team, body:\n%s", body)
 		}
 	})

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"io"
 	"net/http"
 	"os"
@@ -206,7 +207,7 @@ func (h *Handler) buildH4APlan(ctx context.Context, raw []h4aimport.RawGame) (h4
 			pg.TeamID, pg.TeamName, pg.TeamSource = &tid, tname, "gelernt"
 		} else if c, ok := suggestions[staffelKey{g.Staffel, alias}]; ok {
 			tid := c.id
-			pg.TeamID, pg.TeamName, pg.TeamSource = &tid, c.name, "vorschlag"
+			pg.TeamID, pg.TeamName, pg.TeamSource = &tid, c.label, "vorschlag"
 			pg.Warnings = append(pg.Warnings, "Mannschaft vorgeschlagen aus Staffel "+g.Staffel+" — bitte prüfen")
 		} else if grund := rejectReasons[staffelKey{g.Staffel, alias}]; grund != "" {
 			pg.Warnings = append(pg.Warnings, "Mannschaft nicht zugeordnet: "+grund)
@@ -318,7 +319,7 @@ func (h *Handler) lookupStaffelTeam(ctx context.Context, staffel, alias string) 
 	var teamID int
 	var name string
 	err := h.db.QueryRowContext(ctx,
-		`SELECT m.team_id, t.name
+		`SELECT m.team_id, `+appdb.TeamLongName("t")+`
 		   FROM h4a_staffel_team_map m JOIN teams t ON t.id = m.team_id
 		  WHERE m.staffel = ? AND m.club_alias = ?`, staffel, alias).Scan(&teamID, &name)
 	if err != nil {

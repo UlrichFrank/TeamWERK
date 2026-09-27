@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"io"
 	"mime"
 	"net/http"
@@ -371,7 +372,7 @@ func (h *Handler) ListPermissions(w http.ResponseWriter, r *http.Request) {
 			p.DisplayName = h.lookupName(r,
 				`SELECT first_name || ' ' || last_name FROM users WHERE id = ?`, p.PrincipalRef)
 		case "team", "team_parents":
-			p.DisplayName = h.lookupName(r, `SELECT name FROM teams WHERE id = ?`, p.PrincipalRef)
+			p.DisplayName = h.lookupName(r, `SELECT `+appdb.TeamLongName("t")+` FROM teams t WHERE t.id = ?`, p.PrincipalRef)
 		}
 		result = append(result, p)
 	}

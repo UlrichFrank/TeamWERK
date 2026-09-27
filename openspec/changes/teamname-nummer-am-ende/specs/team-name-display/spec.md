@@ -109,3 +109,19 @@ Die Kachel „Mein Team" auf dem Dashboard SHALL jedes eigene Team mit seiner La
 #### Scenario: Video einer von zwei C-Jugenden
 - **WHEN** ein Video der Mannschaft 1 von zwei männlichen C-Jugenden der aktiven Saison gelistet oder im Detail abgerufen wird
 - **THEN** ist `team_name` „C-Jugend männlich 1"
+
+### Requirement: Jede Ausgabe an Menschen nennt die Mannschaft in der Langform
+
+Jede Stelle, die einen Mannschaftsnamen in Langform an Menschen ausgibt — API-Felder (Anwesenheit, Rückmelde-Matrix, Teamliste `GET /api/teams`, Mitfahrten, Spiel-Suche, Staffeln, Ordner-Rechte, H4A-Import-Vorschau), Kalender-Feed, Push-Erinnerungen, Dienst-Export und veröffentlichte Spielberichte — SHALL die Langform nach der Regel von `display_long` verwenden (Fallback `teams.name` ohne Kader in der aktiven Saison). Der gespeicherte `teams.name` SHALL nur noch als Identitätsschlüssel (Team-Anlage, H4A-Nummernabgleich) und in der Stammdatenpflege der Teams verwendet werden. Kurzformen folgen weiterhin `display_short`.
+
+#### Scenario: Anwesenheit einer von zwei C-Jugenden
+- **WHEN** ein Trainer `GET /api/teams/{id}/attendance-stats` bzw. `GET /api/teams/{id}/rsvp-matrix` für Mannschaft 1 von zwei männlichen C-Jugenden abruft
+- **THEN** ist `team_name` „C-Jugend männlich 1"
+
+#### Scenario: Teamliste für Filter
+- **WHEN** `GET /api/teams` zwei männliche C-Jugenden der aktiven Saison liefert
+- **THEN** tragen sie `display_long` „C-Jugend männlich 1" bzw. „C-Jugend männlich 2"
+
+#### Scenario: Kalender-Feed
+- **WHEN** der persönliche Kalender-Feed ein Heimspiel der Mannschaft 1 von zwei männlichen C-Jugenden enthält
+- **THEN** nennt der Titel die Mannschaft als „C-Jugend männlich 1"

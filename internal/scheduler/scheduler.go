@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -756,7 +757,7 @@ func (s *Scheduler) sendGameReminders() {
 	to := now.Add(25 * time.Hour).Format("2006-01-02")
 
 	rows, err := s.db.Query(`
-		SELECT g.id, g.opponent, g.date, g.time, gt.team_id, t.name, g.event_type
+		SELECT g.id, g.opponent, g.date, g.time, gt.team_id, `+appdb.TeamLongName("t")+`, g.event_type
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
 		JOIN teams t ON t.id = gt.team_id
@@ -854,7 +855,7 @@ func (s *Scheduler) sendTrainingReminders() {
 	// wo es eines gibt, sonst vom Kader.
 	rows, err := s.db.Query(`
 		SELECT ts.id, ts.kader_id, COALESCE(NULLIF(ts.title,''),'Training'), ts.date, ts.start_time,
-		       COALESCE(t.name, k.name, '')
+		       COALESCE(`+appdb.TeamLongName("t")+`, k.name, '')
 		FROM training_sessions ts
 		JOIN kader k ON k.id = ts.kader_id
 		LEFT JOIN teams t ON t.id = ts.team_id

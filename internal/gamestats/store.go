@@ -160,7 +160,7 @@ func (s *Store) ListStaffelnWithTeam(ctx context.Context, seasonID, ownUserID in
 	// aushilft, spielt in ihrer Staffel und will Tabelle und Spielplan sehen.
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT COALESCE(st.id, 0), k.staffel, COALESCE(st.name, ''),
-		       COALESCE(t.name, ''), COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), k.id,
+		       COALESCE(`+appdb.TeamLongName("t")+`, ''), COALESCE(`+appdb.TeamDisplayShort("t")+`, t.name, ''), k.id,
 		       CASE WHEN st.polled_at IS NULL THEN 0 ELSE 1 END
 		  FROM kader k
 		  LEFT JOIN teams t ON t.id = k.team_id

@@ -312,7 +312,7 @@ func TestRenderICal_FaltungZerteiltKeineRune(t *testing.T) {
 	srv := prodserver.New(t, db)
 	raw := feedBody(t, srv, testutil.Token(t, userID, "standard", nil), allTogglesOn())
 
-	if !strings.Contains(unfoldICS(raw), "mB1 · erw. Kader · nicht aufgestellt") {
+	if !strings.Contains(unfoldICS(raw), "Erwachsene gemischt · erw. Kader · nicht aufgestellt") {
 		t.Fatalf("Fixture trifft den langen Titel nicht:\n%s", raw)
 	}
 	folded := 0

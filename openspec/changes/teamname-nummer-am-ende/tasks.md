@@ -45,7 +45,13 @@
 - [x] 5.1 Dashboard-Kachel „Mein Team" rendert `display_long || name`; verifizieren mit `DashboardPage.teamname.test.tsx`
 - [x] 5.2 Videos (`crud.go` Liste/Detail, `worker.go` Push, `eligible_games.go` Teamnamen) liefern `COALESCE(TeamDisplayName, t.name)`; verifizieren mit `TestListVideos_TeamNameIstLangformMitNummerAmEnde`
 
-## 6. Dokumentation und Integration
+## 6. Nachgemeldet: alle Seiten konsistent
 
-- [x] 6.1 Benutzerhandbuch/Schulungsfolien auf Beispiele der alten Reihenfolge prüfen (`grep -rn "Jugend [0-9] " web/public docs/schulung`) und ggf. anpassen; verifizieren durch leere Ausgabe
-- [ ] 6.2 Gesamt-Gate: `make test`, `pnpm -C web test`, `pnpm -C web lint`, `openspec validate teamname-nummer-am-ende --strict` grün
+- [x] 6.1 `appdb.TeamLongName(alias)` = `COALESCE(TeamDisplayName, alias.name)`; alle Anzeige-Selects umgestellt: Anwesenheit (Stats, RSVP-Matrix), `GET /api/teams` (+`display_short`/`display_long`), Kalender-Feed (Spiele, Trainings), Scheduler-Erinnerungen (Spiele, Trainings, Anwesenheit), Dienst-Export, Spielbericht-Veröffentlichung, Spiel-Suche, Mitfahrten, Staffeln, Ordner-Rechte, H4A-Vorschau (Abgleich bleibt auf `teams.name`); verifizieren mit `TestGetTeamStats_TeamNameIstLangform`, `TestListTeamsForUser_DisplayLongNummerAmEnde` und angepassten Kalender-/Staffel-Tests
+- [x] 6.2 H4A-Import-Modal: Mannschaftsauswahl zeigt `display_long || name`; verifizieren mit `pnpm -C web build`
+- [x] 6.3 Gotcha „Teamname: Anzeige vs. Identität" in `docs/agent/06-gotchas.md`
+
+## 7. Dokumentation und Integration
+
+- [x] 7.1 Benutzerhandbuch/Schulungsfolien auf Beispiele der alten Reihenfolge prüfen (`grep -rn "Jugend [0-9] " web/public docs/schulung`) und ggf. anpassen; verifizieren durch leere Ausgabe
+- [x] 7.2 Gesamt-Gate: `make test`, `pnpm -C web test`, `pnpm -C web lint`, `openspec validate teamname-nummer-am-ende --strict` grün

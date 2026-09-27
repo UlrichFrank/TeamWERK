@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"log/slog"
 	"sort"
 	"time"
@@ -93,7 +94,7 @@ type openAttendanceEvent struct {
 func (s *Scheduler) loadOpenAttendanceEvents(seasonID int, startDate string) ([]openAttendanceEvent, error) {
 	rows, err := s.db.Query(`
 		WITH trainers AS (
-			SELECT DISTINCT u.id AS user_id, t.id AS team_id, t.name AS team_name
+			SELECT DISTINCT u.id AS user_id, t.id AS team_id, `+appdb.TeamLongName("t")+` AS team_name
 			FROM kader k
 			JOIN teams t ON t.id = k.team_id
 			JOIN kader_trainers kt ON kt.kader_id = k.id

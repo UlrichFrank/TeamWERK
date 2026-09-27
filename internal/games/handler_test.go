@@ -2840,3 +2840,31 @@ func TestListTeamsForUser_TrainerElternteilErweiterterKader(t *testing.T) {
 		t.Errorf("/api/teams?scope=duties: erweiterter Kader (%d) muss als Aushilfe-Mannschaft im Filter stehen", teamErw)
 	}
 }
+
+// TestListTeamsForUser_DisplayLongNummerAmEnde: GET /api/teams liefert dieselbe
+// Langform wie alle anderen Team-Ausgaben — Filter und Auswahllisten zeigen
+// dadurch nie den gespeicherten teams.name ohne Nummer.
+func TestListTeamsForUser_DisplayLongNummerAmEnde(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	t1 := mkTeamCustom(t, db, "C-Jugend männlich", "C-Jugend", "m")
+	t2 := mkTeamCustom(t, db, "C-Jugend männlich 2", "C-Jugend", "m")
+	mkKaderCustomReturn(t, db, seasonID, t1, "C-Jugend", "m", 1)
+	mkKaderCustomReturn(t, db, seasonID, t2, "C-Jugend", "m", 2)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	res := testutil.Get(t, teamsServer(t, db), "/api/teams", testutil.Token(t, adminID, "admin", nil))
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.StatusCode)
+	}
+	var teams []map[string]any
+	json.NewDecoder(res.Body).Decode(&teams)
+	got := map[float64]string{}
+	for _, tm := range teams {
+		got[tm["id"].(float64)], _ = tm["display_long"].(string)
+	}
+	if got[float64(t1)] != "C-Jugend männlich 1" || got[float64(t2)] != "C-Jugend männlich 2" {
+		t.Errorf("display_long = %v, want C-Jugend männlich 1/2", got)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"math"
 	"net/http"
 	"strconv"
@@ -126,10 +127,10 @@ func (h *Handler) ExportSlots(w http.ResponseWriter, r *http.Request) {
 		       COALESCE(gtpl.name, ''),
 		       COALESCE(
 		         (SELECT group_concat(n, ', ') FROM (
-		            SELECT tt.name AS n FROM game_teams gt
+		            SELECT `+appdb.TeamLongName("tt")+` AS n FROM game_teams gt
 		            JOIN teams tt ON tt.id = gt.team_id
-		            WHERE gt.game_id = ds.game_id ORDER BY tt.name)),
-		         COALESCE(t.name, ''))
+		            WHERE gt.game_id = ds.game_id ORDER BY n)),
+		         COALESCE(`+appdb.TeamLongName("t")+`, ''))
 		 FROM duty_slots ds
 		 JOIN duty_types dt ON dt.id = ds.duty_type_id
 		 LEFT JOIN duty_types sdv ON sdv.id = dt.same_day_variant_id

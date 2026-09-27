@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"net/http"
 	"os"
 	"strconv"
@@ -259,7 +260,7 @@ func (h *Handler) GetTeamStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var teamName string
-	if err := h.db.QueryRowContext(r.Context(), `SELECT name FROM teams WHERE id = ?`, teamID).Scan(&teamName); err == sql.ErrNoRows {
+	if err := h.db.QueryRowContext(r.Context(), `SELECT `+appdb.TeamLongName("t")+` FROM teams t WHERE t.id = ?`, teamID).Scan(&teamName); err == sql.ErrNoRows {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	} else if err != nil {
