@@ -106,20 +106,27 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
       </p>
 
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Eigener Scrollbereich in beiden Achsen, höhenbegrenzt: nur so hat
+            `sticky top-0` am Kopf einen Bezug. Mit overflow-x-auto allein wäre
+            der Wrapper Scroll-Container ohne senkrechten Scroll (den macht <main>).
+            Die Höhe lässt Platz für die Legende darunter: ist <main> ganz nach unten
+            gescrollt, bleibt der Kopf trotzdem sichtbar. Gemessen an der engsten
+            Lage — mobil (App-Kopfleiste + fünfzeilige Legende) und 640 px mit
+            Seitenleiste (dreizeilige Legende); 8rem reichte dort nicht. */}
+        <div className="overflow-auto max-h-[calc(100dvh-13rem)]">
           <table className="border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
                 <th
                   scope="col"
-                  className="sticky left-0 z-10 bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left border-b border-r border-brand-border-subtle"
+                  className="sticky top-0 left-0 z-30 bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left border-b border-r border-brand-border-subtle"
                 >
                   Spieler
                 </th>
-                <th scope="col" title="Vergangene Termine: erfasste Anwesenheit, sonst Zusage" className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left border-b border-brand-border-subtle whitespace-nowrap">
+                <th scope="col" title="Vergangene Termine: erfasste Anwesenheit, sonst Zusage" className="hidden sm:table-cell sticky top-0 z-20 bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left border-b border-brand-border-subtle whitespace-nowrap">
                   Bisher
                 </th>
-                <th scope="col" title="Heutige und künftige Termine: Zusagen" className="hidden sm:table-cell bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left border-b border-r border-brand-border-subtle whitespace-nowrap">
+                <th scope="col" title="Heutige und künftige Termine: Zusagen" className="hidden sm:table-cell sticky top-0 z-20 bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-3 text-left border-b border-r border-brand-border-subtle whitespace-nowrap">
                   Geplant
                 </th>
                 {columns.map(i => {
@@ -130,7 +137,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
                     <th
                       key={`${ev.kind}-${ev.id}`}
                       scope="col"
-                      className="bg-brand-surface-card px-1 py-2 border-b border-brand-border-subtle font-normal"
+                      className="sticky top-0 z-20 bg-brand-surface-card px-1 py-2 border-b border-brand-border-subtle font-normal"
                     >
                       <Link
                         to={terminDetailPath(ev)}

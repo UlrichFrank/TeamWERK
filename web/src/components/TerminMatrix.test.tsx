@@ -90,3 +90,41 @@ describe('TerminMatrix — Aufstellung', () => {
     }
   })
 })
+
+// Change termin-matrix-kopfzeile-fixiert: die Titelzeile bleibt beim
+// vertikalen Scrollen stehen. jsdom rechnet kein Sticky-Layout — geprüft werden
+// die Invarianten, ohne die es im Browser nicht greift.
+describe('TerminMatrix — fixierte Titelzeile', () => {
+  test('Tabelle scrollt in einem eigenen, höhenbegrenzten Bereich', () => {
+    renderMatrix()
+    const wrapper = screen.getByRole('table').parentElement as HTMLElement
+    // overflow-x-auto allein wäre Scroll-Container ohne senkrechten Scroll:
+    // sticky top-0 hätte dann keinen Bezug.
+    expect(wrapper.className).toMatch(/(^|\s)overflow-auto(\s|$)/)
+    expect(wrapper.className).toMatch(/(^|\s)max-h-/)
+  })
+
+  test('alle Kopfzellen sind oben fixiert, die Ecke „Spieler" liegt zuoberst', () => {
+    renderMatrix()
+    const heads = screen.getByRole('table').querySelectorAll('thead th')
+    expect(heads.length).toBeGreaterThan(0)
+    for (const th of heads) {
+      expect(th.className).toMatch(/(^|\s)sticky(\s|$)/)
+      expect(th.className).toMatch(/(^|\s)top-0(\s|$)/)
+    }
+    const corner = screen.getByRole('columnheader', { name: 'Spieler' })
+    expect(corner.className).toMatch(/(^|\s)left-0(\s|$)/)
+    expect(corner.className).toMatch(/(^|\s)z-30(\s|$)/)
+    for (const th of heads) {
+      if (th !== corner) expect(th.className).toMatch(/(^|\s)z-20(\s|$)/)
+    }
+  })
+
+  test('Zeilenköpfe bleiben links fixiert unter der Titelzeile', () => {
+    renderMatrix()
+    const rowHead = screen.getByRole('rowheader', { name: /Luca Brenner/ })
+    expect(rowHead.className).toMatch(/(^|\s)sticky(\s|$)/)
+    expect(rowHead.className).toMatch(/(^|\s)left-0(\s|$)/)
+    expect(rowHead.className).toMatch(/(^|\s)z-10(\s|$)/)
+  })
+})
