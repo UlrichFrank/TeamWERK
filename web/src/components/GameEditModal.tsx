@@ -46,11 +46,8 @@ interface AvailableTeam {
   is_active: boolean
 }
 
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
-
 import type { RegenSummary } from './RegenSummaryCard'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER, LABEL } from '../lib/buttonStyles'
 
 interface Props {
   game: Game
@@ -162,7 +159,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
   }
 
   return (
-    <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -181,33 +178,33 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">
+            <label className={LABEL}>
               {isGeneric ? 'Event-Name' : 'Gegner'}
             </label>
             <input type="text" value={opponent} onChange={e => setOpponent(e.target.value)}
               placeholder={isGeneric ? 'Event-Name…' : 'Gegner…'} className={INPUT} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum</label>
+            <label className={LABEL}>Datum</label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
           </div>
           <div className={isGeneric ? 'grid grid-cols-2 gap-3' : ''}>
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">
+              <label className={LABEL}>
                 {isGeneric ? 'Beginn' : 'Uhrzeit'}
               </label>
               <input type="time" value={time} onChange={e => setTime(e.target.value)} className={INPUT} />
             </div>
             {isGeneric && (
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Ende</label>
+                <label className={LABEL}>Ende</label>
                 <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={INPUT} />
               </div>
             )}
           </div>
           {!isGeneric && (
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Typ</label>
+              <label className={LABEL}>Typ</label>
               <select value={eventType} onChange={e => setEventType(e.target.value)} className={INPUT}>
                 <option value="heim">Heimspiel</option>
                 <option value="auswärts">Auswärtsspiel</option>
@@ -215,7 +212,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">
+            <label className={LABEL}>
               Enddatum <span className="text-brand-text-subtle font-normal">(optional, für mehrtägige Events)</span>
             </label>
             <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
@@ -258,11 +255,11 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+            <label className={LABEL}>Ort</label>
             <VenuePicker value={venueId} onChange={setVenueId} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Dienstplan-Vorlage</label>
+            <label className={LABEL}>Dienstplan-Vorlage</label>
             <select
               value={templateId === null ? '' : String(templateId)}
               onChange={e => setTemplateId(e.target.value === '' ? null : Number(e.target.value))}
@@ -304,7 +301,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`flex-1 ${BTN_DANGER}`}
               >
                 {deleting ? 'Löschen…' : 'Ja, löschen'}
               </button>

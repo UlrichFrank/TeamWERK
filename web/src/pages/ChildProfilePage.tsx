@@ -12,7 +12,7 @@ import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
 import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
 import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
 import { Member, Parent, Phone } from './ProfilePage'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 
 export interface UserContact {
   first_name: string
@@ -111,16 +111,12 @@ export default function ChildProfilePage() {
     <div className="max-w-4xl">
       <h1 className="text-2xl font-bold mb-6">{member.first_name}</h1>
 
-      <div className="flex gap-1 mb-6 border-b border-brand-border-subtle flex-wrap">
+      <div className={`${TAB_BAR} mb-6`}>
         {tabs.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab
-                ? 'border-brand-yellow text-brand-text'
-                : 'border-transparent text-brand-text-muted hover:text-brand-text'
-            }`}
+            className={`${TAB} ${activeTab === tab ? TAB_ACTIVE : TAB_INACTIVE}`}
           >
             {labels[tab]}
           </button>
@@ -158,7 +154,7 @@ export default function ChildProfilePage() {
                 <input
                   type="email" required value={newRecoveryEmail} onChange={e => setNewRecoveryEmail(e.target.value)}
                   placeholder="Neue Eltern-E-Mail"
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
                 {recoveryError && (
                   <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{recoveryError}</div>

@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
+import { INPUT, LABEL } from '../lib/buttonStyles'
 
 const Sidebar = () => (
   <div className="hidden sm:flex flex-col justify-center items-center sm:w-56 shrink-0 px-8 py-12 text-brand-black">
@@ -88,30 +89,30 @@ export default function RequestMembershipPage() {
                 </span>
               </label>
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">
+                <label className={LABEL}>
                   {isChild ? 'Vorname des Kindes' : 'Vorname'}
                 </label>
                 <input
                   type="text" value={firstName} onChange={e => setFirstName(e.target.value)} required
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">
+                <label className={LABEL}>
                   {isChild ? 'Nachname des Kindes' : 'Nachname'}
                 </label>
                 <input
                   type="text" value={lastName} onChange={e => setLastName(e.target.value)} required={isChild}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               {isChild ? (
                 <div>
-                  <label className="block text-sm font-medium text-brand-black mb-1">E-Mail der Eltern</label>
+                  <label className={LABEL}>E-Mail der Eltern</label>
                   <input
                     type="email" value={parentEmail} onChange={e => setParentEmail(e.target.value)} required
                     placeholder="verwaltendes Elternteil"
-                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                    className={INPUT}
                   />
                   <p className="mt-1 text-xs text-brand-text-muted">
                     Der Login-Name (Vorname.Nachname) und der Link zum Passwort-Setzen gehen an diese Adresse.
@@ -119,21 +120,21 @@ export default function RequestMembershipPage() {
                 </div>
               ) : (
                 <div>
-                  <label className="block text-sm font-medium text-brand-black mb-1">E-Mail</label>
+                  <label className={LABEL}>E-Mail</label>
                   <input
                     type="email" value={email} onChange={e => setEmail(e.target.value)} required
-                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                    className={INPUT}
                   />
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">
+                <label className={LABEL}>
                   Kommentar <span className="text-brand-text-subtle font-normal">(optional)</span>
                 </label>
                 <input
                   type="text" value={comment} onChange={e => setComment(e.target.value)}
                   placeholder="z.B. Mannschaft, Ansprechpartner …"
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <button

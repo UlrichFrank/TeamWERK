@@ -1,7 +1,7 @@
 import { useEffect, useState, FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
-import { Trash2, X, Star } from 'lucide-react'
+import { Trash2, X, Star, Check, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useVault } from '../contexts/VaultContext'
@@ -14,11 +14,9 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import NumberSpinner from '../components/NumberSpinner'
 import { BEITRAGS_KATEGORIEN, kategorieLabel } from '../lib/beitragsKategorien'
 import { errorStatus } from '../lib/errors'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, INPUT, BTN_SECONDARY, LABEL, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const BTN_DANGER_SM = 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
 // ─── Verein Tab ───────────────────────────────────────────────────────────────
@@ -118,11 +116,11 @@ function VereinTab() {
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Vereinsname</label>
+          <label className={LABEL}>Vereinsname</label>
           <input value={name} onChange={e => setName(e.target.value)} className={INPUT} />
         </div>
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Adresse</label>
+          <label className={LABEL}>Adresse</label>
           <input value={address} onChange={e => setAddress(e.target.value)} className={INPUT} />
         </div>
 
@@ -137,19 +135,19 @@ function VereinTab() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Gläubiger-ID</label>
+              <label className={LABEL}>Gläubiger-ID</label>
               <input value={glaeubigerId} onChange={e => setGlaeubigerId(e.target.value)} disabled={!isUnlocked} placeholder="DE98ZZZ09999999999" className={INPUT} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Kontoinhaber</label>
+              <label className={LABEL}>Kontoinhaber</label>
               <input value={kontoinhaber} onChange={e => setKontoinhaber(e.target.value)} disabled={!isUnlocked} className={INPUT} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
+              <label className={LABEL}>IBAN</label>
               <input value={iban} onChange={e => setIban(e.target.value)} disabled={!isUnlocked} placeholder="DE.." className={INPUT} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">BIC</label>
+              <label className={LABEL}>BIC</label>
               <input value={bic} onChange={e => setBic(e.target.value)} disabled={!isUnlocked} className={INPUT} />
             </div>
           </div>
@@ -159,7 +157,7 @@ function VereinTab() {
           <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
         )}
         <button type="submit" className={BTN_PRIMARY}>
-          {saved ? 'Gespeichert ✓' : 'Speichern'}
+          {saved ? <span className="inline-flex items-center gap-1">Gespeichert <Check className="w-4 h-4" /></span> : 'Speichern'}
         </button>
       </form>
     </div>
@@ -300,8 +298,8 @@ function SaisonsTab() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <span className="text-sm text-brand-text-muted">{seasons.length} Saison{seasons.length !== 1 ? 'en' : ''}</span>
-        <button onClick={() => setShowCreate(true)} className={BTN_PRIMARY}>
-          + Saison anlegen
+        <button onClick={() => setShowCreate(true)} className={`${BTN_PRIMARY} inline-flex items-center gap-1`}>
+          <Plus className="w-3.5 h-3.5" />Saison anlegen
         </button>
       </div>
 
@@ -311,7 +309,7 @@ function SaisonsTab() {
 
       {/* Create Modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg text-brand-text">Neue Saison</h2>
@@ -322,7 +320,7 @@ function SaisonsTab() {
             <form onSubmit={handleCreate} className="flex flex-col flex-1 min-h-0">
               <div className="overflow-y-auto px-6 py-4 space-y-4 flex-1">
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Saison</label>
+                  <label className={LABEL}>Saison</label>
                   <select value={preset} onChange={e => handlePreset(e.target.value)} className={INPUT} required>
                     <option value="">Wählen…</option>
                     {generateSeasonOptions().map(opt => (
@@ -331,16 +329,16 @@ function SaisonsTab() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Name</label>
+                  <label className={LABEL}>Name</label>
                   <input value={createName} onChange={e => setCreateName(e.target.value)} className={INPUT} required />
                 </div>
                 <div className="flex gap-3">
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Startdatum</label>
+                    <label className={LABEL}>Startdatum</label>
                     <input type="date" value={createStart} onChange={e => setCreateStart(e.target.value)} className={INPUT} required />
                   </div>
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Enddatum</label>
+                    <label className={LABEL}>Enddatum</label>
                     <input type="date" value={createEnd} onChange={e => setCreateEnd(e.target.value)} className={INPUT} required />
                   </div>
                 </div>
@@ -360,7 +358,7 @@ function SaisonsTab() {
                   {creating ? 'Anlegen…' : 'Anlegen'}
                 </button>
                 <button type="button" onClick={() => setShowCreate(false)}
-                  className="px-4 py-2.5 sm:py-2 text-sm border border-brand-border rounded-md text-brand-text hover:bg-brand-surface-card transition-colors">
+                  className={BTN_SECONDARY}>
                   Abbrechen
                 </button>
               </div>
@@ -383,16 +381,16 @@ function SaisonsTab() {
           </p>
         )}
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Name</label>
+          <label className={LABEL}>Name</label>
           <input value={editName} onChange={e => setEditName(e.target.value)} className={INPUT} />
         </div>
         <div className="flex gap-3">
           <div className="flex-1">
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Startdatum</label>
+            <label className={LABEL}>Startdatum</label>
             <input type="date" value={editStart} onChange={e => setEditStart(e.target.value)} className={INPUT} />
           </div>
           <div className="flex-1">
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Enddatum</label>
+            <label className={LABEL}>Enddatum</label>
             <input type="date" value={editEnd} onChange={e => setEditEnd(e.target.value)} className={INPUT} />
           </div>
         </div>
@@ -784,7 +782,7 @@ function BewirtungKachel() {
       <h2 className="text-sm font-semibold text-brand-text mb-4">Bewirtung</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="bewirtung-verhaeltnis" className="block text-sm font-medium text-brand-text-muted mb-1">Kuchen je Spiel</label>
+          <label htmlFor="bewirtung-verhaeltnis" className={LABEL}>Kuchen je Spiel</label>
           <input
             id="bewirtung-verhaeltnis"
             type="text"
@@ -798,7 +796,7 @@ function BewirtungKachel() {
           </p>
         </div>
         <div>
-          <label htmlFor="bewirtung-max-per-team" className="block text-sm font-medium text-brand-text-muted mb-1">Max. Kuchen pro Mannschaft</label>
+          <label htmlFor="bewirtung-max-per-team" className={LABEL}>Max. Kuchen pro Mannschaft</label>
           <input
             id="bewirtung-max-per-team"
             type="number"
@@ -818,7 +816,7 @@ function BewirtungKachel() {
           <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
         )}
         <button type="submit" disabled={saving} className={BTN_PRIMARY}>
-          {saving ? 'Speichern…' : saved ? 'Gespeichert ✓' : 'Speichern'}
+          {saving ? 'Speichern…' : saved ? <span className="inline-flex items-center gap-1">Gespeichert <Check className="w-4 h-4" /></span> : 'Speichern'}
         </button>
       </form>
     </div>
@@ -1088,7 +1086,7 @@ function AusrichterKachel() {
 
       {/* Löschen-Bestätigung mit Vorab-Bilanz (Spieltage + gebundene Vorlagen-Zeilen) */}
       {deleteTarget && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg text-brand-text">Ausrichter löschen?</h2>
@@ -1161,7 +1159,7 @@ function AusrichterKachel() {
               <button
                 type="button"
                 onClick={closeDeleteConfirm}
-                className="px-4 py-2.5 sm:py-2 text-sm border border-brand-border rounded-md text-brand-text hover:bg-brand-surface-card transition-colors"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>
@@ -1401,16 +1399,12 @@ export default function AdminSettingsPage() {
       <h1 className="text-2xl font-bold text-brand-text mb-6">Einstellungen</h1>
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-brand-border-subtle mb-6">
+      <div className={`${TAB_BAR} mb-6`}>
         {visibleTabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              activeTab === t.id
-                ? 'border-brand-yellow text-brand-text'
-                : 'border-transparent text-brand-text-muted hover:text-brand-text'
-            }`}
+            className={`${TAB} ${activeTab === t.id ? TAB_ACTIVE : TAB_INACTIVE}`}
           >
             {t.label}
           </button>

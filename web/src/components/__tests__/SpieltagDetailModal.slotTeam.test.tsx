@@ -50,8 +50,8 @@ async function addSlot() {
       <SpieltagDetailModal gameId={234} onClose={() => {}} />
     </MemoryRouter>,
   )
-  await screen.findByText('+ Dienst hinzufügen')
-  await user.click(screen.getByText('+ Dienst hinzufügen'))
+  await screen.findByRole('button', { name: 'Dienst hinzufügen' })
+  await user.click(screen.getByRole('button', { name: 'Dienst hinzufügen' }))
   // getAllByRole, weil das Dauer-Feld (datalist-gestützt) seit dienst-dauer ebenfalls
   // die implizite ARIA-Rolle "combobox" trägt — der Diensttyp-Select steht im DOM zuerst.
   await user.selectOptions(screen.getAllByRole('combobox')[0], '7')

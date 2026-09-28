@@ -280,7 +280,7 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
               Anfrage zurückziehen
             </button>
           )}
-          {dsgvoSaved && <span className="text-sm text-green-600">Anfrage gesendet</span>}
+          {dsgvoSaved && <span className="text-sm text-brand-success">Anfrage gesendet</span>}
           {dsgvoError && <span className="text-sm text-brand-danger">{dsgvoError}</span>}
         </div>
       </div>

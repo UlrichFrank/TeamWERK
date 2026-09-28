@@ -11,6 +11,7 @@ import ProfileKalenderTab from '../components/profile/ProfileKalenderTab'
 import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
 import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
 import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
+import { TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 
 export interface Member {
   id: number; first_name: string; last_name: string
@@ -130,16 +131,12 @@ export default function ProfilePage() {
       <h1 className="text-2xl font-bold mb-6">Mein Profil</h1>
 
       {/* Tab Navigation */}
-      <div className="flex gap-1 mb-6 border-b border-brand-border-subtle flex-wrap">
+      <div className={`${TAB_BAR} mb-6`}>
         {tabs.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab
-                ? 'border-brand-yellow text-brand-text'
-                : 'border-transparent text-brand-text-muted hover:text-brand-text'
-            }`}
+            className={`${TAB} ${activeTab === tab ? TAB_ACTIVE : TAB_INACTIVE}`}
           >
             {labels[tab]}
           </button>

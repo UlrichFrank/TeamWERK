@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Trash2 } from 'lucide-react'
+import { X, Trash2, Plus } from 'lucide-react'
 import { api } from '../lib/api'
 import { formatTeamList } from '../lib/teamName'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -12,7 +12,7 @@ import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import HoursInput from './HoursInput'
 import { resolveAnchorClock, clockDiffMinutes } from '../lib/duration'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER, LABEL } from '../lib/buttonStyles'
 
 interface GameDetail {
   id: number
@@ -61,9 +61,6 @@ interface Props {
   onChanged?: () => void
   onDeleted?: () => void
 }
-
-const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
 
 export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDeleted }: Props) {
   const [game, setGame] = useState<GameDetail | null>(null)
@@ -262,7 +259,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
   const isPast = game ? new Date(game.date.slice(0, 10) + 'T23:59:59') < new Date() : false
 
   return (
-    <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
       <div
         ref={mainDialogRef}
         role="dialog"
@@ -304,9 +301,9 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               {canEdit && (
                 <button
                   onClick={() => setShowAddSlot(true)}
-                  className="text-sm bg-brand-yellow text-brand-black px-3 py-1.5 rounded-md font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  className="inline-flex items-center gap-1 text-sm bg-brand-yellow text-brand-black px-3 py-1.5 rounded-md font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
                 >
-                  + Dienst hinzufügen
+                  <Plus className="w-3.5 h-3.5" />Dienst hinzufügen
                 </button>
               )}
             </div>
@@ -328,7 +325,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
         {/* Add slot modal */}
         {showAddSlot && createPortal(
-          <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
             <div
               ref={addSlotDialogRef}
               role="dialog"
@@ -339,7 +336,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               <h3 id={addSlotTitleId} className="font-bold mb-4 text-brand-text">Dienst hinzufügen</h3>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Diensttyp *</label>
+                  <label className={LABEL}>Diensttyp *</label>
                   <select value={addDutyTypeId} onChange={e => {
                     const dtId = Number(e.target.value)
                     setAddDutyTypeId(dtId)
@@ -364,25 +361,25 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
                         if (diffMinutes !== null && diffMinutes > 0) setAddHours(diffMinutes / 60)
                       }
                     }
-                  }} className={INPUT_WIZ}>
+                  }} className={INPUT}>
                     <option value="">Auswählen…</option>
                     {dutyTypes.map(dt => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Uhrzeit</label>
-                  <input type="time" value={addEventTime} onChange={e => setAddEventTime(e.target.value)} className={INPUT_WIZ} />
+                  <label className={LABEL}>Uhrzeit</label>
+                  <input type="time" value={addEventTime} onChange={e => setAddEventTime(e.target.value)} className={INPUT} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
-                  <HoursInput value={addHours} onChange={setAddHours} className={INPUT_WIZ} />
+                  <label className={LABEL}>Dauer</label>
+                  <HoursInput value={addHours} onChange={setAddHours} className={INPUT} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Personen</label>
-                  <input type="number" min={1} value={addSlotsTotal} onChange={e => setAddSlotsTotal(Number(e.target.value))} className={INPUT_WIZ} />
+                  <label className={LABEL}>Personen</label>
+                  <input type="number" min={1} value={addSlotsTotal} onChange={e => setAddSlotsTotal(Number(e.target.value))} className={INPUT} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle text-xs font-normal">(leer = keine Einschränkung)</span></label>
+                  <label className={LABEL}>Zielgruppe <span className="text-brand-text-subtle text-xs font-normal">(leer = keine Einschränkung)</span></label>
                   <div className="grid grid-cols-2 gap-1.5 mt-1">
                     {AUDIENCE_OPTIONS.map(o => (
                       <label key={o.value} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -419,7 +416,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
         {/* Edit slot modal */}
         {editSlot && createPortal(
-          <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
             <div
               ref={editSlotDialogRef}
               role="dialog"
@@ -431,19 +428,19 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               <p className="text-sm text-brand-text-muted mb-3 font-medium">{editSlot.duty_type_name}</p>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Uhrzeit</label>
-                  <input type="time" value={editEventTime} onChange={e => setEditEventTime(e.target.value)} className={INPUT_WIZ} />
+                  <label className={LABEL}>Uhrzeit</label>
+                  <input type="time" value={editEventTime} onChange={e => setEditEventTime(e.target.value)} className={INPUT} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
-                  <HoursInput value={editHours} onChange={setEditHours} className={INPUT_WIZ} />
+                  <label className={LABEL}>Dauer</label>
+                  <HoursInput value={editHours} onChange={setEditHours} className={INPUT} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Personen</label>
-                  <input type="number" min={1} value={editSlotsTotal} onChange={e => setEditSlotsTotal(Number(e.target.value))} className={INPUT_WIZ} />
+                  <label className={LABEL}>Personen</label>
+                  <input type="number" min={1} value={editSlotsTotal} onChange={e => setEditSlotsTotal(Number(e.target.value))} className={INPUT} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe <span className="text-brand-text-subtle text-xs font-normal">(leer = keine Einschränkung)</span></label>
+                  <label className={LABEL}>Zielgruppe <span className="text-brand-text-subtle text-xs font-normal">(leer = keine Einschränkung)</span></label>
                   <div className="grid grid-cols-2 gap-1.5 mt-1">
                     {AUDIENCE_OPTIONS.map(o => (
                       <label key={o.value} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -488,7 +485,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
         {/* Delete slot confirmation */}
         {deleteSlotId !== null && createPortal(
-          <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
             <div
               ref={deleteSlotDialogRef}
               role="dialog"
@@ -508,7 +505,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               <div className="flex gap-2">
                 <button onClick={closeDeleteSlot} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                 <button onClick={handleDeleteSlot} disabled={deleteSaving}
-                  className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-50">
+                  className={`flex-1 ${BTN_DANGER}`}>
                   {deleteSaving ? 'Löschen…' : 'Löschen'}
                 </button>
               </div>
@@ -519,7 +516,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
         {/* Delete game confirmation */}
         {showDeleteGame && game && createPortal(
-          <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
             <div
               ref={deleteGameDialogRef}
               role="dialog"
@@ -544,7 +541,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               <div className="flex gap-2">
                 <button onClick={() => setShowDeleteGame(false)} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                 <button onClick={handleDeleteGame} disabled={deletingGame}
-                  className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-50">
+                  className={`flex-1 ${BTN_DANGER}`}>
                   {deletingGame ? 'Löschen…' : 'Endgültig löschen'}
                 </button>
               </div>

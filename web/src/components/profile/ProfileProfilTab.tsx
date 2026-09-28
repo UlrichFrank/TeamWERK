@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, FormEvent } from 'react'
-import { ChevronDown, Trash2 } from 'lucide-react'
+import { ChevronDown, Trash2, X, Plus } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Member, Parent, Phone, Visibility, ChangeDraft } from '../../pages/ProfilePage'
 import { UserContact } from '../../pages/ChildProfilePage'
 import ImageCropModal from '../ImageCropModal'
 import Toggle from '../Toggle'
-import { BTN_PRIMARY } from '../../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, LABEL } from '../../lib/buttonStyles'
 
 interface Props {
   children: Member[]
@@ -266,7 +266,7 @@ export default function ProfileProfilTab({
     }
   }
 
-  const inputCls = `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+  const inputCls = INPUT
 
   return (
     <div className="space-y-6">
@@ -284,7 +284,7 @@ export default function ProfileProfilTab({
           {photoURL ? (
             <img src={photoURL} alt="Profilbild" className="w-20 h-20 rounded-full object-cover border border-brand-border" />
           ) : (
-            <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-brand-text-subtle text-xs">Kein Bild</div>
+            <div className="w-20 h-20 rounded-full bg-brand-border-subtle flex items-center justify-center text-brand-text-subtle text-xs">Kein Bild</div>
           )}
           <div>
             <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
@@ -333,7 +333,7 @@ export default function ProfileProfilTab({
         <form onSubmit={handleSave} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
+              <label className={LABEL}>Vorname</label>
               <input
                 type="text"
                 value={firstName}
@@ -342,7 +342,7 @@ export default function ProfileProfilTab({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
+              <label className={LABEL}>Nachname</label>
               <input
                 type="text"
                 value={lastName}
@@ -352,7 +352,7 @@ export default function ProfileProfilTab({
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Straße</label>
+            <label className={LABEL}>Straße</label>
             <input
               type="text"
               value={address.street}
@@ -362,7 +362,7 @@ export default function ProfileProfilTab({
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">PLZ</label>
+              <label className={LABEL}>PLZ</label>
               <input
                 type="text"
                 value={address.zip}
@@ -371,7 +371,7 @@ export default function ProfileProfilTab({
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+              <label className={LABEL}>Ort</label>
               <input
                 type="text"
                 value={address.city}
@@ -382,7 +382,7 @@ export default function ProfileProfilTab({
           </div>
           {showDateOfBirth && (
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Geburtsdatum</label>
+              <label className={LABEL}>Geburtsdatum</label>
               <input
                 type="date"
                 value={dateOfBirth}
@@ -406,7 +406,7 @@ export default function ProfileProfilTab({
                     {p.label && <span className="text-brand-text-muted mr-2">{p.label}:</span>}
                     <span className="font-mono">{p.number}</span>
                   </div>
-                  <button onClick={() => handleDeletePhone(p.id)} className="text-xs text-brand-text-subtle hover:text-brand-danger">×</button>
+                  <button onClick={() => handleDeletePhone(p.id)} aria-label="Telefonnummer entfernen" className="text-brand-text-subtle hover:text-brand-danger transition-colors"><X className="w-4 h-4" /></button>
                 </div>
               ))}
             </div>
@@ -455,8 +455,8 @@ export default function ProfileProfilTab({
               </div>
             </div>
           ) : (
-            <button onClick={() => setShowAddPhone(true)} className="text-sm text-brand-blue underline hover:text-brand-black">
-              + Nummer hinzufügen
+            <button onClick={() => setShowAddPhone(true)} className="inline-flex items-center gap-1 text-sm text-brand-blue underline hover:text-brand-black">
+              <Plus className="w-3.5 h-3.5" />Nummer hinzufügen
             </button>
           )}
         </div>
@@ -524,7 +524,7 @@ export default function ProfileProfilTab({
         >
           {saving ? 'Speichern…' : 'Speichern'}
         </button>
-        {saved && <span className="text-sm text-green-600">Gespeichert</span>}
+        {saved && <span className="text-sm text-brand-success">Gespeichert</span>}
         {error && <span className="text-sm text-brand-danger">{error}</span>}
       </div>
 

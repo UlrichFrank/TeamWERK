@@ -21,7 +21,7 @@ import { useDebouncedQueryParam } from '../hooks/useDebouncedQueryParam'
 import EventSearchInput from '../components/EventSearchInput'
 import FilterEmptyState from '../components/FilterEmptyState'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
-import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, BTN_SECONDARY, INPUT, HEADER_GROUP } from '../lib/buttonStyles'
 
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
@@ -589,7 +589,7 @@ export default function TerminePage() {
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold text-brand-text shrink-0">Termine</h1>
-        <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+        <div className={HEADER_GROUP}>
           {/* Auch auf Mobile bedienbar: als Icon-Button mit Zähler braucht der
               Filter nicht mehr den Platz, an dem das frühere <select> mit dem
               Suchfeld kollidierte. */}
@@ -978,7 +978,7 @@ export default function TerminePage() {
         const typeLabel = ev.event_type === 'training' ? 'Training' : ev.event_type === 'heim' ? 'Heimspiel' : ev.event_type === 'auswärts' ? 'Auswärtsspiel' : 'Termin'
         const status = cell.status
         return (
-          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setMatrixEdit(null)}>
+          <div className="fixed inset-0 z-50 bg-brand-black/40 flex items-center justify-center p-4" onClick={() => setMatrixEdit(null)}>
             <div
               role="dialog"
               aria-modal="true"
@@ -1021,7 +1021,7 @@ export default function TerminePage() {
       })()}
 
       {pendingRSVP && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-brand-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
             <h2 className="text-base font-semibold text-brand-text mb-1">
               {pendingRSVP.status === 'declined' ? 'Absagen' : 'Vielleicht'}
@@ -1034,12 +1034,12 @@ export default function TerminePage() {
               value={modalReason}
               onChange={e => setModalReason(e.target.value)}
               placeholder="Begründung…"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow resize-none"
+              className={`${INPUT} resize-none`}
             />
             <div className="flex justify-end gap-2 mt-4">
               <button
                 onClick={cancelModal}
-                className="rounded-md px-4 py-2 text-sm font-medium border border-brand-border text-brand-text-muted hover:border-brand-text hover:text-brand-text transition-colors"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>

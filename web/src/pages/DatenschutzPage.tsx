@@ -28,7 +28,7 @@ export default function DatenschutzPage() {
 
         <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 sm:p-8 space-y-8">
           <header>
-            <h1 className="text-2xl sm:text-3xl font-bold text-brand-text">Datenschutzerklärung</h1>
+            <h1 className="text-2xl font-bold text-brand-text">Datenschutzerklärung</h1>
             <p className="text-sm text-brand-text-muted mt-2">
               TeamWERK ist die interne Vereinsverwaltungsplattform des Vereins zur Talentförderung
               des Handballs in Stuttgart e.V. (Team Stuttgart). Diese Seite informiert über die

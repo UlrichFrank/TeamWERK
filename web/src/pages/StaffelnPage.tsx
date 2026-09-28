@@ -7,7 +7,7 @@ import {
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../lib/api'
-import { HEADER_CTRL, HEADER_NEUTRAL, HEADER_FIELD } from '../lib/buttonStyles'
+import { HEADER_CTRL, HEADER_NEUTRAL, HEADER_FIELD, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 import {
   Staffel, TableRow, ScheduleGame, PlayerStat,
   CrossTable as CrossTableData, ProgressionDay, TeamStats, RefereeStat, Affiliation, TeamMatrix,
@@ -246,17 +246,13 @@ export default function StaffelnPage() {
         </div>
       )}
 
-      <div className="flex gap-2 mb-4 border-b border-brand-border-subtle overflow-x-auto">
+      <div className={`${TAB_BAR} mb-6`}>
         {TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setParam('tab', id)}
             aria-current={tab === id || undefined}
-            className={`inline-flex items-center gap-1 px-3 py-2 text-sm font-medium border-b-2 transition-colors shrink-0 whitespace-nowrap ${
-              tab === id
-                ? 'border-brand-yellow text-brand-text'
-                : 'border-transparent text-brand-text-muted hover:text-brand-text'
-            }`}
+            className={`${TAB} ${tab === id ? TAB_ACTIVE : TAB_INACTIVE}`}
           >
             <Icon className="w-4 h-4" />
             {label}

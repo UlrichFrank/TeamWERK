@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
-import { BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SMALL, INPUT, BTN_SECONDARY } from '../lib/buttonStyles'
 
 interface TrainerEntry { userId: number; memberId: number; name: string }
 interface Responsibility { id: number; label: string }
@@ -52,8 +52,6 @@ interface PenaltyPreview { from: PenaltyUnit; to: PenaltyUnit; affected: number;
 // Mannschaftskasse (Beträge in Cent, signiert: Einzahlung positiv, Ausgabe negativ)
 interface CashbookEntry { id: number; amountCent: number; note: string; enteredBy: string; enteredByUserId: number; enteredAt: string }
 interface CashbookData { entries: CashbookEntry[]; balanceCent: number; canManage: boolean }
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 const fmtEur = (cent: number) =>
   (cent / 100).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })
@@ -824,7 +822,7 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <button onClick={() => setUnitPreview(null)} className="rounded-md px-4 py-2 text-sm font-medium text-brand-text-muted hover:text-brand-text transition-colors">
+              <button onClick={() => setUnitPreview(null)} className={BTN_SECONDARY}>
                 Abbrechen
               </button>
               <button onClick={applyUnit} className={BTN_PRIMARY}>

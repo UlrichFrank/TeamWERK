@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import { Member, Parent, ChangeDraft } from '../../pages/ProfilePage'
-import { BTN_DANGER, BTN_PRIMARY } from '../../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, INPUT, LABEL } from '../../lib/buttonStyles'
 
 interface MemberEditData {
   first_name: string
@@ -122,7 +122,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
 
   const profilDraft = drafts.find(d => d.field_name === 'profil')
 
-  const inputCls = `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+  const inputCls = INPUT
 
   return (
     <div className="space-y-6">
@@ -132,26 +132,26 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
+                <label className={LABEL}>Vorname</label>
                 <input type="text" value={editFirstName} onChange={e => setEditFirstName(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
+                <label className={LABEL}>Nachname</label>
                 <input type="text" value={editLastName} onChange={e => setEditLastName(e.target.value)} className={inputCls} />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Geburtsdatum</label>
+                <label className={LABEL}>Geburtsdatum</label>
                 <input type="date" value={editDob} onChange={e => setEditDob(e.target.value)} className={inputCls} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Rückennummer</label>
+                <label className={LABEL}>Rückennummer</label>
                 <input type="number" min="1" max="99" value={editJersey} onChange={e => setEditJersey(e.target.value)} placeholder="–" className={inputCls} />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Position</label>
+              <label className={LABEL}>Position</label>
               <input type="text" value={editPosition} onChange={e => setEditPosition(e.target.value)} placeholder="–" className={inputCls} />
             </div>
             <div className="space-y-3 text-sm pt-2 border-t border-brand-border-subtle">
@@ -171,7 +171,7 @@ export default function ProfileMemberTab({ ownMember, children = [], parents = [
                 >
                   {saving ? 'Speichern…' : 'Speichern'}
                 </button>
-                {saved && <span className="text-sm text-green-600">Gespeichert</span>}
+                {saved && <span className="text-sm text-brand-success">Gespeichert</span>}
                 {saveError && <span className="text-sm text-brand-danger">{saveError}</span>}
               </div>
             )}

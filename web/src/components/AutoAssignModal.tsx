@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
 import { buildTeamLongName, countKaderGroups } from '../lib/teamName'
 
 interface Kader {
@@ -75,7 +75,7 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -126,7 +126,7 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
           <div className="flex justify-end gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+              className={BTN_SECONDARY}
             >
               Abbrechen
             </button>

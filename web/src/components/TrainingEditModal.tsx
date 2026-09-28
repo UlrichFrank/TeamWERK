@@ -5,6 +5,7 @@ import { useDialogA11y } from '../lib/useDialogA11y'
 import VenuePicker from './VenuePicker'
 import RsvpDefaultsEditor, { type RsvpDefault } from './RsvpDefaultsEditor'
 import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
+import { INPUT, BTN_SECONDARY, BTN_DANGER, BTN_PRIMARY, LABEL } from '../lib/buttonStyles'
 
 interface VenueRef { id: number; name: string; street: string; city: string; postal_code: string; note: string }
 
@@ -42,9 +43,6 @@ interface Series {
 }
 
 type Scope = 'this_one' | 'this_and_following' | 'all'
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
 
 interface Props {
   session: Training
@@ -169,7 +167,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
   }
 
   return (
-    <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -217,26 +215,26 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
           {scope === 'this_one' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Titel</label>
+                <label className={LABEL}>Titel</label>
                 <input type="text" value={title} onChange={e => setTitle(e.target.value)}
                   placeholder="z. B. Konditionstraining" className={INPUT} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum</label>
+                <label className={LABEL}>Datum</label>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} className={INPUT} />
               </div>
             </>
           )}
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Startzeit</label>
+            <label className={LABEL}>Startzeit</label>
             <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={INPUT} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Endzeit</label>
+            <label className={LABEL}>Endzeit</label>
             <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={INPUT} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+            <label className={LABEL}>Ort</label>
             <VenuePicker value={venueId} onChange={setVenueId} />
           </div>
           <RsvpDefaultsEditor
@@ -273,7 +271,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`flex-1 ${BTN_DANGER}`}
               >
                 {deleting ? 'Löschen…' : 'Ja, löschen'}
               </button>
@@ -293,7 +291,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
             <button
               onClick={handleSave}
               disabled={saving || deleting || (scope !== 'this_one' && !series)}
-              className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+              className={`flex-1 ${BTN_PRIMARY}`}
             >
               {saving ? 'Speichern…' : 'Speichern'}
             </button>

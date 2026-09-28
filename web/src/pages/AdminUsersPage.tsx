@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, FormEvent } from 'react'
-import { X, Check, Upload, ChevronDown, Copy, RefreshCw, Baby } from 'lucide-react'
+import { X, Check, Upload, ChevronDown, Copy, RefreshCw, Baby, Plus } from 'lucide-react'
 
 function generatePassword(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*'
@@ -16,7 +16,7 @@ import Pagination from '../components/Pagination'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorMessage } from '../lib/errors'
 import { relativeTime } from '../lib/relativeTime'
-import { BTN_PRIMARY, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
+import { BTN_PRIMARY, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
 
 interface User {
   id: number
@@ -43,8 +43,6 @@ interface Member { id: number; first_name: string; last_name: string }
 
 const ROLE_LABELS: Record<string, string> = { admin: 'Admin', standard: 'Standard' }
 const ALL_ROLES = ['admin', 'standard'] as const
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 export default function AdminUsersPage() {
   const { user: self, startImpersonation } = useAuth()
@@ -405,7 +403,7 @@ export default function AdminUsersPage() {
     <div>
       {/* Header */}
       <div className="mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
           <h1 className="text-2xl font-bold">Nutzerverwaltung</h1>
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -429,7 +427,7 @@ export default function AdminUsersPage() {
                   onClick={() => setShowInviteModal(true)}
                   className={`${HEADER_SPLIT_MAIN} ${HEADER_PRIMARY} whitespace-nowrap`}
                 >
-                  + Neu
+                  <Plus className="w-3.5 h-3.5" />Neu
                 </button>
                 <button
                   onClick={() => setShowDropdown(v => !v)}
@@ -464,7 +462,7 @@ export default function AdminUsersPage() {
 
       {/* + Neu Modal */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg">Einladung versenden</h2>
@@ -483,27 +481,27 @@ export default function AdminUsersPage() {
               )}
               <form onSubmit={handleInvite} className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">E-Mail</label>
+                  <label className={LABEL}>E-Mail</label>
                   <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} type="email" placeholder="name@beispiel.de" required className={INPUT} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Rolle</label>
+                  <label className={LABEL}>Rolle</label>
                   <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} className={INPUT}>
                     <option value="standard">Standard</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                  <label className={LABEL}>
                     Kommentar <span className="text-brand-text-subtle font-normal">(optional)</span>
                   </label>
                   <input value={inviteComment} onChange={e => setInviteComment(e.target.value)} type="text" placeholder="z.B. Elternteil von Max Mustermann" className={INPUT} />
                 </div>
                 <div className="flex gap-2 pt-1">
-                  <button type="submit" className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
+                  <button type="submit" className={`flex-1 ${BTN_PRIMARY}`}>
                     Einladung senden
                   </button>
-                  <button type="button" onClick={closeInviteModal} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                  <button type="button" onClick={closeInviteModal} className={BTN_SECONDARY}>
                     Abbrechen
                   </button>
                 </div>
@@ -515,7 +513,7 @@ export default function AdminUsersPage() {
 
       {/* Account direkt anlegen Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg">Account anlegen</h2>
@@ -528,21 +526,21 @@ export default function AdminUsersPage() {
                 <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{createError}</p>
               )}
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">E-Mail</label>
+                <label className={LABEL}>E-Mail</label>
                 <input value={createEmail} onChange={e => setCreateEmail(e.target.value)} type="email" placeholder="name@beispiel.de" required className={INPUT} />
               </div>
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
+                  <label className={LABEL}>Vorname</label>
                   <input value={createFirstName} onChange={e => setCreateFirstName(e.target.value)} type="text" placeholder="Max" required className={INPUT} />
                 </div>
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
+                  <label className={LABEL}>Nachname</label>
                   <input value={createLastName} onChange={e => setCreateLastName(e.target.value)} type="text" placeholder="Mustermann" className={INPUT} />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Passwort</label>
+                <label className={LABEL}>Passwort</label>
                 <div className="flex gap-1.5">
                   <input value={createPassword} readOnly className={`${INPUT} font-mono text-xs tracking-wide flex-1`} />
                   <button
@@ -567,11 +565,11 @@ export default function AdminUsersPage() {
                 <button
                   type="submit"
                   disabled={createLoading}
-                  className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`flex-1 ${BTN_PRIMARY}`}
                 >
                   {createLoading ? 'Wird angelegt…' : 'Account anlegen'}
                 </button>
-                <button type="button" onClick={closeCreateModal} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                <button type="button" onClick={closeCreateModal} className={BTN_SECONDARY}>
                   Abbrechen
                 </button>
               </div>
@@ -582,7 +580,7 @@ export default function AdminUsersPage() {
 
       {/* CSV Import Modal */}
       {showCsvModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg">CSV importieren</h2>
@@ -597,7 +595,7 @@ export default function AdminUsersPage() {
                     <span className="font-semibold">{csvResult.created}</span> Einladungen angelegt,{' '}
                     <span className="font-semibold">{csvResult.skipped}</span> übersprungen (bereits vorhanden)
                   </p>
-                  <button onClick={closeCsvModal} className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
+                  <button onClick={closeCsvModal} className={`w-full ${BTN_PRIMARY}`}>
                     Schließen
                   </button>
                 </div>
@@ -630,11 +628,11 @@ export default function AdminUsersPage() {
                     <button
                       onClick={handleCsvUpload}
                       disabled={!csvFile || csvLoading}
-                      className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className={`flex-1 ${BTN_PRIMARY}`}
                     >
                       {csvLoading ? 'Wird importiert…' : 'Importieren'}
                     </button>
-                    <button onClick={closeCsvModal} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                    <button onClick={closeCsvModal} className={BTN_SECONDARY}>
                       Abbrechen
                     </button>
                   </div>
@@ -647,7 +645,7 @@ export default function AdminUsersPage() {
 
       {/* Member Link Modal */}
       {linkModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg">Mit Mitglied verknüpfen</h2>
@@ -683,7 +681,7 @@ export default function AdminUsersPage() {
                   </button>
                 ))}
               </div>
-              <button onClick={closeLinkModal} className="w-full px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+              <button onClick={closeLinkModal} className={`w-full ${BTN_SECONDARY}`}>
                 Abbrechen
               </button>
             </div>
@@ -693,7 +691,7 @@ export default function AdminUsersPage() {
 
       {/* Proxy account activate modal */}
       {activateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg">Proxy-Account aktivieren</h2>
@@ -715,7 +713,7 @@ export default function AdminUsersPage() {
                 placeholder="E-Mail-Adresse"
                 value={activateEmail}
                 onChange={e => setActivateEmail(e.target.value)}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                className={INPUT}
                 autoFocus
               />
               <div className="flex gap-2">
@@ -726,7 +724,7 @@ export default function AdminUsersPage() {
                 >
                   {activateLoading ? 'Aktivieren…' : 'Aktivieren'}
                 </button>
-                <button type="button" onClick={closeActivateModal} className="flex-1 px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                <button type="button" onClick={closeActivateModal} className={`flex-1 ${BTN_SECONDARY}`}>
                   Abbrechen
                 </button>
               </div>
@@ -736,7 +734,7 @@ export default function AdminUsersPage() {
       )}
 
       {recoveryModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg">Eltern-E-Mail setzen</h2>
@@ -758,7 +756,7 @@ export default function AdminUsersPage() {
                 placeholder="Eltern-E-Mail-Adresse"
                 value={recoveryEmailInput}
                 onChange={e => setRecoveryEmailInput(e.target.value)}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                className={INPUT}
                 autoFocus
               />
               <div className="flex gap-2">
@@ -769,7 +767,7 @@ export default function AdminUsersPage() {
                 >
                   {recoveryLoading ? 'Speichern…' : 'Speichern'}
                 </button>
-                <button type="button" onClick={closeRecoveryModal} className="flex-1 px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                <button type="button" onClick={closeRecoveryModal} className={`flex-1 ${BTN_SECONDARY}`}>
                   Abbrechen
                 </button>
               </div>

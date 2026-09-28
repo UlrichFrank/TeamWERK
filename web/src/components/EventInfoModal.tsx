@@ -9,7 +9,7 @@ import EventNoteIndicator from './EventNoteIndicator'
 import EventNoteEditor from './EventNoteEditor'
 import GameDayHostSection from './GameDayHostPicker'
 import { api } from '../lib/api'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, BTN_SECONDARY } from '../lib/buttonStyles'
 
 interface VenueRef {
   id: number
@@ -100,7 +100,7 @@ function formatDateRange(startStr: string, endStr: string): string {
 function RsvpRow({ confirmed, declined, maybe }: { confirmed: number; declined: number; maybe: number }) {
   return (
     <div className="pt-3 border-t border-brand-border-subtle flex gap-5 text-sm">
-      <span className="flex items-center gap-1 text-green-600">
+      <span className="flex items-center gap-1 text-brand-green">
         <Check className="w-4 h-4" />
         <span className="font-medium">{confirmed}</span>
       </span>
@@ -115,8 +115,6 @@ function RsvpRow({ confirmed, declined, maybe }: { confirmed: number; declined: 
     </div>
   )
 }
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 export default function EventInfoModal({ type, game, training, absence, onClose, onEdit, onDienste, canEditAbsence, onAbsenceChanged, canManageGameDayHost, onGameDayHostApplied }: Props) {
   const titleId = useId()
@@ -168,7 +166,7 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
   }
 
   return (
-    <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -359,14 +357,14 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               </button>
               <button
                 onClick={() => { setEditing(false); setError('') }}
-                className="border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>
               <button
                 onClick={handleSaveAbsence}
                 disabled={saving}
-                className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={`flex-1 ${BTN_PRIMARY}`}
               >
                 {saving ? 'Speichern…' : 'Speichern'}
               </button>
@@ -399,7 +397,7 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               )}
               <button
                 onClick={onClose}
-                className="flex-1 border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
+                className={`flex-1 ${BTN_SECONDARY}`}
               >
                 Schließen
               </button>

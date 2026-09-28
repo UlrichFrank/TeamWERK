@@ -1,7 +1,7 @@
 import { useRef, useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import { X, User, CreditCard, ChevronDown, AlertTriangle, ChevronRight, FolderUp } from 'lucide-react'
+import { X, User, CreditCard, ChevronDown, AlertTriangle, ChevronRight, FolderUp, Plus, Pencil, Equal, Ban, Minus } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { usePagination } from '../lib/usePagination'
@@ -11,7 +11,7 @@ import Pagination from '../components/Pagination'
 import WindowedTableBody from '../components/WindowedTableBody'
 import { useWindowedList } from '../hooks/useWindowedList'
 import { useEscapeKey } from '../lib/useEscapeKey'
-import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
+import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_SECONDARY, INPUT, LABEL } from '../lib/buttonStyles'
 import PersonChip from '../components/PersonChip'
 
 interface Member {
@@ -116,12 +116,12 @@ const MEMBER_NUMBER_CONFLICT_LABEL: Record<string, string> = {
 }
 
 const rowStatusIcon = (s: ImportRow['status']) => {
-  if (s === 'created') return '+'
-  if (s === 'updated') return '~'
-  if (s === 'unchanged') return '='
-  if (s === 'skipped') return '⊘'
-  if (s === 'not_found') return '—'
-  return '✗'
+  if (s === 'created') return <Plus className="w-4 h-4" />
+  if (s === 'updated') return <Pencil className="w-4 h-4" />
+  if (s === 'unchanged') return <Equal className="w-4 h-4" />
+  if (s === 'skipped') return <Ban className="w-4 h-4" />
+  if (s === 'not_found') return <Minus className="w-4 h-4" />
+  return <X className="w-4 h-4" />
 }
 
 const rowStatusColor = (s: ImportRow['status']) => {
@@ -395,9 +395,9 @@ export default function MembersPage() {
   return (
     <div>
       <div className="mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
           <h1 className="text-2xl font-bold">Mitglieder</h1>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-end gap-2">
             <input
               type="search"
               placeholder="Suchen…"
@@ -454,7 +454,7 @@ export default function MembersPage() {
                       onClick={() => setShowNew(true)}
                       className={`${HEADER_SPLIT_MAIN} ${HEADER_PRIMARY}`}
                     >
-                      + Neu
+                      <Plus className="w-3.5 h-3.5" />Neu
                     </button>
                   )}
                   <button
@@ -573,7 +573,7 @@ export default function MembersPage() {
 
       {/* Neu-Mitglied Modal */}
       {showNew && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className="font-semibold text-base text-brand-text">Neues Mitglied anlegen</h2>
@@ -583,48 +583,48 @@ export default function MembersPage() {
             </div>
             <form onSubmit={handleCreate} className="px-6 py-5 space-y-4">
               <div>
-                <label htmlFor="new-member-first-name" className="block text-sm font-medium text-brand-text-muted mb-1">Vorname</label>
+                <label htmlFor="new-member-first-name" className={LABEL}>Vorname</label>
                 <input
                   id="new-member-first-name"
                   autoFocus
                   type="text"
                   value={newFirstName}
                   onChange={e => setNewFirstName(e.target.value)}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                   required
                 />
               </div>
               <div>
-                <label htmlFor="new-member-last-name" className="block text-sm font-medium text-brand-text-muted mb-1">Nachname</label>
+                <label htmlFor="new-member-last-name" className={LABEL}>Nachname</label>
                 <input
                   id="new-member-last-name"
                   type="text"
                   value={newLastName}
                   onChange={e => setNewLastName(e.target.value)}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                   required
                 />
               </div>
               <div>
-                <label htmlFor="new-member-join-date" className="block text-sm font-medium text-brand-text-muted mb-1">Mitglied seit</label>
+                <label htmlFor="new-member-join-date" className={LABEL}>Mitglied seit</label>
                 <input
                   id="new-member-join-date"
                   type="date"
                   value={newJoinDate}
                   onChange={e => setNewJoinDate(e.target.value)}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                   required
                 />
                 <p className="text-xs text-brand-text-subtle mt-1">Eintrittsdatum — steuert die Beitrags-Halbierung bei unterjährigem Eintritt.</p>
               </div>
               <div className="flex justify-end gap-2 pt-1">
-                <button type="button" onClick={resetNew} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                <button type="button" onClick={resetNew} className={BTN_SECONDARY}>
                   Abbrechen
                 </button>
                 <button
                   type="submit"
                   disabled={creating}
-                  className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                  className={BTN_PRIMARY}
                 >
                   {creating ? 'Anlegen…' : 'Anlegen'}
                 </button>
@@ -636,7 +636,7 @@ export default function MembersPage() {
 
       {/* Import Modal */}
       {showImport && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className="font-semibold text-base text-brand-text">CSV-Import</h2>
@@ -649,13 +649,13 @@ export default function MembersPage() {
             {!previewResult && !importResult && (
               <div className="px-6 py-5 space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-brand-text-muted mb-1">CSV-Datei</label>
+                  <label className={LABEL}>CSV-Datei</label>
                   <input
                     ref={fileInputRef}
                     type="file"
                     accept=".csv"
                     onChange={e => { setImportFile(e.target.files?.[0] ?? null); setPreviewResult(null) }}
-                    className="block w-full text-sm text-brand-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-brand-yellow file:text-brand-black hover:file:bg-black hover:file:text-white cursor-pointer"
+                    className="block w-full text-sm text-brand-text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-brand-yellow file:text-brand-black hover:file:bg-brand-black hover:file:text-brand-yellow file:transition-colors cursor-pointer"
                   />
                   <p className="text-xs text-brand-text-subtle mt-1">Semikolon-getrennt, UTF-8. Spalten: Name, Vorname, Mitgliedsnummer, Email, Email 2, Geschlecht, Adresse, PLZ, Ort, Mitglied seit, Stammverein, Status, geboren am, SEPA Mandat, Kontoinhaber, IBAN</p>
                 </div>
@@ -727,13 +727,13 @@ export default function MembersPage() {
                 )}
 
                 <div className="flex justify-end gap-2 pt-1">
-                  <button onClick={resetImport} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                  <button onClick={resetImport} className={BTN_SECONDARY}>
                     Abbrechen
                   </button>
                   <button
                     onClick={handlePreview}
                     disabled={!importFile || importing}
-                    className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className={BTN_PRIMARY}
                   >
                     {importing ? 'Analysiere…' : 'Vorschau'}
                   </button>
@@ -747,13 +747,13 @@ export default function MembersPage() {
                 <div className="px-6 py-4 border-b border-brand-border-subtle bg-brand-surface-card">
                   <p className="text-sm font-medium text-brand-text mb-1">{previewResult.total} Zeilen analysiert — Vorschau (nichts gespeichert)</p>
                   <div className="flex flex-wrap gap-3 text-xs">
-                    {previewResult.created > 0 && <span className="text-brand-success font-medium">+ {previewResult.created} neu</span>}
-                    {previewResult.updated > 0 && <span className="text-brand-blue font-medium">~ {previewResult.updated} Änderungen</span>}
-                    {previewResult.unchanged > 0 && <span className="text-brand-text-subtle">= {previewResult.unchanged} unverändert</span>}
-                    {(previewResult.not_found ?? 0) > 0 && <span className="text-brand-text-muted font-medium">— {previewResult.not_found} nicht gefunden</span>}
-                    {previewResult.errors > 0 && <span className="text-brand-danger font-medium">✗ {previewResult.errors} Fehler</span>}
+                    {previewResult.created > 0 && <span className="inline-flex items-center gap-1 text-brand-success font-medium"><Plus className="w-4 h-4" />{previewResult.created} neu</span>}
+                    {previewResult.updated > 0 && <span className="inline-flex items-center gap-1 text-brand-blue font-medium"><Pencil className="w-4 h-4" />{previewResult.updated} Änderungen</span>}
+                    {previewResult.unchanged > 0 && <span className="inline-flex items-center gap-1 text-brand-text-subtle"><Equal className="w-4 h-4" />{previewResult.unchanged} unverändert</span>}
+                    {(previewResult.not_found ?? 0) > 0 && <span className="inline-flex items-center gap-1 text-brand-text-muted font-medium"><Minus className="w-4 h-4" />{previewResult.not_found} nicht gefunden</span>}
+                    {previewResult.errors > 0 && <span className="inline-flex items-center gap-1 text-brand-danger font-medium"><X className="w-4 h-4" />{previewResult.errors} Fehler</span>}
                     {previewResult.rows.some(r => r.iban_warning) && (
-                      <span className="text-amber-600 font-medium flex items-center gap-1">
+                      <span className="text-brand-warning font-medium flex items-center gap-1">
                         <AlertTriangle className="w-3 h-3" />{previewResult.rows.filter(r => r.iban_warning).length} IBAN-Warnungen
                       </span>
                     )}
@@ -766,7 +766,7 @@ export default function MembersPage() {
                     const hasOw = rowHasOverwrites(row)
                     const selectable = row.status === 'updated'
                     return (
-                      <div key={i} className={hasOw ? 'bg-amber-50 -mx-2 px-2 rounded' : ''}>
+                      <div key={i} className={hasOw ? 'bg-brand-warning-light -mx-2 px-2 rounded' : ''}>
                         <div className="flex items-center gap-1">
                           {selectable ? (
                             <input
@@ -785,10 +785,10 @@ export default function MembersPage() {
                           >
                             {hasDetails && <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />}
                             {!hasDetails && <span className="w-3" />}
-                            <span className="font-bold">{rowStatusIcon(row.status)}</span>
+                            <span className="inline-flex items-center">{rowStatusIcon(row.status)}</span>
                             <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
-                            {hasOw && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
-                            {row.iban_warning && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
+                            {hasOw && <AlertTriangle className="w-3 h-3 text-brand-warning ml-1" />}
+                            {row.iban_warning && <AlertTriangle className="w-3 h-3 text-brand-warning ml-1" />}
                           </button>
                         </div>
                         {expanded && (
@@ -796,13 +796,13 @@ export default function MembersPage() {
                             {row.changes?.map((c, j) => {
                               const ow = isOverwrite(c)
                               return (
-                                <div key={j} className={`flex items-center gap-1 ${ow ? 'text-amber-600' : 'text-brand-text-muted'}`}>
+                                <div key={j} className={`flex items-center gap-1 ${ow ? 'text-brand-warning' : 'text-brand-text-muted'}`}>
                                   {ow && <AlertTriangle className="w-3 h-3 shrink-0" />}
                                   <span>{c}</span>
                                 </div>
                               )
                             })}
-                            {row.iban_warning && <div className="text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{row.iban_warning}</div>}
+                            {row.iban_warning && <div className="text-brand-warning flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{row.iban_warning}</div>}
                             {row.message && <div className="italic text-brand-text-muted">{row.message}</div>}
                           </div>
                         )}
@@ -814,7 +814,7 @@ export default function MembersPage() {
                   )}
                 </div>
                 <div className="px-6 py-4 border-t border-brand-border-subtle flex items-center justify-between gap-3">
-                  <button onClick={() => setPreviewResult(null)} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                  <button onClick={() => setPreviewResult(null)} className={BTN_SECONDARY}>
                     Zurück
                   </button>
                   <div className="flex items-center gap-3">
@@ -841,7 +841,7 @@ export default function MembersPage() {
                     <button
                       onClick={handleImport}
                       disabled={importing}
-                      className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                      className={BTN_PRIMARY}
                     >
                       {importing ? 'Importieren…' : 'Jetzt anwenden'}
                     </button>
@@ -856,12 +856,12 @@ export default function MembersPage() {
                 <div className="px-6 py-4 border-b border-brand-border-subtle bg-brand-surface-card">
                   <p className="text-sm font-medium text-brand-text mb-2">{importResult.total} Zeilen verarbeitet</p>
                   <div className="flex flex-wrap gap-3 text-xs">
-                    {importResult.created > 0 && <span className="text-brand-success font-medium">+ {importResult.created} neu</span>}
-                    {importResult.updated > 0 && <span className="text-brand-blue font-medium">~ {importResult.updated} aktualisiert</span>}
-                    {(importResult.skipped ?? 0) > 0 && <span className="text-brand-text-muted font-medium">⊘ {importResult.skipped} übersprungen</span>}
-                    {importResult.unchanged > 0 && <span className="text-brand-text-subtle">= {importResult.unchanged} unverändert</span>}
-                    {(importResult.not_found ?? 0) > 0 && <span className="text-brand-text-muted font-medium">— {importResult.not_found} nicht gefunden</span>}
-                    {importResult.errors > 0 && <span className="text-brand-danger font-medium">✗ {importResult.errors} Fehler</span>}
+                    {importResult.created > 0 && <span className="inline-flex items-center gap-1 text-brand-success font-medium"><Plus className="w-4 h-4" />{importResult.created} neu</span>}
+                    {importResult.updated > 0 && <span className="inline-flex items-center gap-1 text-brand-blue font-medium"><Pencil className="w-4 h-4" />{importResult.updated} aktualisiert</span>}
+                    {(importResult.skipped ?? 0) > 0 && <span className="inline-flex items-center gap-1 text-brand-text-muted font-medium"><Ban className="w-4 h-4" />{importResult.skipped} übersprungen</span>}
+                    {importResult.unchanged > 0 && <span className="inline-flex items-center gap-1 text-brand-text-subtle"><Equal className="w-4 h-4" />{importResult.unchanged} unverändert</span>}
+                    {(importResult.not_found ?? 0) > 0 && <span className="inline-flex items-center gap-1 text-brand-text-muted font-medium"><Minus className="w-4 h-4" />{importResult.not_found} nicht gefunden</span>}
+                    {importResult.errors > 0 && <span className="inline-flex items-center gap-1 text-brand-danger font-medium"><X className="w-4 h-4" />{importResult.errors} Fehler</span>}
                   </div>
                 </div>
                 <div className="overflow-y-auto flex-1 px-6 py-3 space-y-0.5 text-xs font-mono">
@@ -870,30 +870,30 @@ export default function MembersPage() {
                     const expanded = expandedRows.has(row.line)
                     const hasOw = rowHasOverwrites(row)
                     return (
-                      <div key={i} className={hasOw ? 'bg-amber-50 -mx-2 px-2 rounded' : ''}>
+                      <div key={i} className={hasOw ? 'bg-brand-warning-light -mx-2 px-2 rounded' : ''}>
                         <button
                           onClick={() => hasDetails && toggleRow(row.line)}
                           className={`flex items-center gap-1 w-full text-left ${rowStatusColor(row.status)} ${hasDetails ? 'cursor-pointer hover:underline' : 'cursor-default'}`}
                         >
                           {hasDetails && <ChevronRight className={`w-3 h-3 shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`} />}
                           {!hasDetails && <span className="w-3" />}
-                          <span className="font-bold">{rowStatusIcon(row.status)}</span>
+                          <span className="inline-flex items-center">{rowStatusIcon(row.status)}</span>
                           <span>Z.{row.line} {row.name}{row.dob ? ` (${row.dob.slice(0, 10)})` : ''}</span>
-                          {hasOw && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
-                          {row.iban_warning && <AlertTriangle className="w-3 h-3 text-amber-500 ml-1" />}
+                          {hasOw && <AlertTriangle className="w-3 h-3 text-brand-warning ml-1" />}
+                          {row.iban_warning && <AlertTriangle className="w-3 h-3 text-brand-warning ml-1" />}
                         </button>
                         {expanded && (
                           <div className="pl-7 space-y-0.5">
                             {row.changes?.map((c, j) => {
                               const ow = isOverwrite(c)
                               return (
-                                <div key={j} className={`flex items-center gap-1 ${ow ? 'text-amber-600' : 'text-brand-text-muted'}`}>
+                                <div key={j} className={`flex items-center gap-1 ${ow ? 'text-brand-warning' : 'text-brand-text-muted'}`}>
                                   {ow && <AlertTriangle className="w-3 h-3 shrink-0" />}
                                   <span>{c}</span>
                                 </div>
                               )
                             })}
-                            {row.iban_warning && <div className="text-amber-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{row.iban_warning}</div>}
+                            {row.iban_warning && <div className="text-brand-warning flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{row.iban_warning}</div>}
                             {row.message && <div className="italic text-brand-text-muted">{row.message}</div>}
                           </div>
                         )}
@@ -905,7 +905,7 @@ export default function MembersPage() {
                   )}
                 </div>
                 <div className="px-6 py-4 border-t border-brand-border-subtle flex justify-end">
-                  <button onClick={resetImport} className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors">
+                  <button onClick={resetImport} className={BTN_PRIMARY}>
                     Schließen
                   </button>
                 </div>
@@ -917,7 +917,7 @@ export default function MembersPage() {
 
       {/* SEPA-Mandate Bulk Import Modal */}
       {showSepaBulk && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className="font-semibold text-base text-brand-text">SEPA-Mandate importieren</h2>
@@ -998,7 +998,7 @@ export default function MembersPage() {
               )}
               <button
                 onClick={resetSepaBulk}
-                className="border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors"
+                className={BTN_SECONDARY}
               >
                 Schließen
               </button>
@@ -1047,7 +1047,7 @@ function SepaBulkSection({ title, tone, entries, emptyText, showReason }: {
 function SepaBulkAmbiguousSection({ entries }: { entries: SepaBulkAmbiguous[] }) {
   return (
     <section>
-      <h3 className="text-xs uppercase font-semibold text-amber-600">
+      <h3 className="text-xs uppercase font-semibold text-brand-warning">
         Mehrdeutig ({entries.length})
       </h3>
       {entries.length === 0 ? (

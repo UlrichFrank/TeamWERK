@@ -2,8 +2,7 @@ import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import PasswordInput from '../components/forms/PasswordInput'
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+import { INPUT, LABEL } from '../lib/buttonStyles'
 
 export default function RegisterPage() {
   const [params] = useSearchParams()
@@ -64,9 +63,9 @@ export default function RegisterPage() {
   )
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white">
+    <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-sm bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
-        <h1 className="text-2xl font-bold mb-6 text-brand-text">Konto erstellen</h1>
+        <h1 className="text-xl font-bold mb-6 text-brand-text">Konto erstellen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
@@ -74,29 +73,29 @@ export default function RegisterPage() {
             </p>
           )}
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-1">Vorname</label>
+            <label className={LABEL}>Vorname</label>
             <input
               type="text"
               value={firstName}
               onChange={e => setFirstName(e.target.value)}
               required
               readOnly={nameReadOnly}
-              className={nameReadOnly ? `${INPUT} bg-gray-50 text-brand-text-muted cursor-default` : INPUT}
+              className={nameReadOnly ? `${INPUT} bg-brand-surface-card text-brand-text-muted cursor-default` : INPUT}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-1">Nachname</label>
+            <label className={LABEL}>Nachname</label>
             <input
               type="text"
               value={lastName}
               onChange={e => setLastName(e.target.value)}
               required
               readOnly={nameReadOnly}
-              className={nameReadOnly ? `${INPUT} bg-gray-50 text-brand-text-muted cursor-default` : INPUT}
+              className={nameReadOnly ? `${INPUT} bg-brand-surface-card text-brand-text-muted cursor-default` : INPUT}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-1">Passwort</label>
+            <label className={LABEL}>Passwort</label>
             <PasswordInput
               value={password}
               onChange={setPassword}

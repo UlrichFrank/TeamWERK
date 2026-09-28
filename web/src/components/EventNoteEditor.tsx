@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api } from '../lib/api'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT } from '../lib/buttonStyles'
 
 type EventNoteEditorProps = {
   eventType: 'training' | 'game'
@@ -45,7 +45,7 @@ export default function EventNoteEditor({ eventType, eventId, initialNote, onSav
         onChange={(e) => setNote(e.target.value)}
         rows={3}
         placeholder="Hinweis für die Mannschaft (z. B. Halle gesperrt oder Link zum Turnierplan aus Dokumente)"
-        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+        className={INPUT}
       />
       <div className="flex items-center justify-between">
         <span className={`text-xs ${tooLong ? 'text-brand-danger' : 'text-brand-text-muted'}`}>

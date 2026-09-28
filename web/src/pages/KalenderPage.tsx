@@ -16,7 +16,7 @@ import EventSearchInput from '../components/EventSearchInput'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import TeamFilter from '../components/TeamFilter'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
-import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
+import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, BTN_SECONDARY, BTN_DANGER, BTN_PRIMARY, LABEL, HEADER_GROUP } from '../lib/buttonStyles'
 
 import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
@@ -166,8 +166,6 @@ function padDate(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
 }
 
-const BTN_SECONDARY = 'border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors'
-const INPUT_WIZ = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 export default function KalenderPage() {
   const { user, hasCapability } = useAuth()
@@ -1045,7 +1043,7 @@ export default function KalenderPage() {
           onToggle={toggleTeam}
           compact={compact}
         />
-        <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+        <div className={HEADER_GROUP}>
           <EventTypeFilter
             types={KALENDER_TYPES}
             active={filterTypes}
@@ -1168,7 +1166,7 @@ export default function KalenderPage() {
           onClick={goToToday}
           disabled={year === now.getFullYear() && month === now.getMonth()}
           title="Zum aktuellen Monat springen"
-          className="flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 rounded-md px-3 py-2.5 sm:py-2 text-sm font-medium bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <CalendarClock className="w-4 h-4" />
           <span>Heute</span>
@@ -1207,7 +1205,7 @@ export default function KalenderPage() {
             const dayAbsences = absencesForDay(dateStr)
             const isToday = dateStr === todayStr
             return (
-              <div key={day} className="relative @container group min-h-[90px] p-1.5 border-r border-b border-brand-border-subtle">
+              <div key={day} className="relative @container group min-h-[90px] p-1 sm:p-1.5 border-r border-b border-brand-border-subtle">
                 {dayAbsences.map(({ absence, isFirst, isLast }) => (
                   <div
                     key={`abs-${absence.id}`}
@@ -1215,7 +1213,7 @@ export default function KalenderPage() {
                       !absence.is_own
                         ? 'bg-brand-blue/20 border-brand-blue/60'
                         : absence.type === 'injury'
-                          ? 'bg-red-400/20 border-red-400/60'
+                          ? 'bg-brand-danger/20 border-brand-danger/60'
                           : 'bg-brand-yellow/20 border-brand-yellow/60'
                     } ${isFirst && isLast ? 'rounded-full' : isFirst ? 'rounded-l-full' : isLast ? 'rounded-r-full' : ''}`}
                     title={`${absence.member_name}: ${absence.type === 'vacation' ? 'Urlaub' : 'Verletzung'} ${absence.start_date}–${absence.end_date}`}
@@ -1261,7 +1259,7 @@ export default function KalenderPage() {
                     onPointerDown={e => e.stopPropagation()}
                     onClick={() => setInfoItem({ type: 'game', game: { ...g, teams: teamsForRender.map(t => ({ id: t.id, name: t.display_short ?? t.name })) } })}
                     title={`${tooltipLabel} · ${g.opponent || '–'} · ${g.time}`}
-                    className={`w-full text-left mb-1 p-1.5 rounded-md text-xs transition-colors border ${getEventColors(g.event_type).pill}`}
+                    className={`w-full text-left mb-1 p-1 sm:p-1.5 rounded-md text-xs overflow-hidden transition-colors border ${getEventColors(g.event_type).pill}`}
                   >
                     <div className="flex items-center gap-1 mb-0.5">
                       {g.event_type === 'heim'
@@ -1287,7 +1285,7 @@ export default function KalenderPage() {
                     </div>
                     <div className="flex items-center gap-1 text-brand-text-subtle leading-tight">
                       <span>{g.time}</span>
-                      <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-green-600">
+                      <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-green">
                         <Check className="w-2.5 h-2.5" />{g.confirmed_count}
                       </span>
                       <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
@@ -1303,7 +1301,7 @@ export default function KalenderPage() {
                     onPointerDown={e => e.stopPropagation()}
                     title={`${trainingLabel(t)} · ${t.start_time}`}
                     onClick={() => setInfoItem({ type: 'training', training: { ...t, team_name: trainingLabel(t) } })}
-                    className={`w-full text-left mb-1 p-1.5 rounded-md text-xs border ${
+                    className={`w-full text-left mb-1 p-1 sm:p-1.5 rounded-md text-xs overflow-hidden border ${
                       t.status === 'cancelled'
                         ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'
                         : `${getEventColors('training').pill} transition-colors`
@@ -1333,7 +1331,7 @@ export default function KalenderPage() {
                         </span>
                       ) : (
                         <>
-                          <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-green-600">
+                          <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-green">
                             <Check className="w-2.5 h-2.5" />{t.confirmed_count}
                           </span>
                           <span className="hidden @tile-sm:inline-flex items-center gap-0.5 text-brand-danger">
@@ -1355,7 +1353,7 @@ export default function KalenderPage() {
 
       {/* Event Wizard Dialog */}
       {showCreate && (
-        <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
             {wizardStep === 1 && (
               <div>
@@ -1438,30 +1436,30 @@ export default function KalenderPage() {
                 <h2 className="text-lg font-bold mb-4 text-brand-text">Event-Details</h2>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum *</label>
+                    <label className={LABEL}>Datum *</label>
                     <input type="date" value={selectedDate} min={todayStr} onChange={e => {
                       const date = e.target.value
                       setSelectedDate(date)
                       if (eventType === 'generisch' && selectedEndDate && selectedEndDate < date) setSelectedEndDate(date)
-                    }} className={INPUT_WIZ} />
+                    }} className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                    <label className={LABEL}>
                       {eventType === 'generisch' ? 'Beginn' : 'Anwurfzeit'}
                     </label>
-                    <input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)} className={INPUT_WIZ} />
+                    <input type="time" value={selectedTime} onChange={e => setSelectedTime(e.target.value)} className={INPUT} />
                   </div>
                   {eventType === 'generisch' && (
                     <div>
-                      <label className="block text-sm font-medium text-brand-text-muted mb-1">Ende</label>
-                      <input type="time" value={selectedEndTime} onChange={e => setSelectedEndTime(e.target.value)} className={INPUT_WIZ} />
+                      <label className={LABEL}>Ende</label>
+                      <input type="time" value={selectedEndTime} onChange={e => setSelectedEndTime(e.target.value)} className={INPUT} />
                     </div>
                   )}
                   {eventType === 'generisch' && (
                     <div>
-                      <label className="block text-sm font-medium text-brand-text-muted mb-1">Enddatum <span className="text-brand-text-subtle font-normal">(optional, für mehrtägige Events)</span></label>
+                      <label className={LABEL}>Enddatum <span className="text-brand-text-subtle font-normal">(optional, für mehrtägige Events)</span></label>
                       <input type="date" value={selectedEndDate} onChange={e => setSelectedEndDate(e.target.value)}
-                        min={selectedDate || todayStr} className={INPUT_WIZ} />
+                        min={selectedDate || todayStr} className={INPUT} />
                       {selectedEndDate && selectedEndDate < selectedDate && (
                         <p className="text-xs text-brand-danger mt-1">Enddatum muss nach dem Startdatum liegen.</p>
                       )}
@@ -1469,20 +1467,20 @@ export default function KalenderPage() {
                   )}
                   {eventType !== 'generisch' && (
                     <div>
-                      <label className="block text-sm font-medium text-brand-text-muted mb-1">Gegner *</label>
+                      <label className={LABEL}>Gegner *</label>
                       <input type="text" value={selectedOpponent} onChange={e => setSelectedOpponent(e.target.value)}
-                        placeholder="Name des Gegners" className={INPUT_WIZ} />
+                        placeholder="Name des Gegners" className={INPUT} />
                     </div>
                   )}
                   {eventType === 'generisch' && (
                     <div>
-                      <label className="block text-sm font-medium text-brand-text-muted mb-1">Event-Name *</label>
+                      <label className={LABEL}>Event-Name *</label>
                       <input type="text" value={selectedOpponent} onChange={e => setSelectedOpponent(e.target.value)}
-                        placeholder="Name des Events" className={INPUT_WIZ} />
+                        placeholder="Name des Events" className={INPUT} />
                     </div>
                   )}
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+                    <label className={LABEL}>Ort</label>
                     <VenuePicker value={selectedVenueId} onChange={setSelectedVenueId} />
                   </div>
                   {eventType === 'heim' && canEdit && selectedDate && wizardHost && (
@@ -1527,7 +1525,7 @@ export default function KalenderPage() {
                       </div>
                     ) : (
                       <select value={selectedTeamIds[0] ?? ''} onChange={e => setSelectedTeamIds(e.target.value ? [Number(e.target.value)] : [])}
-                        className={INPUT_WIZ}>
+                        className={INPUT}>
                         <option value="">Auswählen…</option>
                         {teams.filter(t => t.is_active).map(t => (
                           <option key={t.id} value={t.id}>{shortNames.get(t.id) ?? t.name}</option>
@@ -1555,7 +1553,7 @@ export default function KalenderPage() {
                       }
                     }}
                     disabled={!selectedDate || selectedTeamIds.length === 0 || (eventType === 'generisch' && !!selectedEndDate && selectedEndDate < selectedDate)}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className={`flex-1 ${BTN_PRIMARY}`}
                   >Weiter →</button>
                 </div>
               </div>
@@ -1566,32 +1564,32 @@ export default function KalenderPage() {
                 <h2 className="text-lg font-bold mb-4 text-brand-text">Einzeltraining anlegen</h2>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Titel</label>
+                    <label className={LABEL}>Titel</label>
                     <input type="text" value={trainingTitle} onChange={e => setTrainingTitle(e.target.value)}
-                      placeholder="z. B. Konditionstraining" className={INPUT_WIZ} />
+                      placeholder="z. B. Konditionstraining" className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Datum *</label>
-                    <input type="date" value={selectedDate} min={todayStr} onChange={e => setSelectedDate(e.target.value)} className={INPUT_WIZ} />
+                    <label className={LABEL}>Datum *</label>
+                    <input type="date" value={selectedDate} min={todayStr} onChange={e => setSelectedDate(e.target.value)} className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Startzeit *</label>
-                    <input type="time" value={trainingStartTime} onChange={e => setTrainingStartTime(e.target.value)} className={INPUT_WIZ} />
+                    <label className={LABEL}>Startzeit *</label>
+                    <input type="time" value={trainingStartTime} onChange={e => setTrainingStartTime(e.target.value)} className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Endzeit *</label>
-                    <input type="time" value={trainingEndTime} onChange={e => setTrainingEndTime(e.target.value)} className={INPUT_WIZ} />
+                    <label className={LABEL}>Endzeit *</label>
+                    <input type="time" value={trainingEndTime} onChange={e => setTrainingEndTime(e.target.value)} className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+                    <label className={LABEL}>Ort</label>
                     <VenuePicker value={trainingVenueId} onChange={setTrainingVenueId} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                    <label className={LABEL}>
                       {practiceGroups.length > 0 ? 'Mannschaft / Übungsgruppe *' : 'Mannschaft *'}
                     </label>
                     <select value={trainingTarget} onChange={e => setTrainingTarget(e.target.value)}
-                      className={INPUT_WIZ}>
+                      className={INPUT}>
                       <option value="">Auswählen…</option>
                       <optgroup label="Mannschaften">
                         {teams.filter(t => t.is_active).map(t => (
@@ -1623,7 +1621,7 @@ export default function KalenderPage() {
                   <button
                     onClick={doCreateTraining}
                     disabled={creating || !selectedDate || !hasTrainingTarget}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className={`flex-1 ${BTN_PRIMARY}`}
                   >
                     {creating ? 'Anlegen…' : 'Training anlegen'}
                   </button>
@@ -1636,31 +1634,31 @@ export default function KalenderPage() {
                 <h2 className="text-lg font-bold mb-4 text-brand-text">Trainingsserie anlegen</h2>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Wochentag *</label>
-                    <select value={seriesWeekday} onChange={e => setSeriesWeekday(Number(e.target.value))} className={INPUT_WIZ}>
+                    <label className={LABEL}>Wochentag *</label>
+                    <select value={seriesWeekday} onChange={e => setSeriesWeekday(Number(e.target.value))} className={INPUT}>
                       {['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'].map((d, i) => (
                         <option key={i} value={i}>{d}</option>
                       ))}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Startzeit *</label>
-                    <input type="time" value={trainingStartTime} onChange={e => setTrainingStartTime(e.target.value)} className={INPUT_WIZ} />
+                    <label className={LABEL}>Startzeit *</label>
+                    <input type="time" value={trainingStartTime} onChange={e => setTrainingStartTime(e.target.value)} className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Endzeit *</label>
-                    <input type="time" value={trainingEndTime} onChange={e => setTrainingEndTime(e.target.value)} className={INPUT_WIZ} />
+                    <label className={LABEL}>Endzeit *</label>
+                    <input type="time" value={trainingEndTime} onChange={e => setTrainingEndTime(e.target.value)} className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Ort</label>
+                    <label className={LABEL}>Ort</label>
                     <VenuePicker value={trainingVenueId} onChange={setTrainingVenueId} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">
+                    <label className={LABEL}>
                       {practiceGroups.length > 0 ? 'Mannschaft / Übungsgruppe *' : 'Mannschaft *'}
                     </label>
                     <select value={trainingTarget} onChange={e => setTrainingTarget(e.target.value)}
-                      className={INPUT_WIZ}>
+                      className={INPUT}>
                       <option value="">Auswählen…</option>
                       <optgroup label="Mannschaften">
                         {teams.filter(t => t.is_active).map(t => (
@@ -1677,16 +1675,16 @@ export default function KalenderPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig von *</label>
+                    <label className={LABEL}>Gültig von *</label>
                     <input type="date" value={seriesValidFrom} min={todayStr} onChange={e => {
                       const from = e.target.value
                       setSeriesValidFrom(from)
                       if (seriesValidUntil && seriesValidUntil < from) setSeriesValidUntil(from)
-                    }} className={INPUT_WIZ} />
+                    }} className={INPUT} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-brand-text-muted mb-1">Gültig bis *</label>
-                    <input type="date" value={seriesValidUntil} min={seriesValidFrom || undefined} onChange={e => setSeriesValidUntil(e.target.value)} className={INPUT_WIZ} />
+                    <label className={LABEL}>Gültig bis *</label>
+                    <input type="date" value={seriesValidUntil} min={seriesValidFrom || undefined} onChange={e => setSeriesValidUntil(e.target.value)} className={INPUT} />
                   </div>
                   <RsvpDefaultsEditor
                     idPrefix="kalender"
@@ -1704,7 +1702,7 @@ export default function KalenderPage() {
                   <button
                     onClick={doCreateSerie}
                     disabled={creating || !hasTrainingTarget || !seriesValidFrom || !seriesValidUntil}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className={`flex-1 ${BTN_PRIMARY}`}
                   >
                     {creating ? 'Anlegen…' : 'Serie anlegen'}
                   </button>
@@ -1750,7 +1748,7 @@ export default function KalenderPage() {
                     <select
                       value={absenceForm.type}
                       onChange={e => setAbsenceForm(f => ({ ...f, type: e.target.value }))}
-                      className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                      className={INPUT}
                     >
                       <option value="vacation">Urlaub / Sonstige Abwesenheit</option>
                       <option value="injury">Verletzung / Sportverbot</option>
@@ -1771,7 +1769,7 @@ export default function KalenderPage() {
                             end_date: f.end_date && f.end_date < start ? start : f.end_date,
                           }))
                         }}
-                        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                        className={INPUT}
                       />
                     </div>
                     <div>
@@ -1781,7 +1779,7 @@ export default function KalenderPage() {
                         value={absenceForm.end_date}
                         min={absenceForm.start_date || undefined}
                         onChange={e => setAbsenceForm(f => ({ ...f, end_date: e.target.value }))}
-                        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                        className={INPUT}
                       />
                     </div>
                   </div>
@@ -1792,7 +1790,7 @@ export default function KalenderPage() {
                       value={absenceForm.note}
                       onChange={e => setAbsenceForm(f => ({ ...f, note: e.target.value }))}
                       placeholder="z.B. Familienurlaub, Knieoperation…"
-                      className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                      className={INPUT}
                     />
                   </div>
                   {absenceError && (
@@ -1800,11 +1798,11 @@ export default function KalenderPage() {
                   )}
                 </div>
                 <div className="flex gap-2 pt-5">
-                  <button onClick={closeDialog} className="flex-1 border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors">Abbrechen</button>
+                  <button onClick={closeDialog} className={`flex-1 ${BTN_SECONDARY}`}>Abbrechen</button>
                   <button
                     onClick={handleAbsencePreview}
                     disabled={absencePreviewLoading}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className={`flex-1 ${BTN_PRIMARY}`}
                   >
                     {absencePreviewLoading ? 'Prüfe…' : 'Weiter'}
                   </button>
@@ -1833,14 +1831,14 @@ export default function KalenderPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setAbsencePreviewEvents(null)}
-                    className="flex-1 border border-brand-border rounded-md px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors"
+                    className={`flex-1 ${BTN_SECONDARY}`}
                   >
                     Zurück
                   </button>
                   <button
                     onClick={doSaveAbsence}
                     disabled={absenceSaving}
-                    className="flex-1 bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className={`flex-1 ${BTN_DANGER}`}
                   >
                     {absenceSaving ? 'Speichert…' : 'Trotzdem eintragen'}
                   </button>
@@ -1888,7 +1886,7 @@ export default function KalenderPage() {
                         setWizardStep(4)
                       }
                     }}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className={`flex-1 ${BTN_PRIMARY}`}
                     disabled={previewLoading || creating}
                   >
                     {previewLoading || creating ? 'Laden…' : 'Weiter →'}
@@ -1927,7 +1925,7 @@ export default function KalenderPage() {
                   <button
                     onClick={() => confirmCreateGame(selectedTemplate ? preview.filter((_, i) => selectedSlotIndices.has(i)) : [])}
                     disabled={creating || hostBusy}
-                    className="flex-1 bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                    className={`flex-1 ${BTN_PRIMARY}`}
                   >
                     {creating ? 'Anlegen…' : 'Bestätigen'}
                   </button>

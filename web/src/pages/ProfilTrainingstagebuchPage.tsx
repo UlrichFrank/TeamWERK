@@ -242,7 +242,7 @@ export function ProfilTrainingstagebuchContent({ forcedMemberId }: { forcedMembe
 export default function ProfilTrainingstagebuchPage() {
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-brand-text mb-4">Trainingstagebuch</h1>
+      <h1 className="text-2xl font-bold text-brand-text mb-4">Trainingstagebuch</h1>
       <p className="mb-4 text-sm text-brand-text-muted">{RETENTION_HINT}</p>
       <ProfilTrainingstagebuchContent />
     </div>

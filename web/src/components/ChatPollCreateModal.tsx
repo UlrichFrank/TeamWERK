@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
-import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
 
 const MAX_OPTIONS = 10
 const MIN_OPTIONS_ON_SCREEN = 2
@@ -76,7 +76,7 @@ export default function ChatPollCreateModal({ convId, onClose, onCreated }: Prop
 
   return (
     <div
-      className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
@@ -107,7 +107,7 @@ export default function ChatPollCreateModal({ convId, onClose, onCreated }: Prop
               onChange={(e) => setQuestion(e.target.value)}
               maxLength={200}
               placeholder="Frage eingeben…"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className={INPUT}
             />
           </div>
 

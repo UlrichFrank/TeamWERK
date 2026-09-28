@@ -12,8 +12,8 @@ import HoursInput from '../components/HoursInput'
 import { errorData } from '../lib/errors'
 import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItems'
 import { dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
-import { HEADER_CTRL, HEADER_PRIMARY } from '../lib/buttonStyles'
-import { ChevronDown, RefreshCw } from 'lucide-react'
+import { HEADER_CTRL, HEADER_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
+import { ChevronDown, RefreshCw, Plus } from 'lucide-react'
 
 interface DutyType {
   id: number
@@ -91,8 +91,6 @@ const typeBadge: Record<string, string> = {
   'auswärts': 'bg-brand-warning-light text-brand-text',
   generisch: 'bg-brand-border-subtle text-brand-text-muted',
 }
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const INPUT_SM = 'w-full border border-brand-border rounded px-2 py-1 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow'
 
 function newTemplate(): TemplateFormState {
@@ -169,7 +167,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
     <div className="space-y-4">
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Name der Vorlage</label>
+          <label className={LABEL}>Name der Vorlage</label>
           <input
             value={template.name}
             onChange={e => onChange({ ...template, name: e.target.value })}
@@ -180,7 +178,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Typ</label>
+            <label className={LABEL}>Typ</label>
             <select
               value={template.template_type}
               onChange={e => onChange({ ...template, template_type: e.target.value as TemplateFormState['template_type'] })}
@@ -193,7 +191,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
           </div>
           {template.template_type === 'generisch' && (
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
+              <label className={LABEL}>Dauer</label>
               <DurationInput
                 value={template.duration_minutes}
                 onChange={v => onChange({ ...template, duration_minutes: v })}
@@ -212,9 +210,9 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
               <button
                 type="button"
                 onClick={addItem}
-                className="bg-brand-yellow text-brand-black rounded-l-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className="inline-flex items-center gap-1 bg-brand-yellow text-brand-black rounded-l-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
               >
-                + Eintrag hinzufügen
+                <Plus className="w-3.5 h-3.5" />Eintrag hinzufügen
               </button>
               <button
                 type="button"
@@ -630,13 +628,13 @@ export default function AdminDutyTemplatesPage() {
   return (
     <div className="max-w-4xl">
       <div className="mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
           <h1 className="text-2xl font-bold">Dienstplan-Vorlagen</h1>
           <button
             onClick={openCreateModal}
             className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
           >
-            + Vorlage
+            <Plus className="w-3.5 h-3.5" />Vorlage
           </button>
         </div>
       </div>

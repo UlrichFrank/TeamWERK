@@ -1,3 +1,4 @@
+import { Plus } from 'lucide-react'
 import { useEffect, useState, type ComponentProps } from 'react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -13,7 +14,7 @@ import StaffelPicker from '../components/StaffelPicker'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
 import { buildTeamLongName, compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
-import { BTN_PRIMARY, HEADER_CTRL, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, BTN_SECONDARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 
 interface Season {
   id: number
@@ -406,7 +407,7 @@ export default function AdminKaderPage() {
                 setSelectedSeason(season)
                 if (season) loadKader(season.id, 0)
               }}
-              className="border border-brand-border rounded-md px-3 py-1.5 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-w-[9rem]"
+              className={`${HEADER_FIELD} min-w-[9rem]`}
             >
               {seasons.map(s => (
                 <option key={s.id} value={s.id}>
@@ -424,7 +425,7 @@ export default function AdminKaderPage() {
                   onClick={() => { setCreateModal({ ageClass: '', gender: '', nextTeamNumber: 1, bracketYears: [] }); setCreateDedicatedYear(null) }}
                   className={`${HEADER_CTRL} ${HEADER_PRIMARY} whitespace-nowrap`}
                 >
-                  + Mannschaft
+                  <Plus className="w-3.5 h-3.5" />Mannschaft
                 </button>
                 <button
                   onClick={() => setShowCopyModal(true)}
@@ -446,16 +447,12 @@ export default function AdminKaderPage() {
 
       {/* Age class tabs */}
       {ageClassTabs.length > 0 && (
-        <div className="flex gap-2 mb-6 border-b border-brand-border-subtle overflow-x-auto">
+        <div className={`${TAB_BAR} mb-6`}>
           {ageClassTabs.map(ac => (
             <button
               key={ac}
               onClick={() => setActiveAgeClass(ac)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activeAgeClass === ac
-                  ? 'border-brand-yellow text-brand-text'
-                  : 'border-transparent text-brand-text-muted hover:text-brand-text'
-              }`}
+              className={`${TAB} ${activeAgeClass === ac ? TAB_ACTIVE : TAB_INACTIVE}`}
             >
               {ac}
             </button>
@@ -484,9 +481,9 @@ export default function AdminKaderPage() {
             </button>
             <button
               onClick={() => { setCreateModal({ ageClass: '', gender: '', nextTeamNumber: 1, bracketYears: [] }); setCreateDedicatedYear(null) }}
-              className="border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors"
+              className="inline-flex items-center gap-1 border border-brand-border text-brand-text-muted px-4 py-2.5 sm:py-2 rounded-md text-sm font-medium hover:border-brand-text-muted hover:text-brand-text transition-colors"
             >
-              + Einzelne Mannschaft
+              <Plus className="w-3.5 h-3.5" />Einzelne Mannschaft
             </button>
             <button
               onClick={() => setShowCopyModal(true)}
@@ -698,7 +695,7 @@ export default function AdminKaderPage() {
 
       {/* Create team modal */}
       {createModal && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
               <h3 className="font-semibold text-base text-brand-text">Neue Mannschaft anlegen</h3>
@@ -713,7 +710,7 @@ export default function AdminKaderPage() {
                     setCreateModal(prev => prev && ({ ...prev, ageClass }))
                     setCreateDedicatedYear(null)
                   }}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 >
                   <option value="">Bitte wählen…</option>
                   <optgroup label="Wettkampf">
@@ -735,7 +732,7 @@ export default function AdminKaderPage() {
                 <select
                   value={createModal.gender}
                   onChange={e => setCreateModal(prev => prev && ({ ...prev, gender: e.target.value }))}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 >
                   <option value="">Bitte wählen…</option>
                   <option value="m">männlich</option>
@@ -751,7 +748,7 @@ export default function AdminKaderPage() {
                     const v = e.target.value
                     setCreateDedicatedYear(v === '' ? null : parseInt(v))
                   }}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 >
                   <option value="">Gemischt (alle Jahrgänge)</option>
                   {createYearOptions.map(yr => (
@@ -763,14 +760,14 @@ export default function AdminKaderPage() {
             <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle justify-end">
               <button
                 onClick={() => { setCreateModal(null); setCreateDedicatedYear(null) }}
-                className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>
               <button
                 onClick={handleCreateKader}
                 disabled={creating || !createModal.ageClass || !createModal.gender}
-                className="px-4 py-2 text-sm bg-brand-yellow text-brand-black font-medium rounded-md hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-50"
+                className={BTN_PRIMARY}
               >
                 {creating ? 'Anlegen…' : 'Anlegen'}
               </button>
@@ -781,7 +778,7 @@ export default function AdminKaderPage() {
 
       {/* Delete confirmation dialog */}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
               <h3 className="font-semibold text-base text-brand-text">Kader löschen?</h3>
@@ -794,7 +791,7 @@ export default function AdminKaderPage() {
             <div className="flex gap-2 px-6 py-4 border-t border-brand-border-subtle justify-end">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>

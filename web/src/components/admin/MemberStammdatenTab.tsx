@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, Trash2, X } from 'lucide-react'
 import { api } from '../../lib/api'
 import { CLUB_FUNCTION_OPTIONS, EXTERN_CLUB_FUNCTIONS } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import ImageCropModal from '../ImageCropModal'
+import { INPUT, LABEL, BTN_PRIMARY } from '../../lib/buttonStyles'
 
 interface Member {
   id?: number
@@ -175,54 +176,54 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
   return (
     <div className="space-y-6">
       {/* Persönliche Daten */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Persönliche Daten</h2>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Persönliche Daten</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Vorname</label>
+            <label className={LABEL}>Vorname</label>
             <input
               type="text"
               value={form.first_name}
               onChange={e => onFormChange({ first_name: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className={INPUT}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nachname</label>
+            <label className={LABEL}>Nachname</label>
             <input
               type="text"
               value={form.last_name}
               onChange={e => onFormChange({ last_name: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className={INPUT}
             />
           </div>
           {nameDraft && (
-            <div className="col-span-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+            <div className="col-span-2 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text-muted">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span>
-                  <span className="font-medium text-blue-700">Angeforderte Namensänderung:</span>{' '}
+                  <span className="font-medium text-brand-text">Angeforderte Namensänderung:</span>{' '}
                   {nameDraft.new_value?.first_name} {nameDraft.new_value?.last_name}
                 </span>
                 <div className="flex gap-2">
-                  <button onClick={() => onDraftAccept(nameDraft.id)} className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium">✓ Annehmen</button>
-                  <button onClick={() => onDraftReject(nameDraft.id)} className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium">✗ Ablehnen</button>
+                  <button onClick={() => onDraftAccept(nameDraft.id)} className="inline-flex items-center gap-1 px-2 py-1 bg-brand-success-light text-brand-success rounded-md hover:bg-brand-success/20 font-medium transition-colors"><Check className="w-4 h-4" />Annehmen</button>
+                  <button onClick={() => onDraftReject(nameDraft.id)} className="inline-flex items-center gap-1 px-2 py-1 bg-brand-danger-light text-brand-danger rounded-md hover:bg-brand-danger/20 font-medium transition-colors"><X className="w-4 h-4" />Ablehnen</button>
                 </div>
               </div>
             </div>
           )}
           {profilDraft && (
-            <div className="col-span-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-gray-700">
+            <div className="col-span-2 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-xs text-brand-text-muted">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div>
-                  <span className="font-medium text-blue-700">Angeforderte Profiländerung:</span>
+                  <span className="font-medium text-brand-text">Angeforderte Profiländerung:</span>
                   <span className="ml-1">{profilDraft.new_value?.first_name} {profilDraft.new_value?.last_name}</span>
                   {profilDraft.new_value?.street && (
-                    <span className="ml-2 text-gray-500">{profilDraft.new_value.street}, {profilDraft.new_value.zip} {profilDraft.new_value.city}</span>
+                    <span className="ml-2 text-brand-text-muted">{profilDraft.new_value.street}, {profilDraft.new_value.zip} {profilDraft.new_value.city}</span>
                   )}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => onDraftAccept(profilDraft.id)} className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium">✓ Annehmen</button>
-                  <button onClick={() => onDraftReject(profilDraft.id)} className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 font-medium">✗ Ablehnen</button>
+                  <button onClick={() => onDraftAccept(profilDraft.id)} className="inline-flex items-center gap-1 px-2 py-1 bg-brand-success-light text-brand-success rounded-md hover:bg-brand-success/20 font-medium transition-colors"><Check className="w-4 h-4" />Annehmen</button>
+                  <button onClick={() => onDraftReject(profilDraft.id)} className="inline-flex items-center gap-1 px-2 py-1 bg-brand-danger-light text-brand-danger rounded-md hover:bg-brand-danger/20 font-medium transition-colors"><X className="w-4 h-4" />Ablehnen</button>
                 </div>
               </div>
             </div>
@@ -232,31 +233,31 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         {/* Adresse */}
         <div className="mt-4 grid grid-cols-1 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Straße</label>
+            <label className={LABEL}>Straße</label>
             <input
               type="text"
               value={form.street || ''}
               onChange={e => onFormChange({ street: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className={INPUT}
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">PLZ</label>
+              <label className={LABEL}>PLZ</label>
               <input
                 type="text"
                 value={form.zip || ''}
                 onChange={e => onFormChange({ zip: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                className={INPUT}
               />
             </div>
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ort</label>
+              <label className={LABEL}>Ort</label>
               <input
                 type="text"
                 value={form.city || ''}
                 onChange={e => onFormChange({ city: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                className={INPUT}
               />
             </div>
           </div>
@@ -264,17 +265,17 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
 
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Geburtsdatum</label>
+            <label className={LABEL}>Geburtsdatum</label>
             <input
               type="date"
               value={form.date_of_birth}
               onChange={e => onFormChange({ date_of_birth: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className={INPUT}
             />
           </div>
           {!isExtern && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Mitgliedsnummer</label>
+              <label className={LABEL}>Mitgliedsnummer</label>
               {isNew ? (
                 <p className="text-sm text-brand-text-muted px-3 py-2 border border-brand-border-subtle rounded-md bg-brand-surface-card">
                   Wird automatisch vergeben
@@ -284,7 +285,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                   type="text"
                   value={form.member_number}
                   onChange={e => onFormChange({ member_number: e.target.value })}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               ) : (
                 <p className="text-sm text-brand-text px-3 py-2 border border-brand-border-subtle rounded-md bg-brand-surface-card">
@@ -294,32 +295,32 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Handball 360 ID</label>
+            <label className={LABEL}>Handball 360 ID</label>
             <input
               type="text"
               value={form.handball_360_id}
               onChange={e => onFormChange({ handball_360_id: e.target.value })}
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className={INPUT}
             />
           </div>
           {hasSpieler && (
             <>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Passnummer</label>
+                <label className={LABEL}>Passnummer</label>
                 <input
                   type="text"
                   value={form.pass_number}
                   onChange={e => onFormChange({ pass_number: e.target.value })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rückennummer</label>
+                <label className={LABEL}>Rückennummer</label>
                 <input
                   type="number"
                   value={form.jersey_number ?? ''}
                   onChange={e => onFormChange({ jersey_number: e.target.value ? parseInt(e.target.value) : undefined })}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                  className={INPUT}
                 />
               </div>
             </>
@@ -329,7 +330,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         {/* Positionen — nur für Spieler */}
         {hasSpieler && (
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Positionen</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-2">Positionen</label>
             <div className="flex flex-wrap gap-2">
               {HANDBALL_POSITIONS.map(pos => (
                 <button
@@ -339,7 +340,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                   className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                     selectedPositions.includes(pos)
                       ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                      : 'text-gray-600 border-gray-300 hover:border-brand-black'
+                      : 'text-brand-text-muted border-brand-border hover:border-brand-black'
                   }`}
                 >
                   {pos}
@@ -352,7 +353,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         {/* Geschlecht — nur für Spieler */}
         {hasSpieler && (
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Geschlecht</label>
+            <label className="block text-sm font-medium text-brand-text-muted mb-2">Geschlecht</label>
             <div className="flex gap-2">
               {GENDER_OPTIONS.map(g => (
                 <button
@@ -362,7 +363,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                   className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                     form.gender === g.value
                       ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                      : 'text-gray-600 border-gray-300'
+                      : 'text-brand-text-muted border-brand-border'
                   }`}
                 >
                   {g.label}
@@ -374,7 +375,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
 
         {/* Status */}
         <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+          <label className="block text-sm font-medium text-brand-text-muted mb-2">Status</label>
           <div className="flex gap-2 flex-wrap">
             {STATUS_OPTIONS.map(s => (
               <button
@@ -394,7 +395,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                 className={`px-3 py-1 rounded-full text-sm border transition-colors ${
                   form.status === s
                     ? 'bg-brand-yellow text-brand-black border-brand-yellow'
-                    : 'text-gray-600 border-gray-300'
+                    : 'text-brand-text-muted border-brand-border'
                 }`}
               >
                 {s}
@@ -406,7 +407,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         {/* Eintritts-/Austrittsdatum (steuern die Beitrags-Halbierung im Beitragslauf) */}
         <div className="mt-4 grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className={LABEL}>
               Eintrittsdatum {joinDateRequired && <span className="text-brand-danger">*</span>}
             </label>
             <input
@@ -414,12 +415,12 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               required={joinDateRequired}
               value={form.join_date ?? ''}
               onChange={e => onFormChange({ join_date: e.target.value })}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className={INPUT}
             />
           </div>
           {form.status === 'ausgetreten' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className={LABEL}>
                 Austrittsdatum <span className="text-brand-danger">*</span>
               </label>
               <input
@@ -427,7 +428,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                 required
                 value={form.exit_date ?? ''}
                 onChange={e => onFormChange({ exit_date: e.target.value })}
-                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                className={INPUT}
               />
             </div>
           )}
@@ -435,7 +436,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
 
         {/* Vereinsfunktion */}
         <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Vereinsfunktion</label>
+          <label className="block text-sm font-medium text-brand-text-muted mb-2">Vereinsfunktion</label>
           <div className="flex flex-wrap gap-2">
             {CLUB_FUNCTION_OPTIONS.map(opt => {
               const disabled = isExtern && !EXTERN_CLUB_FUNCTIONS.includes(opt.value)
@@ -458,11 +459,11 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
         {/* Stammverein + Zweitspielrecht — nicht für Extern-Mitglieder */}
         {!isExtern && (
           <div className="mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Stammverein</label>
+            <label className={LABEL}>Stammverein</label>
             <select
               value={form.home_club_id ?? ''}
               onChange={e => onFormChange({ home_club_id: e.target.value === '' ? null : Number(e.target.value) })}
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className={INPUT}
             >
               <option value="">Kein Stammverein</option>
               {stammvereine
@@ -487,11 +488,11 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
       </div>
 
       {/* Foto */}
-      <div className="bg-gray-50 rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-gray-700 mb-4">Passfoto</h2>
+      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+        <h2 className="font-semibold text-brand-text-muted mb-4">Passfoto</h2>
         <div className="flex items-center gap-4">
           {photoURL && <img src={photoURL} alt="Passfoto" className="w-20 h-20 rounded-full object-cover" />}
-          {!photoURL && <div className="w-20 h-20 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 text-xs">Kein Bild</div>}
+          {!photoURL && <div className="w-20 h-20 rounded-full bg-brand-border-subtle flex items-center justify-center text-brand-text-subtle text-xs">Kein Bild</div>}
           {!isNew && !form.user_id && (
             <div className="text-sm text-brand-text-muted">
               Foto ist erst verfügbar, sobald ein Nutzer-Konto verknüpft ist.
@@ -546,7 +547,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
               onChange={e => onFormChange({ photo_visible: e.target.checked })}
               className="w-4 h-4 accent-brand-yellow"
             />
-            <span className="text-sm text-gray-700">Sichtbar für Mitglieder</span>
+            <span className="text-sm text-brand-text-muted">Sichtbar für Mitglieder</span>
           </label>
         )}
       </div>
@@ -557,12 +558,12 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
           <button
             onClick={onSave}
             disabled={saving}
-            className="bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow disabled:opacity-40"
+            className={BTN_PRIMARY}
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
-          {saved && <span className="text-sm text-green-600">Gespeichert</span>}
-          {error && <span className="text-sm text-red-600">{error}</span>}
+          {saved && <span className="text-sm text-brand-success">Gespeichert</span>}
+          {error && <span className="text-sm text-brand-danger">{error}</span>}
         </div>
       )}
 

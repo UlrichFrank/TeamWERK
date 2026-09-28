@@ -60,7 +60,7 @@ describe('AdminDutyTypesPage — Ablösung', () => {
   test('Häkchen erscheint nur im Modus „Startzeit + Endzeit"', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     await screen.findByPlaceholderText('z.B. Kassierer')
 
     // Modus „Startzeit + Dauer": es gibt kein Ende, das gedeckelt werden könnte.
@@ -76,7 +76,7 @@ describe('AdminDutyTypesPage — Ablösung', () => {
   test('Moduswechsel hin und zurück verliert den Haken nicht', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     await screen.findByPlaceholderText('z.B. Kassierer')
 
     fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Endzeit' }))
@@ -92,7 +92,7 @@ describe('AdminDutyTypesPage — Ablösung', () => {
   test('Anlegen schickt end_at_next_duty mit', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     fireEvent.change(await screen.findByPlaceholderText('z.B. Kassierer'), { target: { value: 'Kuchenverkauf' } })
 
     fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Endzeit' }))

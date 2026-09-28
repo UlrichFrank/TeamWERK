@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import PasswordInput from '../components/forms/PasswordInput'
+import { BTN_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -47,22 +48,22 @@ export default function LoginPage() {
           </div>
 
           <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
-            <h2 className="text-xl font-bold text-brand-black mb-6">Anmelden</h2>
+            <h2 className="text-xl font-bold text-brand-text mb-6">Anmelden</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {error && <p className="text-brand-danger text-sm">{error}</p>}
+              {error && <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>}
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">E-Mail oder Spielername</label>
+                <label className={LABEL}>E-Mail oder Spielername</label>
                 <input
                   type="text"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   autoComplete="username"
                   required
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">Passwort</label>
+                <label className={LABEL}>Passwort</label>
                 <PasswordInput
                   value={password}
                   onChange={setPassword}
@@ -72,7 +73,7 @@ export default function LoginPage() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-semibold hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className={`w-full ${BTN_PRIMARY}`}
               >
                 Anmelden
               </button>

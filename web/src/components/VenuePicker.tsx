@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ChevronDown, MapPin, Plus, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useDialogA11y } from '../lib/useDialogA11y'
+import { BTN_SECONDARY, BTN_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 
 export interface Venue {
   id: number
@@ -97,7 +98,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
           type="button"
           disabled={disabled}
           onClick={() => setOpen(o => !o)}
-          className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow disabled:opacity-50"
+          className={`${INPUT} text-left flex items-center justify-between disabled:opacity-50`}
         >
           {selected ? (
             <span className="flex items-center gap-1.5">
@@ -166,7 +167,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
       </div>
 
       {showModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div
             ref={newVenueDialogRef}
             role="dialog"
@@ -180,55 +181,55 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
             )}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-brand-text mb-1">Name *</label>
+                <label className={LABEL}>Name *</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="z.B. Porsche-Arena"
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text mb-1">Straße *</label>
+                <label className={LABEL}>Straße *</label>
                 <input
                   type="text"
                   value={form.street}
                   onChange={e => setForm(f => ({ ...f, street: e.target.value }))}
                   placeholder="Musterstraße 1"
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-sm font-medium text-brand-text mb-1">PLZ *</label>
+                  <label className={LABEL}>PLZ *</label>
                   <input
                     type="text"
                     value={form.postal_code}
                     onChange={e => setForm(f => ({ ...f, postal_code: e.target.value }))}
                     placeholder="70372"
-                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                    className={INPUT}
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-brand-text mb-1">Stadt *</label>
+                  <label className={LABEL}>Stadt *</label>
                   <input
                     type="text"
                     value={form.city}
                     onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
                     placeholder="Stuttgart"
-                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                    className={INPUT}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text mb-1">Hinweis</label>
+                <label className={LABEL}>Hinweis</label>
                 <input
                   type="text"
                   value={form.note}
                   onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
                   placeholder="z.B. Parkhaus P3 empfohlen"
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
             </div>
@@ -236,7 +237,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
               <button
                 type="button"
                 onClick={() => { setShowModal(false); setForm(emptyForm); setError('') }}
-                className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>
@@ -244,7 +245,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
                 type="button"
                 onClick={handleCreate}
                 disabled={saving}
-                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={BTN_PRIMARY}
               >
                 {saving ? 'Speichern...' : 'Anlegen & auswählen'}
               </button>

@@ -27,7 +27,7 @@ describe('MembersPage — Anlegen sendet join_date', () => {
     const mock = getApiMock()
     mock.onPost('/members').reply(201, { id: 99 })
 
-    fireEvent.click(screen.getByText('+ Neu'))
+    fireEvent.click(screen.getByRole('button', { name: 'Neu' }))
     fireEvent.change(screen.getByLabelText('Vorname'), { target: { value: 'Max' } })
     fireEvent.change(screen.getByLabelText('Nachname'), { target: { value: 'Muster' } })
     fireEvent.click(screen.getByRole('button', { name: 'Anlegen' }))

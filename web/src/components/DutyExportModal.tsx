@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { errorStatus } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, BTN_SECONDARY } from '../lib/buttonStyles'
 
 // Dienst-CSV über einen wählbaren Zeitraum (GET /api/duty-slots/export).
 //
@@ -16,9 +16,6 @@ import { BTN_PRIMARY } from '../lib/buttonStyles'
 // Der Server liefert die Datei als Blob; es gibt keine Vorschau — die Datei ist
 // die Vorschau. Inhaltlich trägt sie KEINE Belegung und keine Namen, sie darf
 // deshalb auch an Ausrichter ohne TeamWERK-Zugang weitergegeben werden.
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_SECONDARY = 'px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text hover:bg-brand-surface-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
 
 interface Props {
   isOpen: boolean
@@ -78,7 +75,7 @@ export default function DutyExportModal({ isOpen, monthStart, monthEnd, onClose 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={busy ? undefined : onClose} />
+      <div className="fixed inset-0 bg-brand-black/40" onClick={busy ? undefined : onClose} />
       <div
         ref={dialogRef}
         role="dialog"

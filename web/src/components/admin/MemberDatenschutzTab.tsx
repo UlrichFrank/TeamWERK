@@ -132,7 +132,7 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
                 <div className="flex gap-2">
                   <button
                     onClick={() => onDraftAccept(dsgvoDraft.id)}
-                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium text-xs"
+                    className="px-2 py-1 bg-brand-success-light text-brand-success rounded hover:bg-brand-success/20 font-medium text-xs"
                   >
                     Annehmen
                   </button>
@@ -159,7 +159,7 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
-          {saved && <span className="text-sm text-green-600">Gespeichert</span>}
+          {saved && <span className="text-sm text-brand-success">Gespeichert</span>}
           {error && <span className="text-sm text-brand-danger">{error}</span>}
         </div>
       )}

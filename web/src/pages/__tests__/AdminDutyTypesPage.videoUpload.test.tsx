@@ -58,7 +58,7 @@ describe('AdminDutyTypesPage — Video-Upload-Berechtigung', () => {
   test('Häkchen ist unabhängig vom Zeit-Modus sichtbar', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     await screen.findByPlaceholderText('z.B. Kassierer')
 
     // Default-Modus „Startzeit + Dauer"
@@ -71,7 +71,7 @@ describe('AdminDutyTypesPage — Video-Upload-Berechtigung', () => {
   test('Anlegen schickt grants_video_upload mit', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     fireEvent.change(await screen.findByPlaceholderText('z.B. Kassierer'), { target: { value: 'Video' } })
 
     fireEvent.click(screen.getByRole('checkbox', { name: CHECKBOX_NAME }))

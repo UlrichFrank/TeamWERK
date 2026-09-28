@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
 
 interface ConvMember { id: number; name: string }
 
@@ -57,7 +57,7 @@ export default function CreatorExitChoiceModal({ convId, ownerId, members, onClo
   }
 
   return (
-    <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -139,7 +139,7 @@ export default function CreatorExitChoiceModal({ convId, ownerId, members, onClo
           <button
             onClick={onClose}
             disabled={busy}
-            className="flex-1 border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors disabled:opacity-40"
+            className={`flex-1 ${BTN_SECONDARY}`}
           >
             Abbrechen
           </button>

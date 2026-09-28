@@ -39,30 +39,14 @@ const METRICS: { constant: string; metric: string }[] = [
   { constant: 'BTN_DANGER', metric: 'bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium' },
   { constant: 'BTN_SECONDARY', metric: 'border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium' },
   { constant: 'BTN_SMALL', metric: 'bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium' },
+  { constant: 'INPUT', metric: 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle' },
 ]
 
 /**
  * Begründete Ausnahmen. Ein Eintrag, dessen Fundstelle verschwunden ist, lässt
  * den Test ebenfalls fehlschlagen — die Liste soll nicht zur Müllhalde werden.
  */
-const ALLOWLIST: { file: string; constant: string; count: number; reason: string }[] = [
-  {
-    file: 'pages/AdminTrainingsPage.tsx',
-    constant: 'BTN_SECONDARY',
-    count: 3,
-    reason:
-      'Abbrechen-Buttons mit hover:bg-brand-surface-card statt hover:bg-brand-table-select. ' +
-      'Der Secondary-Button ist in component-standards nicht definiert und existiert im Bestand ' +
-      'in vier Hover-Varianten; ihn zu vereinheitlichen ist eine Design-Entscheidung mit ' +
-      'sichtbarer Folge, kein Dedupe. Siehe Folge-Change.',
-  },
-  {
-    file: 'pages/MembersPage.tsx',
-    constant: 'BTN_SECONDARY',
-    count: 1,
-    reason: 'Wie AdminTrainingsPage — abweichender Hover, eigener Folge-Change.',
-  },
-]
+const ALLOWLIST: { file: string; constant: string; count: number; reason: string }[] = []
 
 function tsxFiles(dir: string): string[] {
   const out: string[] = []

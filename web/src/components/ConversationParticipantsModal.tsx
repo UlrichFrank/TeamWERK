@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
+import { BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
 
 interface ConvMember { id: number; name: string }
 interface ChatUser { id: number; name: string }
@@ -103,7 +104,7 @@ export default function ConversationParticipantsModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-brand-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -146,7 +147,7 @@ export default function ConversationParticipantsModal({
                 onBlur={commitName}
                 onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
                 maxLength={100}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                className={INPUT}
               />
             </div>
           )}
@@ -218,7 +219,7 @@ export default function ConversationParticipantsModal({
         <div className="pt-4 shrink-0">
           <button
             onClick={onClose}
-            className="w-full border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors"
+            className={`w-full ${BTN_SECONDARY}`}
           >
             Schließen
           </button>

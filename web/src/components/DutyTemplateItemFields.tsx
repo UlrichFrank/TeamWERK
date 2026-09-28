@@ -1,4 +1,5 @@
 import type { TeamForName } from '../lib/teamName'
+import { INPUT } from '../lib/buttonStyles'
 
 /**
  * Die Zusatzfelder eines Dienstplan-Vorlagen-Eintrags.
@@ -149,7 +150,7 @@ export function AusrichterField({ id, value, options, onChange }: {
         id={id}
         value={value ?? ''}
         onChange={e => onChange(e.target.value === '' ? null : Number(e.target.value))}
-        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+        className={INPUT}
       >
         <option value="">Gilt immer (unabhängig vom Ausrichter)</option>
         {options.map(opt => (

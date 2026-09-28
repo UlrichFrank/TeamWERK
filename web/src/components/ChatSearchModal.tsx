@@ -6,6 +6,7 @@ import { relativeTime } from '../lib/relativeTime'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { highlight } from '../lib/chatSearchHighlight'
+import { INPUT } from '../lib/buttonStyles'
 
 /**
  * Ein Suchtreffer über Chat-Nachrichten oder Mitteilungen (`GET /api/chat/search`).
@@ -120,7 +121,7 @@ export default function ChatSearchModal({ onClose, onSelect }: Props) {
             onChange={(e) => onQueryChange(e.target.value)}
             placeholder="Nachrichten und Mitteilungen durchsuchen…"
             aria-label="Suchbegriff"
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            className={INPUT}
           />
           <button
             type="button"

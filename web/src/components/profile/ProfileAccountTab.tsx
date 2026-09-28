@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import PasswordChangeModal from './PasswordChangeModal'
 import EmailChangeModal from './EmailChangeModal'
-import { BTN_PRIMARY } from '../../lib/buttonStyles'
+import { BTN_PRIMARY, LABEL } from '../../lib/buttonStyles'
 
 interface Props {
   user: { email?: string } | null
@@ -19,17 +19,17 @@ export default function ProfileAccountTab({ user, logout, recoveryEmail }: Props
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className="font-semibold text-brand-text-muted mb-4">Kontoangaben</h2>
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">E-Mail</label>
+          <label className={LABEL}>E-Mail</label>
           <input
             type="email"
             value={user?.email || ''}
             disabled
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm bg-gray-100 text-brand-text-muted"
+            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm bg-brand-surface-card text-brand-text-muted"
           />
         </div>
         {recoveryEmail && (
           <div className="mt-4">
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Eltern-E-Mail (Passwort-Reset)</label>
+            <label className={LABEL}>Eltern-E-Mail (Passwort-Reset)</label>
             <input
               type="email"
               value={recoveryEmail}

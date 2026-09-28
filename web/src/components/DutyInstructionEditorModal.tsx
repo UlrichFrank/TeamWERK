@@ -6,7 +6,7 @@ import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorStatus } from '../lib/errors'
 import { DUTY_INSTRUCTION_TEMPLATE } from '../lib/dutyInstructionTemplate'
 import MarkdownRenderer from './MarkdownRenderer'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
 
 interface DutyInstructionEditorModalProps {
   dutyTypeId: number
@@ -68,7 +68,7 @@ export default function DutyInstructionEditorModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
       <div
         ref={dialogRef}
         role="dialog"
@@ -99,7 +99,7 @@ export default function DutyInstructionEditorModal({
             value={markdown}
             disabled={loading}
             onChange={e => { setMarkdown(e.target.value); setHasChanged(true) }}
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text font-mono placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow min-h-64 disabled:opacity-40"
+            className={`${INPUT} font-mono min-h-64 disabled:opacity-40`}
           />
 
           <label className="text-xs uppercase text-brand-text-muted">Vorschau</label>
@@ -126,7 +126,7 @@ export default function DutyInstructionEditorModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 sm:py-2 text-sm border border-brand-border rounded-md text-brand-text hover:bg-brand-surface-card transition-colors"
+            className={BTN_SECONDARY}
           >
             Abbrechen
           </button>

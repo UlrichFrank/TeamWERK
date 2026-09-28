@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { X, ZoomIn } from 'lucide-react'
 import { useDialogA11y } from '../lib/useDialogA11y'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
 
 const CANVAS_SIZE = 320
 const EXPORT_SIZE = 600
@@ -232,7 +232,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
 
   if (loadError) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
         <div
           ref={dialogRef}
           role="dialog"
@@ -245,7 +245,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
           </p>
           <button
             onClick={onCancel}
-            className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            className={BTN_PRIMARY}
           >
             Schließen
           </button>
@@ -255,7 +255,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4" onClick={onCancel}>
       <div
         ref={dialogRef}
         role="dialog"
@@ -302,7 +302,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 border border-brand-border rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-brand-text hover:bg-brand-surface-card transition-colors"
+            className={`flex-1 ${BTN_SECONDARY}`}
           >
             Abbrechen
           </button>

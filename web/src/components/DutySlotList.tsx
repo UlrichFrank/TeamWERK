@@ -15,7 +15,7 @@ import AushilfeBadge from './AushilfeBadge'
 import ActionMenu from './ActionMenu'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
-import { BTN_PRIMARY, BTN_DANGER } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_DANGER, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
 
 // Bewusst schlank: Board liefert nur Namen inline; Avatar/Kontakt lädt
 // PersonChip on-demand über GET /api/users/{id}/contact (Sichtbarkeitsregeln
@@ -208,8 +208,8 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
               <tr key={s.id} id={`duty-slot-${s.id}`}>
                 <td className="pl-4 pr-1 sm:px-4 py-2.5 text-brand-text-muted whitespace-nowrap">{formatTimeSpan(s.event_time, s.hours_value)}</td>
                 <td className="pl-4 pr-4 sm:px-4 py-2.5 font-medium text-brand-text">
-                  <span className="inline-flex items-center gap-1.5">
-                    {s.duty_type}
+                  <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 max-w-full">
+                    <span className="min-w-0 break-words">{s.duty_type}</span>
                     {s.has_instruction ? (
                       <Link
                         to={`/dienste/anleitung/${s.duty_type_id}`}
@@ -318,7 +318,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
       </div>
 
       {noInstructionOpen && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div
             ref={noInstructionRef}
             role="dialog"
@@ -333,7 +333,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
             <div className="flex justify-end">
               <button
                 onClick={() => setNoInstructionOpen(false)}
-                className="text-sm px-4 py-2 rounded bg-brand-yellow text-brand-black font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className={BTN_PRIMARY}
               >
                 OK
               </button>
@@ -344,7 +344,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
       )}
 
       {claimDialog !== null && user && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div
             ref={claimDialogRef}
             role="dialog"
@@ -389,7 +389,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
               </button>
               <button
                 onClick={() => setClaimDialog(null)}
-                className="flex-1 px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                className={`flex-1 ${BTN_SECONDARY}`}
               >
                 Abbrechen
               </button>
@@ -400,7 +400,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
       )}
 
       {commentModal !== null && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div
             ref={commentModalRef}
             role="dialog"
@@ -438,7 +438,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
                   onChange={e => setMyCommentDraft(e.target.value)}
                   maxLength={280}
                   rows={3}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                   placeholder="z.B. Marmorkuchen"
                 />
               </div>
@@ -464,7 +464,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
               )}
               <button
                 onClick={() => setCommentModal(null)}
-                className="flex-1 px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                className={`flex-1 ${BTN_SECONDARY}`}
               >
                 Schließen
               </button>

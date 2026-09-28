@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { INPUT } from '../lib/buttonStyles'
 
 export interface SearchableSelectItem {
   value: string
@@ -82,7 +83,7 @@ export default function SearchableSelect({
         placeholder={open ? (selectedItem?.label || placeholder) : placeholder}
         disabled={disabled}
         autoComplete="off"
-        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow disabled:opacity-40 disabled:cursor-not-allowed"
+        className={`${INPUT} disabled:opacity-40 disabled:cursor-not-allowed`}
       />
 
       {open && !disabled && (

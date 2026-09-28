@@ -199,9 +199,9 @@ export default function VideosPage() {
   return (
     <div>
       <div className="mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
           <h1 className="text-2xl font-bold">Videos</h1>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-end gap-2">
             <select
               value={teamFilter}
               onChange={e => setTeamFilter(e.target.value)}

@@ -3,7 +3,7 @@ import { CheckCircle, Mail } from 'lucide-react'
 import { api } from '../../lib/api'
 import { isLikelyNameMatch } from '../../lib/nameMatch'
 import SearchableSelect from '../SearchableSelect'
-import { BTN_PRIMARY } from '../../lib/buttonStyles'
+import { BTN_PRIMARY, LABEL } from '../../lib/buttonStyles'
 
 interface User {
   id: number
@@ -125,7 +125,7 @@ export default function MemberAdminTab({
         )}
 
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Nutzer ändern</label>
+          <label className={LABEL}>Nutzer ändern</label>
           <SearchableSelect
             items={linkItems}
             value={selected}
@@ -153,9 +153,9 @@ export default function MemberAdminTab({
         <h2 className="font-semibold text-brand-text mb-4">Willkommensmail</h2>
 
         {welcomeEmailSentAt ? (
-          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
-            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-            <span className="text-green-800">
+          <div className="flex items-center gap-2 p-3 bg-brand-success-light border border-brand-success/30 rounded-lg text-sm">
+            <CheckCircle className="w-4 h-4 text-brand-success flex-shrink-0" />
+            <span className="text-brand-success">
               Mail wurde am {formatSentAt(welcomeEmailSentAt)} versendet.
             </span>
           </div>

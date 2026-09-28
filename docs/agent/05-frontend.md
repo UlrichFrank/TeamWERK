@@ -33,6 +33,9 @@ Marke: Schwarz `#181310`, Gelb `#FDE400`, Weiß `#FFFFFF`; sekundär Blau `#3E4A
 - **Button Small (Tabellen):** `bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
 - **Button Danger:** `bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
 - **Input:** `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+- **Weitere Konstanten** (ebenfalls aus `buttonStyles.ts` importieren, nicht abtippen): `INPUT` (= Input oben), `LABEL` (`block text-sm font-medium text-brand-text-muted mb-1`), `BTN_SECONDARY` (Abbrechen/Zurück neben einer Formular-Aktion — gleiche Höhe wie `BTN_PRIMARY`, auch auf Mobile), `TAB_BAR`/`TAB`/`TAB_ACTIVE`/`TAB_INACTIVE` (Tab-Leisten: scrollen auf Mobile horizontal, brechen nie um) und `HEADER_GROUP` (Filter-/Suchgruppe in einer umbrechenden Kopfzeile — `min-w-[12rem]` statt `min-w-0`, sonst quetscht sie sich auf Mobile unter die Nachbar-Buttons).
+- **Modal-Backdrop:** `bg-brand-black/40` (Bild-Vollansichten `bg-brand-black/80`); Modal-Kopf wie `EditModal` (Titel `text-lg font-bold`, Schließen als `<X>` mit `aria-label`).
+- **Seitentitel:** `text-2xl font-bold` — auch auf Detailseiten. `<main>` setzt `text-brand-text` als Grundfarbe.
 - **Card:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6` (Tabellen-Container: `… overflow-hidden`)
 - **Modal:** `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6`
 - **Alert Info:** `p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text`

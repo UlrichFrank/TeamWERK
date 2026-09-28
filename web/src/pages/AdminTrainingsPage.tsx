@@ -9,12 +9,10 @@ import MapsLink from '../components/MapsLink'
 import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import DeleteReasonFields, { deletionPayload } from '../components/DeleteReasonFields'
 import { errorMessage } from '../lib/errors'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER } from '../lib/buttonStyles'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 const WEEKDAY_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 interface VenueRef {
   id: number
@@ -379,7 +377,7 @@ export default function AdminTrainingsPage() {
 
       {/* Delete confirmation modal */}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => closeDeleteConfirm()}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-black/40" onClick={() => closeDeleteConfirm()}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">
@@ -417,13 +415,13 @@ export default function AdminTrainingsPage() {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => closeDeleteConfirm()}
-                className="bg-white border border-brand-border text-brand-text rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>
               <button
                 onClick={() => deleteConfirm.type === 'series' ? handleDeleteSeries(deleteConfirm.id) : handleDeleteSession(deleteConfirm.id)}
-                className="bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors"
+                className={BTN_DANGER}
               >
                 Löschen
               </button>
@@ -581,7 +579,7 @@ export default function AdminTrainingsPage() {
 
       {/* === SERIES MODAL === */}
       {seriesModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSeriesModal(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-black/40" onClick={() => setSeriesModal(null)}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">
@@ -702,7 +700,7 @@ export default function AdminTrainingsPage() {
                   {saving ? 'Speichern…' : isNewSeries ? 'Serie anlegen' : 'Speichern'}
                 </button>
                 <button type="button" onClick={() => setSeriesModal(null)}
-                  className="bg-white border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors">
+                  className={BTN_SECONDARY}>
                   Abbrechen
                 </button>
               </div>
@@ -713,7 +711,7 @@ export default function AdminTrainingsPage() {
 
       {/* === ABMELDE MODAL === */}
       {abmeldModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setAbmeldModal(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-black/40" onClick={() => setAbmeldModal(null)}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">Spieler abmelden</h2>
@@ -766,7 +764,7 @@ export default function AdminTrainingsPage() {
                   {saving ? 'Speichern…' : 'Abmelden'}
                 </button>
                 <button type="button" onClick={() => setAbmeldModal(null)}
-                  className="bg-white border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors">
+                  className={BTN_SECONDARY}>
                   Abbrechen
                 </button>
               </div>
@@ -777,7 +775,7 @@ export default function AdminTrainingsPage() {
 
       {/* === SESSION MODAL === */}
       {sessionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setSessionModal(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-black/40" onClick={() => setSessionModal(null)}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-brand-text text-lg">
@@ -877,7 +875,7 @@ export default function AdminTrainingsPage() {
                   {saving ? 'Speichern…' : isNewSession ? 'Termin anlegen' : 'Speichern'}
                 </button>
                 <button type="button" onClick={() => setSessionModal(null)}
-                  className="bg-white border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-surface-card transition-colors">
+                  className={BTN_SECONDARY}>
                   Abbrechen
                 </button>
               </div>

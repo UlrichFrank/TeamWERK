@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { api } from '../lib/api'
+import { INPUT } from '../lib/buttonStyles'
 
 interface Suggestion {
   id: number
@@ -77,7 +78,7 @@ export default function KaderExtendedSearch({ kaderId, onMemberAdded }: Props) {
         onChange={e => setQuery(e.target.value)}
         onFocus={() => fetchSuggestions(query)}
         placeholder="Mitglied für erweiterten Kader suchen…"
-        className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+        className={INPUT}
       />
 
       {open && (

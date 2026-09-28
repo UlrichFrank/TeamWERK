@@ -7,7 +7,7 @@ import {
   type DiaryKind,
 } from '../lib/trainingDiary'
 import { todayISO } from '../lib/trainingDiary'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
 
 export interface DiarySubmitPayload {
   trained_on: string
@@ -74,8 +74,7 @@ export default function TrainingDiaryEntryForm({
     })
   }
 
-  const inputClass =
-    'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+  const inputClass = INPUT
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -86,7 +85,7 @@ export default function TrainingDiaryEntryForm({
       )}
 
       <div>
-        <label htmlFor="diary-date" className="block text-sm font-medium text-brand-text mb-1">
+        <label htmlFor="diary-date" className={LABEL}>
           Datum
         </label>
         <input
@@ -100,7 +99,7 @@ export default function TrainingDiaryEntryForm({
       </div>
 
       <div>
-        <label htmlFor="diary-kind" className="block text-sm font-medium text-brand-text mb-1">
+        <label htmlFor="diary-kind" className={LABEL}>
           Art
         </label>
         <select
@@ -129,7 +128,7 @@ export default function TrainingDiaryEntryForm({
       </div>
 
       <div>
-        <label htmlFor="diary-duration" className="block text-sm font-medium text-brand-text mb-1">
+        <label htmlFor="diary-duration" className={LABEL}>
           Dauer (Minuten)
         </label>
         <input
@@ -145,7 +144,7 @@ export default function TrainingDiaryEntryForm({
       </div>
 
       <div>
-        <span className="block text-sm font-medium text-brand-text mb-1">Intensität (RPE)</span>
+        <span className={LABEL}>Intensität (RPE)</span>
         <div className="flex flex-wrap gap-1">
           {Array.from({ length: 10 }, (_, i) => i + 1).map(value => (
             <button
@@ -167,7 +166,7 @@ export default function TrainingDiaryEntryForm({
       </div>
 
       <div>
-        <label htmlFor="diary-note" className="block text-sm font-medium text-brand-text mb-1">
+        <label htmlFor="diary-note" className={LABEL}>
           Notiz <span className="text-brand-text-muted font-normal">(optional)</span>
         </label>
         <textarea
@@ -182,7 +181,7 @@ export default function TrainingDiaryEntryForm({
 
       {onFileSelect && (
         <div>
-          <label htmlFor="diary-proof" className="block text-sm font-medium text-brand-text mb-1">
+          <label htmlFor="diary-proof" className={LABEL}>
             Nachweis <span className="text-brand-text-muted font-normal">(optional)</span>
           </label>
           <input
@@ -210,7 +209,7 @@ export default function TrainingDiaryEntryForm({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium text-brand-text-muted hover:text-brand-text transition-colors"
+            className={BTN_SECONDARY}
           >
             Abbrechen
           </button>

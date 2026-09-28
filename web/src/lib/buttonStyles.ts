@@ -45,6 +45,16 @@
 export const HEADER_H = 'h-8 sm:h-[30px]'
 
 /**
+ * Platz für den Auswahlpfeil eines `<select>`. `@tailwindcss/forms` zeichnet ihn
+ * als Hintergrundbild 0,5rem vom rechten Rand, 1,5em breit, und reserviert dafür
+ * `padding-right: 2.5rem` — ein `px-3` am Feld überschreibt das, und der Text
+ * läuft unter den Pfeil (Staffel-Auswahl: „mA1" mit Chevron mitten im Wort).
+ * Bei 16px (Mobile, iOS-Zoom-Schutz) braucht der Pfeil 32px, daher `pr-9`.
+ * Nur für `select`: Text- und Suchfelder behalten ihr symmetrisches Padding.
+ */
+export const SELECT_CHEVRON_ROOM = '[&:is(select)]:pr-9'
+
+/**
  * Gemeinsame Basis aller Header-Controls — ohne Rundung und ohne horizontales
  * Padding, weil Split-Buttons und Icon-only-Varianten beides verändern.
  * Das farblose `border` steht bewusst hier: ohne Rahmen wäre ein Control 2px
@@ -100,7 +110,7 @@ export const HEADER_GHOST =
  * hängen die Aufrufer `w-full` an.
  */
 export const HEADER_FIELD =
-  `border border-brand-border rounded-md ${HEADER_H} px-3 bg-white ` +
+  `border border-brand-border rounded-md ${HEADER_H} px-3 ${SELECT_CHEVRON_ROOM} bg-white ` +
   'text-xs text-brand-text placeholder:text-brand-text-subtle ' +
   'focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
@@ -127,3 +137,46 @@ export const BTN_DANGER =
   'bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium ' +
   'hover:bg-brand-danger/90 transition-colors ' +
   'disabled:opacity-40 disabled:cursor-not-allowed'
+
+/**
+ * Eingabefeld in Formularen und Modals (Text, Datum, Zahl, Select, Textarea).
+ * Layout-Klassen (`mb-*`, `resize-none`, Icon-Padding) hängt der Aufrufer an.
+ */
+export const INPUT =
+  `w-full border border-brand-border rounded-md px-3 ${SELECT_CHEVRON_ROOM} py-2 text-sm text-brand-text ` +
+  'placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 ' +
+  'focus:ring-brand-yellow focus:border-brand-yellow'
+
+/** Beschriftung über einem Formularfeld. */
+export const LABEL = 'block text-sm font-medium text-brand-text-muted mb-1'
+
+/**
+ * Filter-/Suchgruppe in einer umbrechenden Kopfzeile (`flex flex-wrap`).
+ *
+ * Bewusst `min-w-[12rem]` und nicht `min-w-0`: ein `flex-1`-Item hat Basis 0,
+ * und mit Mindestbreite 0 passt es beim Zeilenumbruch rechnerisch IMMER noch in
+ * die erste Zeile. Auf Mobile wurde die Gruppe dadurch auf wenige Pixel
+ * gequetscht, und Filter-Button und Suchfeld lagen über den Aktions-Buttons
+ * rechts daneben (Kalender: Abwesenheits-Button komplett verdeckt). Mit
+ * Mindestbreite bricht die Gruppe stattdessen in eine eigene Zeile um.
+ */
+export const HEADER_GROUP = 'flex items-center gap-1.5 flex-1 flex-nowrap min-w-[12rem]'
+
+/**
+ * Tab-Leiste unter der Seitenüberschrift. Scrollt auf schmalen Bildschirmen
+ * horizontal statt umzubrechen: eine umbrochene Leiste mit Unterstrich sieht aus
+ * wie zwei Leisten, eine nicht scrollende (so war es in den Einstellungen) schiebt
+ * die ganze Seite seitlich aus dem Bild. Abstand nach unten setzt der Aufrufer.
+ */
+export const TAB_BAR =
+  'flex gap-1 border-b border-brand-border-subtle overflow-x-auto ' +
+  // Scrollbalken ausblenden: er lag als zweite, graue Linie unter dem Unterstrich.
+  // Wischen bleibt möglich, der angeschnittene letzte Tab zeigt, dass es weitergeht.
+  '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+
+/** Einzelner Tab; mit `TAB_ACTIVE` bzw. `TAB_INACTIVE` kombinieren. */
+export const TAB =
+  'inline-flex items-center gap-1 px-4 py-2 text-sm font-medium border-b-2 ' +
+  'transition-colors whitespace-nowrap shrink-0'
+export const TAB_ACTIVE = 'border-brand-yellow text-brand-text'
+export const TAB_INACTIVE = 'border-transparent text-brand-text-muted hover:text-brand-text'

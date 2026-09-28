@@ -10,6 +10,7 @@ import MemberKontaktTab from '../components/admin/MemberKontaktTab'
 import MemberDatenschutzTab from '../components/admin/MemberDatenschutzTab'
 import MemberFamilieTab from '../components/admin/MemberFamilieTab'
 import MemberAdminTab from '../components/admin/MemberAdminTab'
+import { TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 
 interface Member {
   id: number
@@ -375,16 +376,12 @@ export default function MemberDetailPage() {
 
       {/* Tab Navigation */}
       {!isNew && (
-        <div className="flex gap-2 mb-6 border-b border-brand-border-subtle overflow-x-auto">
+        <div className={`${TAB_BAR} mb-6`}>
           {tabButtons.filter(t => t.show).map(tab => (
             <button
               key={tab.name}
               onClick={() => setActiveTab(tab.name)}
-              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === tab.name
-                  ? 'border-brand-yellow text-brand-text'
-                  : 'border-transparent text-brand-text-muted hover:text-brand-text'
-              }`}
+              className={`${TAB} ${activeTab === tab.name ? TAB_ACTIVE : TAB_INACTIVE}`}
             >
               {tab.label}
             </button>

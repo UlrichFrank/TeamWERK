@@ -84,7 +84,7 @@ export default function MemberFamilieTab({
   }
 
   if (isNew) {
-    return <div className="text-gray-600">Familie kann nach dem Erstellen hinzugefügt werden.</div>
+    return <div className="text-brand-text-muted">Familie kann nach dem Erstellen hinzugefügt werden.</div>
   }
 
   return (
@@ -135,7 +135,7 @@ export default function MemberFamilieTab({
         )}
 
         {error && <p className="text-sm text-brand-danger mt-4">{error}</p>}
-        {saved && <p className="text-sm text-green-600 mt-4">Gespeichert</p>}
+        {saved && <p className="text-sm text-brand-success mt-4">Gespeichert</p>}
       </div>
 
       {memberId && memberUserId == null && (

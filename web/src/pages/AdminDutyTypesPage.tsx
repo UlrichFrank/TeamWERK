@@ -1,5 +1,5 @@
 import { useEffect, useState, FormEvent } from 'react'
-import { X } from 'lucide-react'
+import { X, Plus } from 'lucide-react'
 import { api, getReference } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { formatOffset, parseOffset } from '../lib/time'
@@ -10,7 +10,7 @@ import OffsetInput from '../components/OffsetInput'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { hoursToDisplay, parseHoursInput, resolveAnchorClock, addMinutesToTime, dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
-import { BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
 
 interface DutyType {
   id: number
@@ -106,8 +106,6 @@ function editStateSpanImpossible(state: EditState): boolean {
     state.end_anchor, parseOffset(state.end_offset),
   )
 }
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const INPUT_SM = 'w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow'
 
 function DutyTypeForm({ state, onChange, types, excludeId }: {
@@ -122,12 +120,12 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-brand-text-muted mb-1">Name</label>
+        <label className={LABEL}>Name</label>
         <input value={state.name} onChange={e => onChange({ ...state, name: e.target.value })}
           placeholder="z.B. Kassierer" required className={INPUT} />
       </div>
       <div>
-        <label className="block text-sm font-medium text-brand-text-muted mb-1">Zeit-Modus</label>
+        <label className={LABEL}>Zeit-Modus</label>
         <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-4">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input
@@ -154,14 +152,14 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Start-Anker</label>
+          <label className={LABEL}>Start-Anker</label>
           <select value={state.anchor} onChange={e => onChange({ ...state, anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
             <option value="start">Anpfiff/Beginn</option>
             <option value="end">Abpfiff/Ende</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Start-Versatz</label>
+          <label className={LABEL}>Start-Versatz</label>
           <OffsetInput
             value={parseOffset(state.offset)}
             onChange={v => onChange({ ...state, offset: formatOffset(v) })}
@@ -172,7 +170,7 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
 
       {state.duration_mode === 'absolut' ? (
         <div>
-          <label className="block text-sm font-medium text-brand-text-muted mb-1">Dauer</label>
+          <label className={LABEL}>Dauer</label>
           <input
             list="hours-presets"
             value={state.hours}
@@ -190,14 +188,14 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
         <>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">End-Anker</label>
+              <label className={LABEL}>End-Anker</label>
               <select value={state.end_anchor} onChange={e => onChange({ ...state, end_anchor: e.target.value as 'start' | 'end' })} className={INPUT}>
                 <option value="start">Anpfiff/Beginn</option>
                 <option value="end">Abpfiff/Ende</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">End-Versatz</label>
+              <label className={LABEL}>End-Versatz</label>
               <OffsetInput
                 value={parseOffset(state.end_offset)}
                 onChange={v => onChange({ ...state, end_offset: formatOffset(v) })}
@@ -237,7 +235,7 @@ function DutyTypeForm({ state, onChange, types, excludeId }: {
       <p className="text-xs text-brand-text-subtle">Versatz-Format: <code>-1h 30min</code> (vor Anker) · <code>+30min</code> (nach Anker) · <code>0</code></p>
 
       <div>
-        <label className="block text-sm font-medium text-brand-text-muted mb-1">Zielgruppe</label>
+        <label className={LABEL}>Zielgruppe</label>
         <p className="text-xs text-brand-text-subtle mb-2">Leer = keine Einschränkung</p>
         <div className="grid grid-cols-2 gap-1.5">
           {AUDIENCE_OPTIONS.map(o => (
@@ -413,20 +411,20 @@ export default function AdminDutyTypesPage() {
     <div>
       {/* Header */}
       <div className="mb-4 sm:mb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
           <h1 className="text-2xl font-bold">Diensttypen</h1>
           <button
             onClick={() => setShowCreateModal(true)}
             className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
           >
-            + Diensttyp
+            <Plus className="w-3.5 h-3.5" />Diensttyp
           </button>
         </div>
       </div>
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
               <h2 className="font-semibold text-lg text-brand-text">Neuer Diensttyp</h2>
@@ -453,7 +451,7 @@ export default function AdminDutyTypesPage() {
                 <button
                   type="button"
                   onClick={() => { setShowCreateModal(false); setCreate(emptyCreate()) }}
-                  className="px-4 py-2.5 sm:py-2 text-sm border border-brand-border rounded-md text-brand-text hover:bg-brand-surface-card transition-colors"
+                  className={BTN_SECONDARY}
                 >
                   Abbrechen
                 </button>

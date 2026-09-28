@@ -11,7 +11,7 @@ import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventT
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId } from '../lib/teamFilter'
 import TeamFilter from '../components/TeamFilter'
-import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, INPUT, LABEL, HEADER_GROUP } from '../lib/buttonStyles'
 import { useCompactHeader } from '../hooks/useCompactHeader'
 
 interface CarpoolEntry {
@@ -208,7 +208,7 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
                 <button
                   onClick={() => onConfirm(p.id)}
                   aria-label="Bestätigen"
-                  className="p-1 text-brand-text-muted hover:text-green-600 transition-colors"
+                  className="p-1 text-brand-text-muted hover:text-brand-success transition-colors"
                 >
                   <Check className="w-4 h-4" />
                 </button>
@@ -306,7 +306,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-brand-black/40">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-brand-text">Mitfahrgelegenheit eintragen</h2>
@@ -334,11 +334,11 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
 
           {children && children.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-brand-text mb-1">Für wen?</label>
+              <label className={LABEL}>Für wen?</label>
               <select
                 value={forUserId ?? ''}
                 onChange={e => setForUserId(e.target.value === '' ? null : Number(e.target.value))}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                className={INPUT}
               >
                 <option value="">Ich selbst</option>
                 {children.map(c => (
@@ -349,7 +349,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
           )}
 
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-1">
+            <label className={LABEL}>
               {typ === 'biete' ? 'Freie Plätze' : 'Anzahl Personen'}
               {typ === 'suche' && <span className="text-brand-danger ml-1">*</span>}
             </label>
@@ -365,24 +365,24 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-1">Treffpunkt <span className="font-normal text-brand-text-muted">(optional)</span></label>
+            <label className={LABEL}>Treffpunkt <span className="font-normal text-brand-text-muted">(optional)</span></label>
             <input
               type="text"
               value={treffpunkt}
               onChange={e => setTreffpunkt(e.target.value)}
               placeholder="z. B. Halle um 09:00 Uhr"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className={INPUT}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-1">Notiz <span className="font-normal text-brand-text-muted">(optional)</span></label>
+            <label className={LABEL}>Notiz <span className="font-normal text-brand-text-muted">(optional)</span></label>
             <input
               type="text"
               value={notiz}
               onChange={e => setNotiz(e.target.value)}
               placeholder="z. B. Parkplatz Ost"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className={INPUT}
             />
           </div>
 
@@ -445,7 +445,7 @@ function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/40">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-brand-black/40">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-base font-semibold text-brand-text">{isRide ? 'Mitfahren' : 'Platz anbieten'}</h2>
@@ -456,11 +456,11 @@ function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, 
         <form onSubmit={handleSubmit} className="space-y-4">
           {isRide && children && children.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-brand-text mb-1">Für wen?</label>
+              <label className={LABEL}>Für wen?</label>
               <select
                 value={forUserId ?? ''}
                 onChange={e => setForUserId(e.target.value === '' ? null : Number(e.target.value))}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                className={INPUT}
               >
                 <option value="">Ich selbst</option>
                 {children.map(c => (
@@ -471,7 +471,7 @@ function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, 
           )}
 
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-1">
+            <label className={LABEL}>
               {isRide ? 'Anzahl Personen' : 'Freie Plätze'}
             </label>
             <NumberSpinner value={plaetze} min={1} max={8} onChange={setPlaetze} />
@@ -619,7 +619,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
           <div className="space-y-1">
             {confirmedPaarungen.map(p => (
               <div key={p.id} id={`paarung-${p.id}`} className="flex items-center gap-2 text-xs text-brand-text scroll-mt-24">
-                <Check className="w-3 h-3 text-green-600 flex-shrink-0" />
+                <Check className="w-3 h-3 text-brand-success flex-shrink-0" />
                 <span className="flex items-center gap-1 flex-wrap">
                   <PersonChip userId={p.sucheUserId} name={p.sucheName} photoUrl={p.suchePhotoUrl} />
                   {p.anzahl > 1 && ` (${p.anzahl} Personen)`}
@@ -847,7 +847,7 @@ export default function MitfahrgelegenheitenPage() {
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
         <h1 className="text-2xl font-bold text-brand-text shrink-0">Mitfahrten</h1>
-        <div className="flex items-center gap-1.5 flex-1 flex-nowrap min-w-0">
+        <div className={HEADER_GROUP}>
           {allTeams.length > 1 && (
             <TeamFilter
               teams={teamOptions}

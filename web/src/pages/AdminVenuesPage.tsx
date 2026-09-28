@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, Home, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { api } from '../lib/api'
-import { HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN } from '../lib/buttonStyles'
+import { HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER, INPUT, LABEL } from '../lib/buttonStyles'
 import ActionMenu from '../components/ActionMenu'
 import MapsLink from '../components/MapsLink'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
@@ -162,8 +162,8 @@ export default function AdminVenuesPage() {
   }
 
   return (
-    <div className="p-4 sm:p-8 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-brand-text">Veranstaltungsorte</h1>
         <div ref={actionsMenuRef} className="relative">
           <div className="flex">
@@ -278,7 +278,7 @@ export default function AdminVenuesPage() {
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-semibold text-brand-text mb-4">
               {editVenue ? 'Ort bearbeiten' : 'Neuer Veranstaltungsort'}
@@ -288,60 +288,60 @@ export default function AdminVenuesPage() {
             )}
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-brand-text mb-1">Name *</label>
+                <label className={LABEL}>Name *</label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text mb-1">Straße *</label>
+                <label className={LABEL}>Straße *</label>
                 <input
                   type="text"
                   value={form.street}
                   onChange={e => setForm(f => ({ ...f, street: e.target.value }))}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-sm font-medium text-brand-text mb-1">PLZ *</label>
+                  <label className={LABEL}>PLZ *</label>
                   <input
                     type="text"
                     value={form.postal_code}
                     onChange={e => setForm(f => ({ ...f, postal_code: e.target.value }))}
-                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                    className={INPUT}
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-brand-text mb-1">Stadt *</label>
+                  <label className={LABEL}>Stadt *</label>
                   <input
                     type="text"
                     value={form.city}
                     onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
-                    className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                    className={INPUT}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text mb-1">Land</label>
+                <label className={LABEL}>Land</label>
                 <input
                   type="text"
                   value={form.country}
                   onChange={e => setForm(f => ({ ...f, country: e.target.value }))}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text mb-1">Hinweis</label>
+                <label className={LABEL}>Hinweis</label>
                 <input
                   type="text"
                   value={form.note}
                   onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
                   placeholder="z.B. Parkhaus P3 empfohlen"
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -360,7 +360,7 @@ export default function AdminVenuesPage() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>
@@ -368,7 +368,7 @@ export default function AdminVenuesPage() {
                 type="button"
                 onClick={handleSave}
                 disabled={saving}
-                className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className={BTN_PRIMARY}
               >
                 {saving ? 'Speichern...' : 'Speichern'}
               </button>
@@ -379,7 +379,7 @@ export default function AdminVenuesPage() {
 
       {/* Import Modal */}
       {showImport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
             <h2 className="text-lg font-semibold text-brand-text mb-4">CSV importieren</h2>
 
@@ -405,7 +405,7 @@ export default function AdminVenuesPage() {
                   <button
                     type="button"
                     onClick={resetImport}
-                    className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors"
+                    className={BTN_SECONDARY}
                   >
                     Abbrechen
                   </button>
@@ -413,7 +413,7 @@ export default function AdminVenuesPage() {
                     type="button"
                     onClick={handleImport}
                     disabled={!importFile || importing}
-                    className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className={BTN_PRIMARY}
                   >
                     {importing ? 'Importiere...' : 'Importieren'}
                   </button>
@@ -458,7 +458,7 @@ export default function AdminVenuesPage() {
                   <button
                     type="button"
                     onClick={resetImport}
-                    className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                    className={BTN_PRIMARY}
                   >
                     Schließen
                   </button>
@@ -471,13 +471,13 @@ export default function AdminVenuesPage() {
 
       {/* Delete all confirmation */}
       {showDeleteAll && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className="text-lg font-semibold text-brand-text mb-2">Alle Orte löschen?</h2>
             <p className="text-sm text-brand-text-muted mb-5">Alle Veranstaltungsorte außer der Heimhalle werden unwiderruflich gelöscht.</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowDeleteAll(false)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors">Abbrechen</button>
-              <button onClick={handleDeleteAll} className="bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors">
+              <button onClick={() => setShowDeleteAll(false)} className={BTN_SECONDARY}>Abbrechen</button>
+              <button onClick={handleDeleteAll} className={BTN_DANGER}>
                 Alle löschen
               </button>
             </div>
@@ -487,13 +487,13 @@ export default function AdminVenuesPage() {
 
       {/* Delete confirmation */}
       {deleteConfirm !== null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className="text-lg font-semibold text-brand-text mb-2">Ort löschen?</h2>
             <p className="text-sm text-brand-text-muted mb-5">Events die diesem Ort zugeordnet sind, verlieren ihre Ortsangabe.</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors">Abbrechen</button>
-              <button onClick={() => handleDelete(deleteConfirm)} className="bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors">
+              <button onClick={() => setDeleteConfirm(null)} className={BTN_SECONDARY}>Abbrechen</button>
+              <button onClick={() => handleDelete(deleteConfirm)} className={BTN_DANGER}>
                 Löschen
               </button>
             </div>

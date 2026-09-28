@@ -5,7 +5,7 @@ import { errorData, errorMessage } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
 
 // Tages-Ausrichter im Kalender (heimspieltag-ausrichter, design.md Decision 9/10).
 //
@@ -53,7 +53,6 @@ export interface GameDayHost {
 }
 
 const SELECT = 'w-full border border-brand-border rounded-md px-3 py-2.5 sm:py-2 text-sm text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow disabled:opacity-40'
-const BTN_SECONDARY = 'px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text-muted hover:text-brand-text hover:bg-brand-border-subtle transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
 /** "2026-09-14" → "14.09." — die Kurzform für die tagesbezogene Beschriftung. */
 export function formatDayShort(date: string): string {
@@ -121,7 +120,7 @@ export function GameDayHostSelect({ id, date, value, options, disabled, onChange
 }) {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-brand-text-muted mb-1">
+      <label htmlFor={id} className={LABEL}>
         {gameDayHostLabel(date)}
       </label>
       <select
@@ -162,7 +161,7 @@ export function GameDayHostPreviewDialog({ preview, targetName, busy, error, onC
   const destructive = (b?.assignments_lost ?? 0) > 0
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-brand-black/50" onClick={busy ? undefined : onCancel} />
+      <div className="fixed inset-0 bg-brand-black/40" onClick={busy ? undefined : onCancel} />
       <div
         ref={dialogRef}
         role="dialog"

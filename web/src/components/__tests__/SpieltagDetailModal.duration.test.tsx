@@ -6,7 +6,7 @@ import MockAdapter from 'axios-mock-adapter'
 import { api } from '../../lib/api'
 import SpieltagDetailModal from '../SpieltagDetailModal'
 
-// Teil von openspec/changes/dienst-dauer: "+ Dienst hinzufügen" belegt Dauer UND
+// Teil von openspec/changes/dienst-dauer: „Dienst hinzufügen" belegt Dauer UND
 // Uhrzeit aus dem gewählten Diensttyp vor (Uhrzeit = Zeit des Termins +
 // default_offset_minutes, Anker "Start"), beide Felder bleiben editierbar.
 
@@ -53,8 +53,8 @@ async function openAddModal(gameId = 50) {
     </MemoryRouter>,
   )
   const user = userEvent.setup()
-  await screen.findByText('+ Dienst hinzufügen')
-  await user.click(screen.getByText('+ Dienst hinzufügen'))
+  await screen.findByRole('button', { name: 'Dienst hinzufügen' })
+  await user.click(screen.getByRole('button', { name: 'Dienst hinzufügen' }))
   return user
 }
 

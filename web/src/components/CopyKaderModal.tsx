@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
 import { GENDER_LABEL } from '../lib/teamName'
 
 interface Season {
@@ -127,7 +127,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -160,7 +160,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
                 <select
                   value={fromSeasonId}
                   onChange={e => handleSelectSeason(Number(e.target.value))}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 >
                   <option value="">Saison wählen…</option>
                   {seasons.map(s => (
@@ -171,7 +171,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
               <div className="flex justify-end gap-2">
                 <button
                   onClick={onClose}
-                  className="px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                  className={BTN_SECONDARY}
                 >
                   Abbrechen
                 </button>
@@ -232,7 +232,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
               <div className="flex justify-between gap-2">
                 <button
                   onClick={() => setStep(1)}
-                  className="px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                  className={BTN_SECONDARY}
                 >
                   Zurück
                 </button>

@@ -13,7 +13,7 @@ import { errorMessage, errorStatus } from '../lib/errors'
 import { useMediaQuery } from '../lib/useMediaQuery'
 import { openBlobNatively } from '../lib/openFileNatively'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
-import { BTN_DANGER, BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ function NewFolderModal({ parentId, onCreated, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-semibold text-brand-text">Neuer Ordner</h2>
@@ -109,11 +109,11 @@ function NewFolderModal({ parentId, onCreated, onClose }: {
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Ordnername"
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            className={INPUT}
           />
           {error && <p className="text-sm text-brand-danger">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+            <button type="button" onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
             <button
               type="submit"
               disabled={saving || !name.trim()}
@@ -162,7 +162,7 @@ function UploadModal({ folderId, onUploaded, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-semibold text-brand-text">Datei hochladen</h2>
@@ -192,7 +192,7 @@ function UploadModal({ folderId, onUploaded, onClose }: {
                 <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</p>
               )}
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+                <button type="button" onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
                 <button
                   onClick={upload}
                   disabled={!file}
@@ -204,9 +204,9 @@ function UploadModal({ folderId, onUploaded, onClose }: {
             </>
           ) : (
             <div className="text-center space-y-3 py-4">
-              <Check className="w-8 h-8 text-green-600 mx-auto" />
+              <Check className="w-8 h-8 text-brand-success mx-auto" />
               <p className="text-sm text-brand-text">Datei erfolgreich hochgeladen.</p>
-              <button onClick={onClose} className="bg-brand-yellow text-brand-black rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">Schließen</button>
+              <button onClick={onClose} className={BTN_PRIMARY}>Schließen</button>
             </div>
           )}
         </div>
@@ -336,7 +336,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-semibold text-brand-text flex items-center gap-2">
@@ -545,7 +545,7 @@ function RenameModal({ type, id, currentName, onRenamed, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-semibold text-brand-text">Umbenennen</h2>
@@ -556,11 +556,11 @@ function RenameModal({ type, id, currentName, onRenamed, onClose }: {
             autoFocus
             value={name}
             onChange={e => setName(e.target.value)}
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            className={INPUT}
           />
           {error && <p className="text-sm text-brand-danger">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+            <button type="button" onClick={onClose} className={BTN_SECONDARY}>Abbrechen</button>
             <button
               type="submit"
               disabled={saving || !name.trim()}
@@ -949,12 +949,12 @@ export default function DocumentsPage() {
 
       {/* Delete confirmation */}
       {confirmDelete && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className="font-semibold text-brand-text mb-2">Löschen bestätigen</h2>
             <p className="text-sm text-brand-text-muted mb-4">„{confirmDelete.name}" wirklich löschen?</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(null)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+              <button onClick={() => setConfirmDelete(null)} className={BTN_SECONDARY}>Abbrechen</button>
               <button
                 onClick={() => deleteItem(confirmDelete.type, confirmDelete.id)}
                 className={BTN_DANGER}

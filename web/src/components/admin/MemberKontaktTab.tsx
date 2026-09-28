@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useVault } from '../../contexts/VaultContext'
 import { useDialogA11y } from '../../lib/useDialogA11y'
 import { encryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL } from '../../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, BTN_SECONDARY, INPUT, LABEL } from '../../lib/buttonStyles'
 
 const formatIBAN = (raw: string) =>
   raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
@@ -181,7 +181,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
               <p>Bankdaten-Antrag liegt vor — Tresor entsperren um einzusehen und anzunehmen (Menü „Tresor").</p>
               <button
                 onClick={() => onDraftReject(bankdatenDraft.id)}
-                className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-red-200 text-xs font-medium shrink-0"
+                className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-brand-danger/20 text-xs font-medium shrink-0"
               >
                 Ablehnen
               </button>
@@ -215,13 +215,13 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
               <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => onDraftAccept(bankdatenDraft.id)}
-                  className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 text-xs font-medium"
+                  className="px-2 py-1 bg-brand-success-light text-brand-success rounded hover:bg-brand-success/20 text-xs font-medium"
                 >
                   Annehmen
                 </button>
                 <button
                   onClick={() => onDraftReject(bankdatenDraft.id)}
-                  className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-red-200 text-xs font-medium"
+                  className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-brand-danger/20 text-xs font-medium"
                 >
                   Ablehnen
                 </button>
@@ -232,16 +232,16 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
 
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Kontoinhaber</label>
+            <label className={LABEL}>Kontoinhaber</label>
             <input
               type="text"
               value={form.account_holder || ''}
               onChange={e => onFormChange({ account_holder: e.target.value })}
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className={INPUT}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">IBAN</label>
+            <label className={LABEL}>IBAN</label>
             <input
               type="text"
               value={ibanDisplay}
@@ -270,7 +270,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
           </label>
           {form.beitragsfrei && (
             <div className="mt-2">
-              <label className="block text-sm font-medium text-brand-text-muted mb-1">
+              <label className={LABEL}>
                 Grund für Beitragsfreiheit
               </label>
               <input
@@ -279,7 +279,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
                 onChange={e => onFormChange({ beitragsfrei_grund: e.target.value })}
                 placeholder="z. B. kein aktiver Sportler mehr"
                 maxLength={200}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                className={INPUT}
               />
             </div>
           )}
@@ -301,7 +301,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
             {sepaDraft && <span className="text-sm text-brand-text-muted">(Änderung ausstehend)</span>}
           </label>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">
+            <label className={LABEL}>
               Datum der Unterschrift
             </label>
             <input
@@ -317,7 +317,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
 
           {!isNew && (
             <div className="mt-4 space-y-2">
-              <label className="block text-sm font-medium text-brand-text mb-1">Mandat-Dokument</label>
+              <label className={LABEL}>Mandat-Dokument</label>
 
               {form.sepa_mandat_url && (
                 <div className="flex items-center gap-2 flex-wrap">
@@ -374,7 +374,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
                 <div className="flex gap-2">
                   <button
                     onClick={() => onDraftAccept(sepaDraft.id)}
-                    className="px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 font-medium text-xs"
+                    className="px-2 py-1 bg-brand-success-light text-brand-success rounded hover:bg-brand-success/20 font-medium text-xs"
                   >
                     Annehmen
                   </button>
@@ -400,14 +400,14 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
           >
             {saving ? 'Speichern…' : 'Speichern'}
           </button>
-          {saved && <span className="text-sm text-green-600">Gespeichert</span>}
+          {saved && <span className="text-sm text-brand-success">Gespeichert</span>}
           {error && <span className="text-sm text-brand-danger">{error}</span>}
         </div>
       )}
 
       {/* Delete confirmation modal */}
       {confirmDelete && createPortal(
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
           <div
             ref={deleteDialogRef}
             role="dialog"
@@ -418,7 +418,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
             <h2 id={deleteTitleId} className="font-semibold text-brand-text mb-2">Dokument löschen</h2>
             <p className="text-sm text-brand-text-muted mb-4">Das SEPA-Mandat-Dokument wirklich löschen?</p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setConfirmDelete(false)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text">Abbrechen</button>
+              <button onClick={() => setConfirmDelete(false)} className={BTN_SECONDARY}>Abbrechen</button>
               <button
                 onClick={handleDeleteSepa}
                 className={BTN_DANGER}

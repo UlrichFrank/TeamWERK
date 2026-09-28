@@ -64,7 +64,7 @@ describe('AdminDutyTypesPage — Zeit-Modus', () => {
   test('End-Felder ersetzen im Modus „Startzeit + Endzeit" das Dauer-Feld', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     await screen.findByPlaceholderText('z.B. Kassierer')
 
     // Modus 1: Dauer, keine End-Felder.
@@ -85,7 +85,7 @@ describe('AdminDutyTypesPage — Zeit-Modus', () => {
   test('Start-Felder heißen Start-Anker und Start-Versatz', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     await screen.findByPlaceholderText('z.B. Kassierer')
 
     expect(screen.getByText('Start-Anker')).toBeTruthy()
@@ -96,7 +96,7 @@ describe('AdminDutyTypesPage — Zeit-Modus', () => {
   test('unmögliche Spanne blockiert das Speichern', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     fireEvent.change(await screen.findByPlaceholderText('z.B. Kassierer'), { target: { value: 'Halbzeit' } })
 
     fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Endzeit' }))
@@ -123,7 +123,7 @@ describe('AdminDutyTypesPage — Zeit-Modus', () => {
   test('Anlegen schickt alle drei Felder', async () => {
     mockApi([])
     render(<AdminDutyTypesPage />)
-    fireEvent.click(await screen.findByText('+ Diensttyp'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Diensttyp' }))
     fireEvent.change(await screen.findByPlaceholderText('z.B. Kassierer'), { target: { value: 'Kamera' } })
 
     fireEvent.click(screen.getByRole('radio', { name: 'Startzeit + Endzeit' }))

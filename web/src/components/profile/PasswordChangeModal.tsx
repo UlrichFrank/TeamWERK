@@ -1,5 +1,7 @@
 import { useId, useRef, useState, FormEvent } from 'react'
 import { api } from '../../lib/api'
+import { X } from 'lucide-react'
+import { BTN_PRIMARY, BTN_SECONDARY, LABEL } from '../../lib/buttonStyles'
 import { useEscapeKey } from '../../lib/useEscapeKey'
 import { useDialogA11y } from '../../lib/useDialogA11y'
 import { errorStatus } from '../../lib/errors'
@@ -47,7 +49,7 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/50" onClick={onClose}></div>
+      <div className="fixed inset-0 bg-brand-black/40" onClick={onClose}></div>
 
       {/* Modal */}
       <div
@@ -55,25 +57,25 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative bg-white rounded-lg shadow-lg max-w-md w-full mx-4"
+        className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
       >
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 id={titleId} className="text-lg font-semibold">Passwort ändern</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            ×
+        <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
+          <h2 id={titleId} className="text-lg font-bold text-brand-text">Passwort ändern</h2>
+          <button type="button" onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {success ? (
           <div className="p-6 text-center">
-            <p className="text-green-600 font-medium">Passwort geändert. Du wirst ausgeloggt…</p>
+            <p className="text-brand-success font-medium">Passwort geändert. Du wirst ausgeloggt…</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Aktuelles Passwort</label>
+              <label className={LABEL}>Aktuelles Passwort</label>
               <PasswordInput
                 value={pwCurrent}
                 onChange={setPwCurrent}
@@ -84,7 +86,7 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Neues Passwort</label>
+              <label className={LABEL}>Neues Passwort</label>
               <PasswordInput
                 value={pwNew}
                 onChange={setPwNew}
@@ -96,7 +98,7 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Wiederholen</label>
+              <label className={LABEL}>Wiederholen</label>
               <PasswordInput
                 value={pwConfirm}
                 onChange={setPwConfirm}
@@ -105,18 +107,18 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
               />
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-2 justify-end pt-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 text-gray-600 hover:text-gray-900 px-4 py-2 rounded-md text-sm font-medium"
+                className={BTN_SECONDARY}
               >
                 Abbrechen
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 bg-brand-yellow text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-black hover:text-brand-yellow transition-colors disabled:opacity-40"
+                className={BTN_PRIMARY}
               >
                 {saving ? 'Speichern…' : 'Passwort ändern'}
               </button>

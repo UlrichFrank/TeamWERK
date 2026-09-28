@@ -2,7 +2,7 @@ import { ReactNode, useId, useRef } from 'react'
 import { X } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
 
 interface EditModalProps {
   isOpen: boolean
@@ -26,7 +26,7 @@ export default function EditModal({ isOpen, title, onClose, onSave, isSaving = f
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 bg-brand-black/40" onClick={onClose} />
       <div
         ref={dialogRef}
         role="dialog"
@@ -47,7 +47,7 @@ export default function EditModal({ isOpen, title, onClose, onSave, isSaving = f
           <button
             onClick={onClose}
             disabled={isSaving}
-            className="px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text hover:bg-brand-surface-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className={BTN_SECONDARY}
           >
             Abbrechen
           </button>

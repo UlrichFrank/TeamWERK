@@ -7,7 +7,7 @@ import MarkdownRenderer from '../components/MarkdownRenderer'
 import { AlertTriangle, ImageOff, Trash2, Upload, X, Eye, EyeOff, Send, Undo2, MessageSquare } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, INPUT } from '../lib/buttonStyles'
 import { MATCH_REPORT_STATE_LABEL, type MatchReportState } from '../lib/matchReportState'
 
 const MAX_IMAGES = 10
@@ -66,8 +66,6 @@ type MatchReport = {
     photo_consent_missing: ConsentMember[] | null
 }
 
-const input =
-    'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 export default function MatchReportFormPage() {
     const { id } = useParams<{ id: string }>()
@@ -370,7 +368,7 @@ export default function MatchReportFormPage() {
                     <label className="block text-sm font-medium text-brand-text">Titel</label>
                     <input
                         type="text"
-                        className={input}
+                        className={INPUT}
                         value={title}
                         onChange={e => setTitle(e.target.value)}
                         disabled={readOnly}
@@ -390,7 +388,7 @@ export default function MatchReportFormPage() {
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-brand-text">Abstract (Teaser, max 500 Zeichen)</label>
                     <textarea
-                        className={input}
+                        className={INPUT}
                         rows={2}
                         maxLength={500}
                         value={abstract}
@@ -419,7 +417,7 @@ export default function MatchReportFormPage() {
                         </div>
                     ) : (
                         <textarea
-                            className={input}
+                            className={INPUT}
                             rows={12}
                             value={bodyMd}
                             onChange={e => setBodyMd(e.target.value)}
@@ -483,7 +481,7 @@ export default function MatchReportFormPage() {
             </div>
 
             {returnComment !== null && (
-                <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setReturnComment(null)}>
+                <div className="fixed inset-0 z-50 bg-brand-black/40 flex items-center justify-center p-4" onClick={() => setReturnComment(null)}>
                     <div
                         role="dialog"
                         aria-modal="true"
@@ -496,7 +494,7 @@ export default function MatchReportFormPage() {
                             Der Autor kann den Bericht danach wieder bearbeiten und erneut einreichen. Er bekommt deinen Kommentar als Benachrichtigung.
                         </p>
                         <textarea
-                            className={input}
+                            className={INPUT}
                             rows={5}
                             maxLength={2000}
                             autoFocus
@@ -547,22 +545,22 @@ function ScoreFieldset(props: {
                 <div className="grid grid-cols-2 gap-3">
                     <div>
                         <label className="block text-xs text-brand-text-muted mb-1">Endstand Heim</label>
-                        <input className={input} type="number" min={0} value={props.homeGoals}
+                        <input className={INPUT} type="number" min={0} value={props.homeGoals}
                             onChange={e => props.onChange.setHomeGoals(e.target.value)} disabled={props.readOnly} />
                     </div>
                     <div>
                         <label className="block text-xs text-brand-text-muted mb-1">Endstand Gast</label>
-                        <input className={input} type="number" min={0} value={props.awayGoals}
+                        <input className={INPUT} type="number" min={0} value={props.awayGoals}
                             onChange={e => props.onChange.setAwayGoals(e.target.value)} disabled={props.readOnly} />
                     </div>
                     <div>
                         <label className="block text-xs text-brand-text-muted mb-1">Halbzeit Heim (optional)</label>
-                        <input className={input} type="number" min={0} value={props.homeGoalsHT}
+                        <input className={INPUT} type="number" min={0} value={props.homeGoalsHT}
                             onChange={e => props.onChange.setHomeGoalsHT(e.target.value)} disabled={props.readOnly} />
                     </div>
                     <div>
                         <label className="block text-xs text-brand-text-muted mb-1">Halbzeit Gast (optional)</label>
-                        <input className={input} type="number" min={0} value={props.awayGoalsHT}
+                        <input className={INPUT} type="number" min={0} value={props.awayGoalsHT}
                             onChange={e => props.onChange.setAwayGoalsHT(e.target.value)} disabled={props.readOnly} />
                     </div>
                 </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import { encryptBankData } from '../../lib/bankCrypto'
 import { Member, ChangeDraft } from '../../pages/ProfilePage'
-import { BTN_PRIMARY } from '../../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, LABEL } from '../../lib/buttonStyles'
 
 interface Props {
   ownMember: Member | null
@@ -83,14 +83,14 @@ export default function ProfileBankTab({ ownMember }: Props) {
           <div className="flex items-center gap-2 text-sm">
             <span className="text-brand-text-muted w-36">Bankverbindung:</span>
             {ownMember.has_bank_data
-              ? <span className="text-green-700 font-medium">hinterlegt</span>
+              ? <span className="text-brand-success font-medium">hinterlegt</span>
               : <span className="text-brand-text-subtle">nicht hinterlegt</span>
             }
           </div>
           <div className="flex items-center gap-2 text-sm">
             <span className="text-brand-text-muted w-36">SEPA-Mandat:</span>
             {ownMember.sepa_mandat
-              ? <span className="text-green-700 font-medium">
+              ? <span className="text-brand-success font-medium">
                   hinterlegt{ownMember.sepa_mandat_date ? ` (${formatDate(ownMember.sepa_mandat_date)})` : ''}
                 </span>
               : <span className="text-brand-text-subtle">nicht hinterlegt</span>
@@ -112,17 +112,17 @@ export default function ProfileBankTab({ ownMember }: Props) {
         {/* Änderungsformular */}
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Neuer Kontoinhaber</label>
+            <label className={LABEL}>Neuer Kontoinhaber</label>
             <input
               type="text"
               value={accountHolder}
               onChange={e => setAccountHolder(e.target.value)}
               placeholder="Vor- und Nachname"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className={INPUT}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-muted mb-1">Neue IBAN</label>
+            <label className={LABEL}>Neue IBAN</label>
             <input
               type="text"
               value={iban}
@@ -131,7 +131,7 @@ export default function ProfileBankTab({ ownMember }: Props) {
                 if (raw.length <= 22) setIban(raw)
               }}
               placeholder="DE89 3704 0044 0532 0130 00"
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text font-mono tracking-wider placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className={`${INPUT} font-mono tracking-wider`}
             />
             <p className="text-xs text-brand-text-subtle mt-1">Bankdaten-Änderungen müssen vom Verein übernommen werden.</p>
           </div>
@@ -146,7 +146,7 @@ export default function ProfileBankTab({ ownMember }: Props) {
             >
               {saving ? 'Senden…' : 'Änderung anfordern'}
             </button>
-            {saved && <span className="text-sm text-green-600">Anfrage gesendet</span>}
+            {saved && <span className="text-sm text-brand-success">Anfrage gesendet</span>}
             {error && <span className="text-sm text-brand-danger">{error}</span>}
           </div>
         )}

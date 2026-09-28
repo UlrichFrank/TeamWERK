@@ -13,6 +13,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import LineupBadge from '../components/LineupBadge'
 import LineupCheckbox from '../components/LineupCheckbox'
 import type { LineupState } from '../lib/lineup'
+import { BTN_SECONDARY, BTN_DANGER, INPUT } from '../lib/buttonStyles'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
@@ -388,7 +389,7 @@ export default function TermineDetailPage() {
   if (!isTraining && !game) return <p className="text-brand-danger text-sm p-4">Spiel nicht gefunden.</p>
 
   const declineModal = declineTarget ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setDeclineTarget(null)}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40" onClick={() => setDeclineTarget(null)}>
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
         <h2 className="font-semibold text-brand-text mb-1">Absagen für {declineTarget.name}</h2>
         <p className="text-sm text-brand-text-muted mb-4">Grund angeben (optional)</p>
@@ -398,11 +399,11 @@ export default function TermineDetailPage() {
           onChange={e => setDeclineReason(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') confirmDecline(); if (e.key === 'Escape') setDeclineTarget(null) }}
           placeholder="z.B. Krank, Urlaub…"
-          className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-4"
+          className={`${INPUT} mb-4`}
         />
         <div className="flex justify-end gap-2">
-          <button onClick={() => setDeclineTarget(null)} className="px-4 py-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors">Abbrechen</button>
-          <button onClick={confirmDecline} className="bg-brand-danger text-white rounded-md px-4 py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors">Absagen</button>
+          <button onClick={() => setDeclineTarget(null)} className={BTN_SECONDARY}>Abbrechen</button>
+          <button onClick={confirmDecline} className={BTN_DANGER}>Absagen</button>
         </div>
       </div>
     </div>
@@ -434,7 +435,7 @@ export default function TermineDetailPage() {
           <div className="flex items-start gap-3">
             <Dumbbell className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
             <div className="flex-1 min-w-0">
-              <h1 className={`text-xl font-bold text-brand-text ${session.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>
+              <h1 className={`text-2xl font-bold text-brand-text ${session.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>
                 {fmtDate(session.date)}
               </h1>
               {session.status === 'cancelled' && (
@@ -578,7 +579,7 @@ export default function TermineDetailPage() {
         <div className="flex items-start gap-3">
           <Icon className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-bold text-brand-text">{fmtDate(g.date)}</h1>
+            <h1 className="text-2xl font-bold text-brand-text">{fmtDate(g.date)}</h1>
             <p className="text-brand-text-muted mt-1">{gameLabel}</p>
             <div className="mt-3 flex items-center gap-2 text-sm text-brand-text-muted">
               <Clock className="w-4 h-4" />

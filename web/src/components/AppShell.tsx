@@ -445,7 +445,7 @@ export default function AppShell() {
       {isMobile && sidebarOpen && (
         <>
           <div
-            className="fixed inset-0 z-40 bg-black/40"
+            className="fixed inset-0 z-40 bg-brand-black/40"
             onClick={closeSidebar}
           />
           <div className="fixed inset-y-0 left-0 z-50 w-56">
@@ -527,7 +527,7 @@ export default function AppShell() {
         )}
 
         {/* Main content */}
-        <main ref={mainRef} className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4 sm:border-brand-yellow">
+        <main ref={mainRef} className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white text-brand-text sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4 sm:border-brand-yellow">
           {canGoBack && (
             <div className="hidden sm:block -mt-2 mb-3">
               <button

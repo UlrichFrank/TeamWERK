@@ -67,7 +67,7 @@ import CreatorExitChoiceModal from "../components/CreatorExitChoiceModal";
 import ChatPollCreateModal from "../components/ChatPollCreateModal";
 import ChatPollCard from "../components/ChatPollCard";
 import ChatPollVotesModal from "../components/ChatPollVotesModal";
-import { BTN_SMALL, HEADER_CTRL_ICON, HEADER_NEUTRAL } from '../lib/buttonStyles'
+import { BTN_SMALL, HEADER_CTRL_ICON, HEADER_NEUTRAL, INPUT, LABEL } from '../lib/buttonStyles'
 import ChatSearchModal, { type SearchHit } from "../components/ChatSearchModal";
 import ActionMenu from "../components/ActionMenu";
 
@@ -2129,7 +2129,7 @@ export default function ChatPage() {
                   maxLength={2000}
                   rows={1}
                   enterKeyHint={isMobile ? "enter" : "send"}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow resize-none overflow-y-auto leading-5"
+                  className={`${INPUT} resize-none overflow-y-auto leading-5`}
                 />
                 <button
                   onClick={sendMessage}
@@ -2435,7 +2435,7 @@ export default function ChatPage() {
 
       {lightboxUrl && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-brand-black/80 flex items-center justify-center p-4"
           onClick={() => setLightboxUrl(null)}
         >
           <button
@@ -2833,7 +2833,7 @@ function MobileMessageActionOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6 bg-brand-black/40 backdrop-blur-sm"
       onTouchStart={onClose}
     >
       <div
@@ -3041,7 +3041,7 @@ function NewConversationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-brand-text">Neues Gespräch</h2>
@@ -3071,7 +3071,7 @@ function NewConversationModal({
             placeholder="Gruppenname"
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
-            className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow mb-3"
+            className={`${INPUT} mb-3`}
           />
         )}
 
@@ -3318,7 +3318,7 @@ function BroadcastModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-brand-text">
@@ -3329,7 +3329,7 @@ function BroadcastModal({
           </button>
         </div>
 
-        <p className="block text-sm font-medium text-brand-text mb-1">
+        <p className={LABEL}>
           Empfänger
         </p>
         {targetsLoading ? (
@@ -3378,7 +3378,7 @@ function BroadcastModal({
           </div>
         )}
 
-        <label className="block text-sm font-medium text-brand-text mb-1">
+        <label className={LABEL}>
           Nachricht
         </label>
         <textarea
@@ -3387,7 +3387,7 @@ function BroadcastModal({
           maxLength={2000}
           rows={5}
           placeholder="Deine Mitteilung…"
-          className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow resize-none mb-1"
+          className={`${INPUT} resize-none mb-1`}
         />
         <p className="text-xs text-brand-text-subtle text-right mb-2">
           {body.length}/2000
@@ -3475,7 +3475,7 @@ function BroadcastEditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-brand-text">
@@ -3491,7 +3491,7 @@ function BroadcastEditModal({
           onChange={(e) => setBody(e.target.value)}
           maxLength={2000}
           rows={5}
-          className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow resize-none mb-1"
+          className={`${INPUT} resize-none mb-1`}
         />
         <p className="text-xs text-brand-text-subtle text-right mb-3">
           {body.length}/2000

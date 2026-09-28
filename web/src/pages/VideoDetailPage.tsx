@@ -7,7 +7,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import VideoStatusPill from '../components/VideoStatusPill'
 import CastButton from '../components/CastButton'
 import { fmtBytes, fmtDuration, fmtVideoDate } from '../lib/videoFormat'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL, BTN_SECONDARY, INPUT, LABEL } from '../lib/buttonStyles'
 
 interface VideoDetail {
   id: number
@@ -478,7 +478,7 @@ export default function VideoDetailPage() {
 
       {/* Bearbeiten-Modal */}
       {showEdit && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-md">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className="font-semibold text-base text-brand-text">Video bearbeiten</h2>
@@ -488,32 +488,32 @@ export default function VideoDetailPage() {
             </div>
             <form onSubmit={handleSave} className="px-6 py-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Titel</label>
+                <label className={LABEL}>Titel</label>
                 <input
                   autoFocus
                   type="text"
                   value={editTitle}
                   onChange={e => setEditTitle(e.target.value)}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-brand-text-muted mb-1">Beschreibung</label>
+                <label className={LABEL}>Beschreibung</label>
                 <textarea
                   value={editDescription}
                   onChange={e => setEditDescription(e.target.value)}
                   rows={4}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 />
               </div>
               <div>
-                <label htmlFor="edit-game" className="block text-sm font-medium text-brand-text-muted mb-1">Spiel</label>
+                <label htmlFor="edit-game" className={LABEL}>Spiel</label>
                 <select
                   id="edit-game"
                   value={editGameId}
                   onChange={e => setEditGameId(e.target.value)}
-                  className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className={INPUT}
                 >
                   <option value="">Kein Spiel zuordnen</option>
                   {games.map(g => (
@@ -525,7 +525,7 @@ export default function VideoDetailPage() {
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{actionError}</div>
               )}
               <div className="flex justify-end gap-2 pt-1">
-                <button type="button" onClick={() => setShowEdit(false)} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                <button type="button" onClick={() => setShowEdit(false)} className={BTN_SECONDARY}>
                   Abbrechen
                 </button>
                 <button
@@ -543,7 +543,7 @@ export default function VideoDetailPage() {
 
       {/* Löschen-Modal */}
       {showDelete && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className="font-semibold text-base text-brand-text">Video löschen</h2>
@@ -559,7 +559,7 @@ export default function VideoDetailPage() {
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{actionError}</div>
               )}
               <div className="flex justify-end gap-2">
-                <button onClick={() => setShowDelete(false)} className="px-4 py-2 text-sm border border-brand-border rounded-md text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors">
+                <button onClick={() => setShowDelete(false)} className={BTN_SECONDARY}>
                   Abbrechen
                 </button>
                 <button

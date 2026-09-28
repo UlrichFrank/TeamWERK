@@ -1,4 +1,5 @@
 import { useAuth } from '../contexts/AuthContext'
+import { INPUT, LABEL } from '../lib/buttonStyles'
 
 /**
  * Gemeinsame Zusatzfelder für alle Lösch-Bestätigungen von Terminen und Diensten
@@ -14,8 +15,6 @@ import { useAuth } from '../contexts/AuthContext'
  */
 
 const CAP_SUPPRESS_EVENT_NOTIFICATION = 'suppress_event_notification'
-
-const REASON_INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 /**
  * Body des DELETE-Requests. `reason` wird immer mitgesendet — der leere String
@@ -44,7 +43,7 @@ export default function DeleteReasonFields({
 
   return (
     <div className="mb-4 text-left">
-      <label htmlFor={reasonId} className="block text-sm font-medium text-brand-text-muted mb-1">
+      <label htmlFor={reasonId} className={LABEL}>
         Grund <span className="text-brand-text-subtle font-normal">(optional)</span>
       </label>
       <input
@@ -53,7 +52,7 @@ export default function DeleteReasonFields({
         value={reason}
         onChange={e => onReasonChange(e.target.value)}
         placeholder="z. B. Halle gesperrt"
-        className={REASON_INPUT}
+        className={INPUT}
       />
       {hasCapability(CAP_SUPPRESS_EVENT_NOTIFICATION) && (
         <label htmlFor={silentId} className="flex items-center gap-2 mt-2 py-2.5 sm:py-1.5 cursor-pointer">

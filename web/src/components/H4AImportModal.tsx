@@ -3,7 +3,7 @@ import { AlertTriangle, Check, ChevronDown, ChevronRight, Copy, Home, Lightbulb,
 import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
-import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
 
 // Import des H4A-Spielplans in zwei Schritten:
 //   1. Zugangsdaten + Periode  → POST /games/import/h4a/preview  (liest Handball4All)
@@ -65,10 +65,7 @@ interface Props {
   onClose: () => void
   onImported: (result: H4AApplyResult) => void
 }
-
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 const SELECT_SM = 'border border-brand-border rounded-md px-2 py-1 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const BTN_SECONDARY = 'px-4 py-2.5 sm:py-2 border border-brand-border rounded-md text-sm text-brand-text hover:bg-brand-surface-card disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
 
 const FIELD_LABELS: Record<string, string> = {
   date: 'Datum',
@@ -240,7 +237,7 @@ export default function H4AImportModal({ isOpen, onClose, onImported }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={busy ? undefined : onClose} />
+      <div className="fixed inset-0 bg-brand-black/40" onClick={busy ? undefined : onClose} />
       <div
         ref={dialogRef}
         role="dialog"
@@ -269,7 +266,7 @@ export default function H4AImportModal({ isOpen, onClose, onImported }: Props) {
                 noch protokolliert.
               </div>
               <div>
-                <label htmlFor="h4a-user" className="block text-sm font-medium text-brand-text mb-1">
+                <label htmlFor="h4a-user" className={LABEL}>
                   H4A-Benutzername
                 </label>
                 <input
@@ -282,7 +279,7 @@ export default function H4AImportModal({ isOpen, onClose, onImported }: Props) {
                 />
               </div>
               <div>
-                <label htmlFor="h4a-pw" className="block text-sm font-medium text-brand-text mb-1">
+                <label htmlFor="h4a-pw" className={LABEL}>
                   H4A-Passwort
                 </label>
                 <input
@@ -297,7 +294,7 @@ export default function H4AImportModal({ isOpen, onClose, onImported }: Props) {
 
               {periods.length > 0 && (
                 <div>
-                  <label htmlFor="h4a-period" className="block text-sm font-medium text-brand-text mb-1">
+                  <label htmlFor="h4a-period" className={LABEL}>
                     Spielperiode
                   </label>
                   <select

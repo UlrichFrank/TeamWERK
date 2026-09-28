@@ -44,7 +44,7 @@ export default function WartungsmodusPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <h1 className="text-2xl font-semibold text-brand-text">Wartungsmodus</h1>
+        <h1 className="text-2xl font-bold text-brand-text">Wartungsmodus</h1>
       </div>
 
       <div className={CARD}>
