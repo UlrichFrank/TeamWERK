@@ -140,7 +140,7 @@ func TestRespondToGame_AenderungImFenster_BenachrichtigtTrainer(t *testing.T) {
 func TestRespondToGame_ErsteAntwort_KeineMeldung(t *testing.T) {
 	f := newRSVPPushFixture(t)
 	ch := captureNotices(t)
-	if st := f.respond(t, "2026-06-13 18:00", f.playerTok, map[string]any{"status": "declined"}); st != http.StatusNoContent {
+	if st := f.respond(t, "2026-06-13 18:00", f.playerTok, map[string]any{"status": "declined", "reason": "krank"}); st != http.StatusNoContent {
 		t.Fatalf("status %d, want 204", st)
 	}
 	expectNoNotice(t, ch)
@@ -160,7 +160,7 @@ func TestRespondToGame_AchtTageVorher_KeineMeldung(t *testing.T) {
 	f := newRSVPPushFixture(t)
 	addGameResponse(t, f.db, f.gameID, f.mPlayer, f.uPlayer, "confirmed")
 	ch := captureNotices(t)
-	if st := f.respond(t, "2026-06-07 18:00", f.playerTok, map[string]any{"status": "declined"}); st != http.StatusNoContent {
+	if st := f.respond(t, "2026-06-07 18:00", f.playerTok, map[string]any{"status": "declined", "reason": "krank"}); st != http.StatusNoContent {
 		t.Fatalf("status %d, want 204", st)
 	}
 	expectNoNotice(t, ch)
@@ -170,7 +170,7 @@ func TestRespondToGame_GenauSiebenTage_Meldung(t *testing.T) {
 	f := newRSVPPushFixture(t)
 	addGameResponse(t, f.db, f.gameID, f.mPlayer, f.uPlayer, "confirmed")
 	ch := captureNotices(t)
-	if st := f.respond(t, "2026-06-08 18:00", f.playerTok, map[string]any{"status": "maybe"}); st != http.StatusNoContent {
+	if st := f.respond(t, "2026-06-08 18:00", f.playerTok, map[string]any{"status": "maybe", "reason": "krank"}); st != http.StatusNoContent {
 		t.Fatalf("status %d, want 204", st)
 	}
 	expectNotice(t, ch)
@@ -211,7 +211,7 @@ func TestRespondToGame_Elternteil_NameDesKindes(t *testing.T) {
 	ch := captureNotices(t)
 
 	tok := testutil.TokenWithIsParent(t, uParent, "standard", nil, true)
-	if st := f.respond(t, "2026-06-13 18:00", tok, map[string]any{"status": "declined", "member_id": f.mPlayer}); st != http.StatusNoContent {
+	if st := f.respond(t, "2026-06-13 18:00", tok, map[string]any{"status": "declined", "reason": "krank", "member_id": f.mPlayer}); st != http.StatusNoContent {
 		t.Fatalf("status %d, want 204", st)
 	}
 	n := expectNotice(t, ch)

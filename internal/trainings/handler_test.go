@@ -311,7 +311,7 @@ func TestRespond_UpdatesExistingRSVP(t *testing.T) {
 
 	r1 := testutil.Post(t, srv, path, token, map[string]any{"status": "confirmed"})
 	r1.Body.Close()
-	r2 := testutil.Post(t, srv, path, token, map[string]any{"status": "declined"})
+	r2 := testutil.Post(t, srv, path, token, map[string]any{"status": "declined", "reason": "krank"})
 	r2.Body.Close()
 
 	var count int
@@ -1309,7 +1309,7 @@ func TestRespond_Cutoff_PlayerBefore_OK(t *testing.T) {
 
 	token := testutil.Token(t, spielerUserID, "standard", []string{"spieler"})
 	res := testutil.Post(t, srv, fmt.Sprintf("/api/training-sessions/%d/respond", sessionID), token,
-		map[string]any{"status": "declined"})
+		map[string]any{"status": "declined", "reason": "krank"})
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusNoContent {
 		t.Fatalf("expected 204, got %d", res.StatusCode)

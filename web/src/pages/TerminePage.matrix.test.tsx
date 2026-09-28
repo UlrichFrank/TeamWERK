@@ -160,14 +160,19 @@ describe('TerminePage — Tabellenansicht', () => {
     expect(matrixCalls().length).toBeGreaterThan(before)
   })
 
-  test('eigene Zeile: Zusagen schaltet wie in der Liste auf Vielleicht, ohne member_id', async () => {
+  // Termin 12 verlangt eine Begründung: das Zurücknehmen der Zusage ist eine
+  // Vielleicht-Sage und geht deshalb wie der „Vielleicht"-Knopf über den Dialog.
+  test('eigene Zeile: Zusagen schaltet wie in der Liste auf Vielleicht, mit Grund, ohne member_id', async () => {
     seedRoutes()
     renderAt('/termine?view=tabelle&team=1')
     const user = userEvent.setup()
     await waitFor(() => expect(screen.getByText('Philip Lei')).toBeTruthy())
     await user.click(within(row('Philip Lei')).getAllByRole('button')[0])
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Zusagen' }))
-    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/training-sessions/12/respond', { status: 'maybe', reason: '' }))
+    expect(mockPost).not.toHaveBeenCalled()
+    await user.type(screen.getByPlaceholderText('Begründung…'), 'unsicher')
+    await user.click(screen.getByRole('button', { name: 'OK' }))
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/training-sessions/12/respond', { status: 'maybe', reason: 'unsicher' }))
   })
 
   test('Absage mit Begründungspflicht öffnet den Begründungs-Dialog', async () => {

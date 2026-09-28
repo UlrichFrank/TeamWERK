@@ -32,9 +32,10 @@ function trainingSession(overrides: Record<string, unknown>) {
 }
 
 const mockGet = vi.fn()
+const mockPost = vi.fn()
 const authState = { is_parent: false }
 
-vi.mock('../lib/api', () => ({ api: { get: (...args: unknown[]) => mockGet(...args), post: vi.fn() } }))
+vi.mock('../lib/api', () => ({ api: { get: (...args: unknown[]) => mockGet(...args), post: (...args: unknown[]) => mockPost(...args) } }))
 vi.mock('../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -513,5 +514,34 @@ describe('TerminePage — Aufstellungsstatus auf Spielkarten', () => {
     renderPage()
     await waitFor(() => expect(screen.getByText('Zusagen')).toBeTruthy())
     expect(document.querySelector('[data-lineup]')).toBeNull()
+  })
+})
+
+// Begründungspflicht: „Zusagen" auf einer bestehenden Zusage schaltet auf
+// „Vielleicht" zurück. Das ist eine Vielleicht-Sage und braucht bei
+// rsvp_require_reason denselben Grund-Dialog wie der „Vielleicht"-Knopf —
+// ohne ihn lehnt der Server mit reason_required ab.
+describe('TerminePage — Zusagen zurücknehmen bei Begründungspflicht', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    mockPost.mockReset()
+    mockPost.mockResolvedValue({ data: {} })
+    authState.is_parent = false
+  })
+
+  test('mit Pflicht öffnet der Umschalter den Grund-Dialog statt direkt zu senden', async () => {
+    seedRoutes([trainingSession({ my_rsvp: 'confirmed', rsvp_require_reason: 1 })])
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: /Zusagen/ }))
+    expect(await screen.findByPlaceholderText('Begründung…')).toBeTruthy()
+    expect(mockPost).not.toHaveBeenCalled()
+  })
+
+  test('ohne Pflicht schaltet der Umschalter direkt auf „Vielleicht"', async () => {
+    seedRoutes([trainingSession({ my_rsvp: 'confirmed', rsvp_require_reason: 0 })])
+    renderPage()
+    await userEvent.click(await screen.findByRole('button', { name: /Zusagen/ }))
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/training-sessions/100/respond', { status: 'maybe', reason: '' }))
+    expect(screen.queryByPlaceholderText('Begründung…')).toBeNull()
   })
 })

@@ -498,6 +498,11 @@ export default function TerminePage() {
     if (e?.response?.data?.error === 'rsvp_locked' && e.response.data.message) {
       return e.response.data.message
     }
+    // Server-seitige Begründungspflicht (rsvp_require_reason) — die Oberfläche
+    // fragt den Grund selbst ab, das hier greift nur, wenn ein Weg daran vorbeiführt.
+    if (e?.response?.data?.error === 'reason_required') {
+      return 'Für diesen Termin ist bei Absage oder „Vielleicht" ein Grund nötig.'
+    }
     return 'Fehler beim Speichern. Bitte nochmal versuchen.'
   }
 
@@ -762,7 +767,7 @@ export default function TerminePage() {
                               <span className="text-xs font-medium text-brand-text-muted">Ich</span>
                             )}
                             <div className="flex gap-2">
-                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondTraining(s.id, s.my_rsvp_is_default ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                              <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={s.my_rsvp === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => { const next = s.my_rsvp_is_default ? 'confirmed' : (s.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'); if (next === 'maybe' && s.rsvp_require_reason) openReasonModal('training', s.id, 'maybe'); else respondTraining(s.id, next) }} />
                               <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={s.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'maybe') : respondTraining(s.id, 'maybe')} />
                               <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={s.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => s.rsvp_require_reason ? openReasonModal('training', s.id, 'declined') : respondTraining(s.id, 'declined')} />
                             </div>
@@ -881,7 +886,7 @@ export default function TerminePage() {
                             <span className="text-xs font-medium text-brand-text-muted">Ich</span>
                           )}
                           <div className="flex flex-wrap gap-2">
-                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => respondGame(g.id, g.my_rsvp_is_default ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'))} />
+                            <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={g.my_rsvp === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => { const next = g.my_rsvp_is_default ? 'confirmed' : (g.my_rsvp === 'confirmed' ? 'maybe' : 'confirmed'); if (next === 'maybe' && g.rsvp_require_reason) openReasonModal('game', g.id, 'maybe'); else respondGame(g.id, next) }} />
                             <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={g.my_rsvp === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'maybe') : respondGame(g.id, 'maybe')} />
                             <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={g.my_rsvp === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={buttonsDisabled || rsvpLoading === key} onClick={() => g.rsvp_require_reason ? openReasonModal('game', g.id, 'declined') : respondGame(g.id, 'declined')} />
                             <LineupBadge state={g.my_lineup} inRow />
@@ -993,7 +998,7 @@ export default function TerminePage() {
                 </button>
               </div>
               <div className="flex gap-2">
-                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={status === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={disabled} onClick={() => respond(nextConfirmStatus(cell, m.is_self))} />
+                <RsvpButton label="Zusagen" icon={<Check className="w-4 h-4" />} active={status === 'confirmed'} activeClass="bg-brand-green text-white border-brand-green" disabled={disabled} onClick={() => { const next = nextConfirmStatus(cell, m.is_self); if (next === 'maybe') decline('maybe'); else respond(next) }} />
                 <RsvpButton label="Vielleicht" icon={<HelpCircle className="w-4 h-4" />} active={status === 'maybe'} activeClass="bg-brand-yellow text-brand-black border-brand-yellow" disabled={disabled} onClick={() => decline('maybe')} />
                 <RsvpButton label="Absagen" icon={<X className="w-4 h-4" />} active={status === 'declined'} activeClass="bg-brand-danger text-white border-brand-danger" disabled={disabled} onClick={() => decline('declined')} />
               </div>

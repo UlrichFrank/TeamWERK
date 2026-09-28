@@ -168,7 +168,7 @@ func TestRespond_Uebungsgruppe_BenachrichtigtTrainer(t *testing.T) {
 	f.addResponse(t, f.mPlayer, f.uPlayer, "confirmed")
 	ch := captureRSVPNotices(t)
 
-	if st := f.respond(t, "2026-06-10 12:00", f.playerTok, map[string]any{"status": "declined"}); st != http.StatusNoContent {
+	if st := f.respond(t, "2026-06-10 12:00", f.playerTok, map[string]any{"status": "declined", "reason": "krank"}); st != http.StatusNoContent {
 		t.Fatalf("status %d, want 204", st)
 	}
 	n := expectRSVPNotice(t, ch)
@@ -180,7 +180,7 @@ func TestRespond_Uebungsgruppe_BenachrichtigtTrainer(t *testing.T) {
 func TestRespond_ErsteAntwort_KeineMeldung(t *testing.T) {
 	f := newTeamRSVPPushFixture(t)
 	ch := captureRSVPNotices(t)
-	if st := f.respond(t, "2026-06-13 18:00", f.playerTok, map[string]any{"status": "declined"}); st != http.StatusNoContent {
+	if st := f.respond(t, "2026-06-13 18:00", f.playerTok, map[string]any{"status": "declined", "reason": "krank"}); st != http.StatusNoContent {
 		t.Fatalf("status %d, want 204", st)
 	}
 	expectNoRSVPNotice(t, ch)
@@ -200,7 +200,7 @@ func TestRespond_AchtTageVorher_KeineMeldung(t *testing.T) {
 	f := newTeamRSVPPushFixture(t)
 	f.addResponse(t, f.mPlayer, f.uPlayer, "confirmed")
 	ch := captureRSVPNotices(t)
-	if st := f.respond(t, "2026-06-07 18:00", f.playerTok, map[string]any{"status": "declined"}); st != http.StatusNoContent {
+	if st := f.respond(t, "2026-06-07 18:00", f.playerTok, map[string]any{"status": "declined", "reason": "krank"}); st != http.StatusNoContent {
 		t.Fatalf("status %d, want 204", st)
 	}
 	expectNoRSVPNotice(t, ch)
@@ -210,7 +210,7 @@ func TestRespond_GenauSiebenTage_Meldung(t *testing.T) {
 	f := newTeamRSVPPushFixture(t)
 	f.addResponse(t, f.mPlayer, f.uPlayer, "confirmed")
 	ch := captureRSVPNotices(t)
-	if st := f.respond(t, "2026-06-08 18:00", f.playerTok, map[string]any{"status": "declined"}); st != http.StatusNoContent {
+	if st := f.respond(t, "2026-06-08 18:00", f.playerTok, map[string]any{"status": "declined", "reason": "krank"}); st != http.StatusNoContent {
 		t.Fatalf("status %d, want 204", st)
 	}
 	expectRSVPNotice(t, ch)

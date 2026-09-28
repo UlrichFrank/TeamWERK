@@ -2770,9 +2770,10 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 
 	if !claims.CanOverrideRSVPCutoff() {
 		var gameDate, gameTime string
+		var requireReason bool
 		if err := h.db.QueryRowContext(r.Context(),
-			`SELECT date(date), substr(time,1,5) FROM games WHERE id = ?`,
-			gameID).Scan(&gameDate, &gameTime); err != nil {
+			`SELECT date(date), substr(time,1,5), rsvp_require_reason FROM games WHERE id = ?`,
+			gameID).Scan(&gameDate, &gameTime, &requireReason); err != nil {
 			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
@@ -2783,6 +2784,10 @@ func (h *Handler) RespondToGame(w http.ResponseWriter, r *http.Request) {
 		}
 		if h.now().After(locksAt) {
 			writeRSVPLocked(w, "Spiel kann nur bis 18 Stunden vor Beginn umgesagt werden.", locksAt)
+			return
+		}
+		if policy.RSVPReasonMissing(requireReason, req.Status, req.Reason) {
+			httpx.WriteError(w, r, http.StatusBadRequest, "reason_required", nil)
 			return
 		}
 	}

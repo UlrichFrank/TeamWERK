@@ -1761,9 +1761,10 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 
 	if !claims.CanOverrideRSVPCutoff() {
 		var sessDate, sessStart string
+		var requireReason bool
 		if err := h.db.QueryRowContext(r.Context(),
-			`SELECT date(date), substr(start_time,1,5) FROM training_sessions WHERE id = ?`,
-			sessionID).Scan(&sessDate, &sessStart); err != nil {
+			`SELECT date(date), substr(start_time,1,5), rsvp_require_reason FROM training_sessions WHERE id = ?`,
+			sessionID).Scan(&sessDate, &sessStart, &requireReason); err != nil {
 			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 			return
 		}
@@ -1774,6 +1775,10 @@ func (h *Handler) Respond(w http.ResponseWriter, r *http.Request) {
 		}
 		if h.now().After(locksAt) {
 			writeRSVPLocked(w, "Training kann nur bis 2 Stunden vor Beginn umgesagt werden.", locksAt)
+			return
+		}
+		if policy.RSVPReasonMissing(requireReason, req.Status, req.Reason) {
+			httpx.WriteError(w, r, http.StatusBadRequest, "reason_required", nil)
 			return
 		}
 	}
