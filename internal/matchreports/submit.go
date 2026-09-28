@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/background"
@@ -77,6 +78,19 @@ func (h *Handler) SubmitForReview(w http.ResponseWriter, r *http.Request) {
 		return
 	case StatePublishFailed:
 		writeErr(w, http.StatusConflict, "already_submitted")
+		return
+	}
+
+	// Pflichtfelder prüfen, solange der Autor noch bearbeiten darf — nach dem
+	// Einreichen könnte er ein fehlendes Abstract nicht mehr nachtragen.
+	missing, err := missingRequiredFields(h.db, id)
+	if err != nil {
+		logErr("matchreports.SubmitForReview required fields", err, "id", id)
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if len(missing) > 0 {
+		writeErr(w, http.StatusBadRequest, "missing_fields", strings.Join(missing, ","))
 		return
 	}
 

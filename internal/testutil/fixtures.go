@@ -483,8 +483,8 @@ func CreateMatchReport(t *testing.T, database *sql.DB, gameID, authorUserID, dut
 		slotArg = dutySlotID
 	}
 	res, err := database.Exec(
-		`INSERT INTO match_reports (game_id, author_user_id, duty_slot_id, state)
-		 VALUES (?, ?, ?, 'draft')`,
+		`INSERT INTO match_reports (game_id, author_user_id, duty_slot_id, state, abstract, body_md)
+		 VALUES (?, ?, ?, 'draft', 'Test-Abstract', 'Test-Bericht')`,
 		gameID, authorUserID, slotArg)
 	if err != nil {
 		t.Fatalf("CreateMatchReport: %v", err)

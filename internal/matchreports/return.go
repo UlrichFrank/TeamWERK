@@ -24,7 +24,7 @@ type returnReq struct {
 //
 //	POST /api/match-reports/{id}/return   {"comment": "…"}
 //
-// Übergang pending_review → draft: der Autor darf danach wieder bearbeiten
+// Übergang pending_review|publish_failed → draft: der Autor darf danach wieder bearbeiten
 // und erneut einreichen (guardMutation: draft = Autor). Nur Freigeber
 // (medien|vorstand|admin); der Kommentar ist Pflicht — eine Rückgabe ohne
 // Hinweis, was zu ändern ist, ließe den Autor raten.
@@ -67,7 +67,9 @@ func (h *Handler) Return(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "internal")
 		return
 	}
-	if state != StatePendingReview {
+	// publish_failed zählt mit: scheitert die Veröffentlichung an etwas, das
+	// der Autor klären muss, soll der Freigeber den Bericht zurückgeben können.
+	if state != StatePendingReview && state != StatePublishFailed {
 		writeErr(w, http.StatusConflict, "not_pending_review")
 		return
 	}
@@ -90,9 +92,9 @@ func (h *Handler) Return(w http.ResponseWriter, r *http.Request) {
 	res, err := h.db.Exec(
 		`UPDATE match_reports
 		 SET state=?, review_comment=?, returned_at=CURRENT_TIMESTAMP,
-		     reviewer_user_id=?, updated_at=CURRENT_TIMESTAMP
-		 WHERE id=? AND state=?`,
-		StateDraft, comment, claims.UserID, id, StatePendingReview,
+		     reviewer_user_id=?, error_message=NULL, updated_at=CURRENT_TIMESTAMP
+		 WHERE id=? AND state IN (?, ?)`,
+		StateDraft, comment, claims.UserID, id, StatePendingReview, StatePublishFailed,
 	)
 	if err != nil {
 		logErr("matchreports.Return update", err, "id", id)

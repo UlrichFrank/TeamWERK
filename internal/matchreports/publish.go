@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/teamstuttgart/teamwerk/internal/auth"
@@ -83,6 +84,19 @@ func (h *Handler) Publish(w http.ResponseWriter, r *http.Request) {
 		return
 	case StatePublishing:
 		writeErr(w, http.StatusConflict, "in_progress")
+		return
+	}
+
+	// Pflichtfelder vor dem State-Wechsel prüfen: der Bericht bleibt in
+	// pending_review/publish_failed und ist weiter bearbeitbar.
+	missing, err := missingRequiredFields(h.db, id)
+	if err != nil {
+		logErr("matchreports.Publish required fields", err, "id", id)
+		writeErr(w, http.StatusInternalServerError, "internal")
+		return
+	}
+	if len(missing) > 0 {
+		writeErr(w, http.StatusBadRequest, "missing_fields", strings.Join(missing, ","))
 		return
 	}
 
