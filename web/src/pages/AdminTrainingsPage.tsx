@@ -9,7 +9,7 @@ import MapsLink from '../components/MapsLink'
 import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import DeleteReasonFields, { deletionPayload } from '../components/DeleteReasonFields'
 import { errorMessage } from '../lib/errors'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY, INPUT } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
@@ -354,14 +354,12 @@ export default function AdminTrainingsPage() {
       <h1 className={`${PAGE_TITLE} mb-6`}>Trainings verwalten</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-brand-surface-card rounded-lg p-1 border border-brand-border-subtle w-fit">
+      <div className={`${TAB_BAR} mb-6`}>
         {(['serien', 'einzeltermine'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeTab === tab ? 'bg-brand-yellow text-brand-black' : 'text-brand-text-muted hover:text-brand-text'
-            }`}
+            className={`${TAB} ${activeTab === tab ? TAB_ACTIVE : TAB_INACTIVE}`}
           >
             {tab === 'serien' ? 'Trainingsserien' : 'Einzeltermine'}
           </button>
