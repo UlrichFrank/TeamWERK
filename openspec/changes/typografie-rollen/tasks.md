@@ -32,4 +32,4 @@
 
 - [x] 7.1 `MIGRATION_PENDING` ist leer. Liste und zugehörigen Code aus dem Gate entfernen. Prüfen: Gate grün.
 - [ ] 7.2 Sichtprüfung im Browser bei 375 px und Desktop: Profil, Kalender (Menü offen), Dienstvorlagen, ein Modal, Login. Hierarchie und Kopfzeilen-Höhen sind stimmig. Prüfen: Screenshots gesichtet.
-- [ ] 7.3 Volles Gate: `pnpm -C web build`, `pnpm -C web test`, `pnpm -C web lint`, `openspec validate typografie-rollen`. Alles grün.
+- [x] 7.3 Volles Gate: `pnpm -C web build`, `pnpm -C web test`, `pnpm -C web lint`, `openspec validate typografie-rollen`. Alles grün.
