@@ -14,7 +14,7 @@ import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItem
 import { dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
 import { HEADER_CTRL, HEADER_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 import { ChevronDown, RefreshCw, Plus } from 'lucide-react'
-import { PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
+import { MENU_ITEM, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface DutyType {
   id: number
@@ -232,7 +232,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                   type="button"
                   role="menuitem"
                   onClick={refreshFromDutyTypes}
-                  className="w-full flex items-start gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                  className={`${MENU_ITEM} !items-start`}
                 >
                   <RefreshCw className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>

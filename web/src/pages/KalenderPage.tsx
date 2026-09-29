@@ -38,7 +38,7 @@ import {
   describeHostError,
   type GameDayHost,
 } from '../components/GameDayHostPicker'
-import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
+import { MENU_ITEM, MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 // Dieselben vier Typen wie auf /termine (TERMINE_TYPES) — im Compact-Modus
 // klappt EventTypeFilter sie in ein Dropdown, weil vier Einzel-Buttons neben
@@ -1126,7 +1126,7 @@ export default function KalenderPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setShowEventMenu(false); setShowH4AImport(true) }}
-                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      className={MENU_ITEM}
                     >
                       <Download className="w-4 h-4 shrink-0" />
                       Spielplan aus Handball4All
@@ -1136,7 +1136,7 @@ export default function KalenderPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setShowEventMenu(false); setShowBulkRegen(true) }}
-                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      className={MENU_ITEM}
                     >
                       <RefreshCw className="w-4 h-4 shrink-0" />
                       Dienste aktualisieren
@@ -1146,7 +1146,7 @@ export default function KalenderPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setShowEventMenu(false); setShowDutyExport(true) }}
-                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      className={MENU_ITEM}
                     >
                       <FileSpreadsheet className="w-4 h-4 shrink-0" />
                       Dienste als CSV

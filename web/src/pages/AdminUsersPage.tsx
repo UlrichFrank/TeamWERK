@@ -17,7 +17,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorMessage } from '../lib/errors'
 import { relativeTime } from '../lib/relativeTime'
 import { BTN_PRIMARY, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
-import { MODAL_TITLE, PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
+import { MENU_ITEM, MODAL_TITLE, PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 interface User {
   id: number
@@ -439,19 +439,21 @@ export default function AdminUsersPage() {
                 </button>
               </div>
               {showDropdown && (
-                <div className="absolute right-0 mt-1 w-48 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                <div role="menu" className="absolute right-0 mt-1 w-48 bg-white border border-brand-border rounded-md shadow-lg z-20">
                   <button
                     onClick={openCreateModal}
-                    className="w-full text-left px-4 py-2.5 text-xs text-brand-text hover:bg-brand-surface-card transition-colors flex items-center gap-2"
+                    role="menuitem"
+                    className={MENU_ITEM}
                   >
-                    <RefreshCw className="w-3.5 h-3.5 text-brand-text-muted" />
+                    <RefreshCw className="w-4 h-4 shrink-0 text-brand-text-muted" />
                     Account anlegen
                   </button>
                   <button
                     onClick={() => { setShowDropdown(false); setShowCsvModal(true) }}
-                    className="w-full text-left px-4 py-2.5 text-xs text-brand-text hover:bg-brand-surface-card transition-colors flex items-center gap-2"
+                    role="menuitem"
+                    className={MENU_ITEM}
                   >
-                    <Upload className="w-3.5 h-3.5 text-brand-text-muted" />
+                    <Upload className="w-4 h-4 shrink-0 text-brand-text-muted" />
                     CSV importieren
                   </button>
                 </div>

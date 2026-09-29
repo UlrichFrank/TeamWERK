@@ -127,7 +127,7 @@ describe('DutySlotList — Anleitung link', () => {
     // Instanzen im DOM (Desktop `hidden sm:flex` + Mobile `sm:hidden`, jsdom wertet
     // keine Media Queries aus) — beide tragen denselben "Anleitung"-Eintrag.
     fireEvent.click(screen.getAllByLabelText('Aktionen')[0])
-    fireEvent.click(screen.getAllByRole('button', { name: 'Anleitung' })[0])
+    fireEvent.click(screen.getAllByRole('menuitem', { name: 'Anleitung' })[0])
     expect(screen.getByTestId('location')).toHaveTextContent('/dienste/anleitung/3')
   })
 
@@ -146,7 +146,7 @@ describe('DutySlotList — Anleitung link', () => {
       </MemoryRouter>,
     )
     fireEvent.click(screen.getAllByLabelText('Aktionen')[0])
-    fireEvent.click(screen.getAllByRole('button', { name: 'Anleitung' })[0])
+    fireEvent.click(screen.getAllByRole('menuitem', { name: 'Anleitung' })[0])
     expect(onFocusSlot).toHaveBeenCalledWith(201)
   })
 
@@ -162,6 +162,6 @@ describe('DutySlotList — Anleitung link', () => {
       </MemoryRouter>,
     )
     fireEvent.click(screen.getByLabelText('Aktionen'))
-    expect(screen.queryByRole('button', { name: 'Anleitung' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Anleitung' })).toBeNull()
   })
 })

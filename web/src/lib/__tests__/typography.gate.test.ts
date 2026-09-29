@@ -61,9 +61,6 @@ const ALLOWLIST: { file: string; rule: Rule; count: number; reason: string }[] =
  * raus (sonst rot) — die Liste kann also nur kleiner werden.
  */
 const MIGRATION_PENDING: string[] = [
-  'pages/AdminDutyTemplatesPage.tsx',
-  'pages/KalenderPage.tsx',
-  'pages/VideosPage.tsx',
 ]
 
 interface Tag {

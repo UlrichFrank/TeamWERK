@@ -5,7 +5,7 @@ import { HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_PRIMARY, BTN
 import ActionMenu from '../components/ActionMenu'
 import MapsLink from '../components/MapsLink'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MENU_ITEM, MENU_ITEM_DANGER, MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface Venue {
   id: number
@@ -184,16 +184,18 @@ export default function AdminVenuesPage() {
             </button>
           </div>
           {showActionsMenu && (
-            <div className="absolute right-0 mt-1 w-44 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
+            <div role="menu" className="absolute right-0 mt-1 w-44 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
               <button
                 onClick={() => { setShowActionsMenu(false); setShowImport(true) }}
-                className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                role="menuitem"
+                className={MENU_ITEM}
               >
                 Import CSV
               </button>
               <button
                 onClick={() => { setShowActionsMenu(false); setShowDeleteAll(true) }}
-                className="w-full text-left px-4 py-2.5 text-sm text-brand-danger hover:bg-brand-danger-light transition-colors"
+                role="menuitem"
+                className={MENU_ITEM_DANGER}
               >
                 Alle löschen
               </button>

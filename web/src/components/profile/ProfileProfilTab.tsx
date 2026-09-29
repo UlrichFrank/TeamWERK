@@ -6,7 +6,7 @@ import { UserContact } from '../../pages/ChildProfilePage'
 import ImageCropModal from '../ImageCropModal'
 import Toggle from '../Toggle'
 import { BTN_PRIMARY, INPUT, LABEL } from '../../lib/buttonStyles'
-import { SECTION_TITLE, SUBSECTION_TITLE } from '../../lib/typography'
+import { MENU_ITEM_DANGER, SECTION_TITLE, SUBSECTION_TITLE } from '../../lib/typography'
 
 interface Props {
   children: Member[]
@@ -309,12 +309,13 @@ export default function ProfileProfilTab({
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>
                     {photoDropdown && (
-                      <div className="absolute left-0 top-full mt-1 w-36 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                      <div role="menu" className="absolute left-0 top-full mt-1 w-36 bg-white border border-brand-border rounded-md shadow-lg z-20">
                         <button
                           onClick={handlePhotoDelete}
-                          className="w-full text-left px-4 py-2.5 text-xs text-brand-danger hover:bg-brand-danger-light transition-colors flex items-center gap-2"
+                          role="menuitem"
+                          className={MENU_ITEM_DANGER}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4 shrink-0" />
                           Bild löschen
                         </button>
                       </div>

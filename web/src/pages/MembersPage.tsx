@@ -13,7 +13,7 @@ import { useWindowedList } from '../hooks/useWindowedList'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_SECONDARY, INPUT, LABEL } from '../lib/buttonStyles'
 import PersonChip from '../components/PersonChip'
-import { MODAL_TITLE, OVERLINE, PAGE_TITLE } from '../lib/typography'
+import { MENU_ITEM, MODAL_TITLE, OVERLINE, PAGE_TITLE } from '../lib/typography'
 
 interface Member {
   id: number; first_name: string; last_name: string
@@ -468,13 +468,15 @@ export default function MembersPage() {
                 </div>
                 {showActionsMenu && (
                   <div
+                    role="menu"
                     className="absolute right-0 mt-1 w-52 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden"
                     onBlur={() => setShowActionsMenu(false)}
                   >
                     {isAdmin && (
                       <button
                         onClick={() => { setShowActionsMenu(false); setShowImport(true) }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                        role="menuitem"
+                        className={MENU_ITEM}
                       >
                         Import CSV
                       </button>
@@ -482,7 +484,8 @@ export default function MembersPage() {
                     {canBulkSepa && (
                       <button
                         onClick={() => { setShowActionsMenu(false); setShowSepaBulk(true) }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                        role="menuitem"
+                        className={MENU_ITEM}
                       >
                         Import SEPA-Mandate
                       </button>
@@ -490,7 +493,8 @@ export default function MembersPage() {
                     {isAdmin && (
                       <button
                         onClick={() => { setShowActionsMenu(false); handleExport() }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                        role="menuitem"
+                        className={MENU_ITEM}
                       >
                         Export CSV
                       </button>

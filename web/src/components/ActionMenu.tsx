@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MoreVertical } from 'lucide-react'
+import { MENU_ITEM, MENU_ITEM_DANGER } from '../lib/typography'
 
 interface Action {
   label: string
@@ -50,17 +51,17 @@ export default function ActionMenu({ actions }: ActionMenuProps) {
         <div
           ref={menuRef}
           style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999 }}
+          role="menu"
           className="bg-white border border-brand-border-subtle rounded-lg shadow-lg min-w-[140px] py-1"
         >
           {actions.map((action, idx) => (
             <button
               key={idx}
+              role="menuitem"
               onClick={() => { action.onClick(); setOpen(false) }}
-              className={`block w-full text-left px-4 py-2 text-sm transition-colors ${
-                action.variant === 'danger'
-                  ? 'text-brand-danger hover:bg-brand-danger-light'
-                  : 'text-brand-text hover:bg-brand-surface-card'
-              }${idx > 0 ? ' border-t border-brand-border-subtle' : ''}`}
+              className={`${action.variant === 'danger' ? MENU_ITEM_DANGER : MENU_ITEM}${
+                idx > 0 ? ' border-t border-brand-border-subtle' : ''
+              }`}
             >
               {action.label}
             </button>

@@ -21,7 +21,7 @@
 
 ## 5. Menüeinträge
 
-- [ ] 5.1 `ActionMenu` und alle Dropdown-Menüs (Kalender „Weitere Aktionen“, Nutzerverwaltung, Veranstaltungsorte, Videos, `MemberStammdatenTab`, `ProfileProfilTab` und alle weiteren Funde von `w-full text-left px-… py-… text-…` in Menüs) auf `MENU_ITEM`/`MENU_ITEM_DANGER` umstellen und mit `role="menuitem"` versehen, wo es fehlt. `MIGRATION_PENDING` nachziehen. Prüfen: Gate grün, `ActionMenu`-Tests grün.
+- [x] 5.1 `ActionMenu` und alle Dropdown-Menüs (Kalender „Weitere Aktionen“, Nutzerverwaltung, Veranstaltungsorte, Videos, `MemberStammdatenTab`, `ProfileProfilTab` und alle weiteren Funde von `w-full text-left px-… py-… text-…` in Menüs) auf `MENU_ITEM`/`MENU_ITEM_DANGER` umstellen und mit `role="menuitem"` versehen, wo es fehlt. `MIGRATION_PENDING` nachziehen. Prüfen: Gate grün, `ActionMenu`-Tests grün.
 
 ## 6. Frei nachgebaute Buttons und Tabs
 
