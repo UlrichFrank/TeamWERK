@@ -13,7 +13,7 @@ import {
   Mail,
   ArrowLeft,
 } from 'lucide-react'
-import { PAGE_TITLE } from '../lib/typography'
+import { PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 export default function DatenschutzPage() {
   return (
@@ -42,7 +42,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Verantwortlicher</h2>
+              <h2 className={SECTION_TITLE}>Verantwortlicher</h2>
             </div>
             <p className="text-sm text-brand-text">
               Verein zur Talentförderung des Handballs in Stuttgart e.V.<br />
@@ -57,7 +57,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Mitgliedsdaten und Vereinsverwaltung</h2>
+              <h2 className={SECTION_TITLE}>Mitgliedsdaten und Vereinsverwaltung</h2>
             </div>
             <p className="text-sm text-brand-text">
               Zur Verwaltung der Vereinsmitgliedschaft und des Spielbetriebs verarbeiten wir
@@ -80,7 +80,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Einwilligungen</h2>
+              <h2 className={SECTION_TITLE}>Einwilligungen</h2>
             </div>
             <p className="text-sm text-brand-text">
               Für Mitglieder erfassen wir gesondert die Einwilligung in die Datenverarbeitung zur
@@ -95,7 +95,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Landmark className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Bankdaten (SEPA-Beitragseinzug)</h2>
+              <h2 className={SECTION_TITLE}>Bankdaten (SEPA-Beitragseinzug)</h2>
             </div>
             <p className="text-sm text-brand-text">
               Bankverbindungen für den Mitgliedsbeitrag (IBAN, Kontoinhaber) werden
@@ -117,7 +117,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <HeartPulse className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Trainingstagebuch</h2>
+              <h2 className={SECTION_TITLE}>Trainingstagebuch</h2>
             </div>
             <p className="text-sm text-brand-text">
               Spieler:innen können freiwillig ein eigenes Trainingstagebuch führen (Datum, Art und
@@ -134,7 +134,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Video className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Spielvideos und Fotos</h2>
+              <h2 className={SECTION_TITLE}>Spielvideos und Fotos</h2>
             </div>
             <p className="text-sm text-brand-text">
               Von Heimspielen können Videoaufzeichnungen hochgeladen werden. Der Zugriff auf ein
@@ -149,7 +149,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <MessageCircle className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Kommunikation</h2>
+              <h2 className={SECTION_TITLE}>Kommunikation</h2>
             </div>
             <p className="text-sm text-brand-text">
               Für die vereinsinterne Kommunikation stehen ein Chat zwischen Mitgliedern sowie
@@ -164,7 +164,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Baby className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Kinder-Accounts und Eltern</h2>
+              <h2 className={SECTION_TITLE}>Kinder-Accounts und Eltern</h2>
             </div>
             <p className="text-sm text-brand-text">
               Minderjährige Mitglieder erhalten einen eigenen Zugang. Über eine Eltern-Kind-Verknüpfung
@@ -179,7 +179,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Lock className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Hosting, Sicherheit und Speicherdauer</h2>
+              <h2 className={SECTION_TITLE}>Hosting, Sicherheit und Speicherdauer</h2>
             </div>
             <p className="text-sm text-brand-text">
               Die Anwendung wird auf einem Server bei <strong>IONOS</strong> (Deutschland)
@@ -195,7 +195,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Anonyme Nutzungsstatistiken (Matomo)</h2>
+              <h2 className={SECTION_TITLE}>Anonyme Nutzungsstatistiken (Matomo)</h2>
             </div>
             <p className="text-sm text-brand-text">
               Zur Verbesserung der Anwendung erfassen wir anonyme Nutzungsdaten über
@@ -232,7 +232,7 @@ export default function DatenschutzPage() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold text-brand-text">Ihre Rechte</h2>
+            <h2 className={SECTION_TITLE}>Ihre Rechte</h2>
             <p className="text-sm text-brand-text">
               Sie haben das Recht auf Auskunft über die zu Ihrer Person gespeicherten Daten
               (Art. 15 DSGVO), auf Berichtigung unrichtiger Daten (Art. 16), auf Löschung
@@ -248,7 +248,7 @@ export default function DatenschutzPage() {
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <Mail className="w-5 h-5 text-brand-yellow" />
-              <h2 className="text-lg font-semibold text-brand-text">Kontakt</h2>
+              <h2 className={SECTION_TITLE}>Kontakt</h2>
             </div>
             <p className="text-sm text-brand-text">
               Bei Fragen zum Datenschutz wenden Sie sich bitte an

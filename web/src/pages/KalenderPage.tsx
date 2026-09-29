@@ -38,7 +38,7 @@ import {
   describeHostError,
   type GameDayHost,
 } from '../components/GameDayHostPicker'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 // Dieselben vier Typen wie auf /termine (TERMINE_TYPES) — im Compact-Modus
 // klappt EventTypeFilter sie in ein Dropdown, weil vier Einzel-Buttons neben
@@ -1821,7 +1821,7 @@ export default function KalenderPage() {
                 <div className="flex items-start gap-3 mb-4">
                   <AlertTriangle className="w-5 h-5 text-brand-danger shrink-0 mt-0.5" />
                   <div>
-                    <h2 className="text-base font-semibold text-brand-text">Folgende Trainings &amp; Spiele werden automatisch abgesagt</h2>
+                    <h2 className={SUBSECTION_TITLE}>Folgende Trainings &amp; Spiele werden automatisch abgesagt</h2>
                     <p className="text-sm text-brand-text-muted mt-1">Bestätigte Zusagen werden zurückgezogen, offene Termine abgesagt.</p>
                   </div>
                 </div>

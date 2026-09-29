@@ -17,7 +17,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorMessage } from '../lib/errors'
 import { relativeTime } from '../lib/relativeTime'
 import { BTN_PRIMARY, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 interface User {
   id: number
@@ -782,7 +782,7 @@ export default function AdminUsersPage() {
         <div className="mb-8">
           <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-x-auto">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-brand-text">Ausstehende Anfragen & Einladungen ({filteredRequests.length + filteredInvitations.length})</h2>
+              <h2 className={SECTION_TITLE}>Ausstehende Anfragen & Einladungen ({filteredRequests.length + filteredInvitations.length})</h2>
             </div>
             <table className="w-full text-sm">
               <tbody className="divide-y divide-brand-border-subtle">
@@ -860,7 +860,7 @@ export default function AdminUsersPage() {
       {/* Registered users */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-x-auto mt-6">
         <div className="px-6 py-4 border-b border-brand-border-subtle">
-          <h2 className="font-semibold text-brand-text">Registrierte Nutzer ({total})</h2>
+          <h2 className={SECTION_TITLE}>Registrierte Nutzer ({total})</h2>
         </div>
         <table className="w-full text-sm">
           <tbody className="divide-y divide-brand-border-subtle">

@@ -14,7 +14,7 @@ import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItem
 import { dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
 import { HEADER_CTRL, HEADER_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 import { ChevronDown, RefreshCw, Plus } from 'lucide-react'
-import { PAGE_TITLE } from '../lib/typography'
+import { PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface DutyType {
   id: number
@@ -205,7 +205,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
 
       <div className="bg-brand-surface-card rounded-xl border border-brand-border-subtle p-4">
         <div className="flex items-center justify-between mb-4 gap-3">
-          <h3 className="font-semibold text-brand-text">Dienst-Einträge</h3>
+          <h3 className={SUBSECTION_TITLE}>Dienst-Einträge</h3>
           <div className="relative shrink-0">
             <div className="flex">
               <button

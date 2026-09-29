@@ -14,7 +14,7 @@ import LineupBadge from '../components/LineupBadge'
 import LineupCheckbox from '../components/LineupCheckbox'
 import type { LineupState } from '../lib/lineup'
 import { BTN_SECONDARY, BTN_DANGER, INPUT } from '../lib/buttonStyles'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
@@ -821,7 +821,7 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
     <div className="bg-brand-surface-card rounded-xl shadow overflow-hidden">
       <div className="h-1 bg-brand-yellow" />
       <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="font-semibold text-brand-text">Teilnahme</h2>
+        <h2 className={SECTION_TITLE}>Teilnahme</h2>
         {lineupMap !== undefined && (
           <LineupBadge
             state={lineupAnySet ? 'in' : 'open'}

@@ -15,7 +15,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
 import { buildTeamLongName, compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
 import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, BTN_SECONDARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface Season {
   id: number
@@ -513,7 +513,7 @@ export default function AdminKaderPage() {
                   {/* Card header */}
                   <div className="px-5 py-3 border-b border-brand-border-subtle flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <h2 className="font-semibold text-sm truncate text-brand-text">{title}</h2>
+                      <h2 className={`${SUBSECTION_TITLE} truncate`}>{title}</h2>
                       {k.birth_years.length > 0 && (
                         <span className="text-xs bg-brand-yellow text-brand-black px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
                           {birthYearLabel(k.birth_years)}

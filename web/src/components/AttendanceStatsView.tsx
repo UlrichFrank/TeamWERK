@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, MinusCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { SUBSECTION_TITLE } from '../lib/typography'
 
 interface Counts {
   member_id: number
@@ -73,7 +74,7 @@ function PillarBlock({ title, present, excused, missed }: { title: string; prese
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
       <div className="flex items-baseline justify-between mb-3">
-        <h3 className="font-semibold text-brand-text">{title}</h3>
+        <h3 className={SUBSECTION_TITLE}>{title}</h3>
         <span className="text-sm text-brand-text-muted">{total} {total === 1 ? 'Termin' : 'Termine'}</span>
       </div>
       <StackedBar present={present} excused={excused} missed={missed} />
@@ -112,7 +113,7 @@ function EventTable({ title, events }: { title: string; events: EventDetail[] })
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-6 py-4 border-b border-brand-border-subtle">
-        <h3 className="font-semibold text-brand-text">{title}</h3>
+        <h3 className={SUBSECTION_TITLE}>{title}</h3>
       </div>
       {events.length === 0 ? (
         <p className="px-6 py-4 text-sm text-brand-text-muted">Keine Termine im Saisonzeitraum.</p>

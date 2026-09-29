@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Trophy } from 'lucide-react'
 import { PlayerStat, fetchMemberStats, sevenMeterRate } from '../lib/staffeln'
+import { SUBSECTION_TITLE } from '../lib/typography'
 
 const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4'
 
@@ -28,7 +29,7 @@ export default function SaisonbilanzPanel({ memberId }: { memberId: number }) {
 
   return (
     <div className={CARD}>
-      <h2 className="text-sm font-medium text-brand-text mb-3 inline-flex items-center gap-1">
+      <h2 className={`${SUBSECTION_TITLE} mb-3 inline-flex items-center gap-1`}>
         <Trophy className="w-4 h-4" /> Saisonbilanz
       </h2>
       <div className="space-y-3">

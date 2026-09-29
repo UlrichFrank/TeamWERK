@@ -25,7 +25,7 @@ import StandingsChart from '../components/staffeln/StandingsChart'
 import Spielmatrix from '../components/staffeln/Spielmatrix'
 import { GoalTablesView, FairPlayView, DistributionView } from '../components/staffeln/TeamStatsViews'
 import RefereeView from '../components/staffeln/RefereeView'
-import { PAGE_TITLE } from '../lib/typography'
+import { PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 type Tab =
   | 'tabelle' | 'spielplan' | 'kreuztabelle' | 'verlauf'
@@ -365,7 +365,7 @@ function VerlaufView({ staffelId, days, ownTeams, matrices, ownPlayers, onOpenGa
       <StandingsChart days={days} ownTeams={ownTeams} />
       {teams.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium text-brand-text">Spielerübersicht</h2>
+          <h2 className={SUBSECTION_TITLE}>Spielerübersicht</h2>
           <select
             className={HEADER_FIELD}
             value={auswahl}
@@ -618,7 +618,7 @@ function Ranking({
   return (
     <div className={CARD}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
-        <h2 className="text-sm font-medium text-brand-text">{title}</h2>
+        <h2 className={SUBSECTION_TITLE}>{title}</h2>
         {hint && <p className="text-xs text-brand-text-muted mt-1">{hint}</p>}
       </div>
       <ul>

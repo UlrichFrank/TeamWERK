@@ -4,7 +4,7 @@ import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 // Import des H4A-Spielplans in zwei Schritten:
 //   1. Zugangsdaten + Periode  → POST /games/import/h4a/preview  (liest Handball4All)
@@ -435,7 +435,7 @@ function PlanSection({
 
   return (
     <section>
-      <h3 className="text-sm font-bold text-brand-text mb-2">{title} ({games.length})</h3>
+      <h3 className={`${SUBSECTION_TITLE} mb-2`}>{title} ({games.length})</h3>
       <ul className="space-y-2">
         {games.map(g => {
           const key = rowKey(g)

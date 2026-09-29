@@ -13,7 +13,7 @@ import { useWindowedList } from '../hooks/useWindowedList'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_SECONDARY, INPUT, LABEL } from '../lib/buttonStyles'
 import PersonChip from '../components/PersonChip'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MODAL_TITLE, OVERLINE, PAGE_TITLE } from '../lib/typography'
 
 interface Member {
   id: number; first_name: string; last_name: string
@@ -1018,14 +1018,16 @@ function SepaBulkSection({ title, tone, entries, emptyText, showReason }: {
   emptyText: string
   showReason?: boolean
 }) {
+  // Zustandsfarbe über der Rollenfarbe von OVERLINE (gedämpft): ohne `!`
+  // entschiede die CSS-Reihenfolge, welche der beiden Textfarben gewinnt.
   const headerClass = tone === 'ok'
-    ? 'text-brand-green'
+    ? '!text-brand-green'
     : tone === 'warn'
-      ? 'text-brand-danger'
-      : 'text-brand-text-muted'
+      ? '!text-brand-danger'
+      : ''
   return (
     <section>
-      <h3 className={`text-xs uppercase font-semibold ${headerClass}`}>
+      <h3 className={`${OVERLINE} ${headerClass}`}>
         {title} ({entries.length})
       </h3>
       {entries.length === 0 ? (
@@ -1048,7 +1050,7 @@ function SepaBulkSection({ title, tone, entries, emptyText, showReason }: {
 function SepaBulkAmbiguousSection({ entries }: { entries: SepaBulkAmbiguous[] }) {
   return (
     <section>
-      <h3 className="text-xs uppercase font-semibold text-brand-warning">
+      <h3 className={`${OVERLINE} !text-brand-warning`}>
         Mehrdeutig ({entries.length})
       </h3>
       {entries.length === 0 ? (

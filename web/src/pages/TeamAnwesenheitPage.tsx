@@ -6,7 +6,7 @@ import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { buildTeamShortNames } from '../lib/teamName'
 import { HEADER_FIELD } from '../lib/buttonStyles'
-import { PAGE_TITLE } from '../lib/typography'
+import { PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 interface MemberCounts {
   member_id: number
@@ -96,7 +96,7 @@ function StatTable({ title, members, averages, onMember }: {
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-6 py-4 border-b border-brand-border-subtle">
-        <h2 className="font-semibold text-brand-text">{title}</h2>
+        <h2 className={SECTION_TITLE}>{title}</h2>
       </div>
 
       {/* Desktop-Tabelle */}

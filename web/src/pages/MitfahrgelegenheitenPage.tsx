@@ -13,7 +13,7 @@ import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, se
 import TeamFilter from '../components/TeamFilter'
 import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, INPUT, LABEL, HEADER_GROUP } from '../lib/buttonStyles'
 import { useCompactHeader } from '../hooks/useCompactHeader'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface CarpoolEntry {
   id: number
@@ -534,7 +534,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
             <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${colors.card.icon}`} />
             <div>
               <p className="text-xs text-brand-text-muted">{formatDate(data.game.date)}</p>
-              <h2 className="text-sm font-semibold text-brand-text">{gameTitle(data.game, teamShort)}</h2>
+              <h2 className={SUBSECTION_TITLE}>{gameTitle(data.game, teamShort)}</h2>
             </div>
           </div>
           {!hasOwn && (

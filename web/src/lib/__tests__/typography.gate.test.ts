@@ -61,30 +61,8 @@ const ALLOWLIST: { file: string; rule: Rule; count: number; reason: string }[] =
  * raus (sonst rot) — die Liste kann also nur kleiner werden.
  */
 const MIGRATION_PENDING: string[] = [
-  'components/AttendanceStatsView.tsx',
-  'components/H4AImportModal.tsx',
-  'components/SaisonbilanzPanel.tsx',
-  'components/SpielberichtPanel.tsx',
-  'components/SpieltagDetailModal.tsx',
-  'components/staffeln/RefereeView.tsx',
-  'components/staffeln/Spielmatrix.tsx',
-  'components/staffeln/TeamStatsViews.tsx',
   'pages/AdminDutyTemplatesPage.tsx',
-  'pages/AdminKaderPage.tsx',
-  'pages/AdminSettingsPage.tsx',
-  'pages/AdminTrainingsPage.tsx',
-  'pages/AdminUsersPage.tsx',
-  'pages/ChildProfilePage.tsx',
-  'pages/DatenschutzPage.tsx',
-  'pages/DienstRanglistePage.tsx',
   'pages/KalenderPage.tsx',
-  'pages/MatchReportListPage.tsx',
-  'pages/MeinTeamPage.tsx',
-  'pages/MembersPage.tsx',
-  'pages/MitfahrgelegenheitenPage.tsx',
-  'pages/StaffelnPage.tsx',
-  'pages/TeamAnwesenheitPage.tsx',
-  'pages/TermineDetailPage.tsx',
   'pages/VideosPage.tsx',
 ]
 

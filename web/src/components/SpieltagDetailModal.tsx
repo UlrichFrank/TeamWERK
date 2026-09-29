@@ -13,7 +13,7 @@ import HoursInput from './HoursInput'
 import { resolveAnchorClock, clockDiffMinutes } from '../lib/duration'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER, LABEL } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface GameDetail {
   id: number
@@ -298,7 +298,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         {!loading && !notFound && game && (
           <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-4">
             <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border-subtle">
-              <h3 className="font-semibold text-brand-text">Dienste</h3>
+              <h3 className={SUBSECTION_TITLE}>Dienste</h3>
               {canEdit && (
                 <button
                   onClick={() => setShowAddSlot(true)}

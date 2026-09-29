@@ -10,7 +10,7 @@ import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaults
 import DeleteReasonFields, { deletionPayload } from '../components/DeleteReasonFields'
 import { errorMessage } from '../lib/errors'
 import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER } from '../lib/buttonStyles'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 const WEEKDAY_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
@@ -485,7 +485,7 @@ export default function AdminTrainingsPage() {
                   {expandedSeries.has(s.id) && (
                     <div className="border-t border-brand-border-subtle px-4 py-3 bg-white/40">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <h3 className="text-sm font-semibold text-brand-text flex items-center gap-1.5">
+                        <h3 className={`${SUBSECTION_TITLE} flex items-center gap-1.5`}>
                           <Ban className="w-4 h-4 text-brand-text-muted" /> Dauerhaft abgemeldete Spieler
                         </h3>
                         <button

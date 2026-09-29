@@ -15,7 +15,7 @@ import NumberSpinner from '../components/NumberSpinner'
 import { BEITRAGS_KATEGORIEN, kategorieLabel } from '../lib/beitragsKategorien'
 import { errorStatus } from '../lib/errors'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, INPUT, BTN_SECONDARY, LABEL, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
-import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const BTN_DANGER_SM = 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -126,7 +126,7 @@ function VereinTab() {
         </div>
 
         <div className="pt-2 border-t border-brand-border-subtle">
-          <h3 className="text-sm font-semibold text-brand-text mb-3">SEPA-Stammdaten</h3>
+          <h3 className={`${SUBSECTION_TITLE} mb-3`}>SEPA-Stammdaten</h3>
           {!isUnlocked && (
             <div className="mb-3 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
               {sepaEnv
@@ -665,7 +665,7 @@ function BeitraegeTab() {
         const f = forms[kat] ?? { datum: '', betrag: '' }
         return (
           <div key={kat} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-4">
-            <h3 className="text-sm font-semibold text-brand-text mb-3">{kategorieLabel(kat)}</h3>
+            <h3 className={`${SUBSECTION_TITLE} mb-3`}>{kategorieLabel(kat)}</h3>
             <table className="w-full text-sm mb-3">
               <thead>
                 <tr className="text-brand-text-muted text-xs uppercase text-left">
@@ -780,7 +780,7 @@ function BewirtungKachel() {
 
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
-      <h2 className="text-sm font-semibold text-brand-text mb-4">Bewirtung</h2>
+      <h2 className={`${SUBSECTION_TITLE} mb-4`}>Bewirtung</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="bewirtung-verhaeltnis" className={LABEL}>Kuchen je Spiel</label>
@@ -950,7 +950,7 @@ function AusrichterKachel() {
 
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5">
-      <h2 className="text-sm font-semibold text-brand-text mb-4">Ausrichter</h2>
+      <h2 className={`${SUBSECTION_TITLE} mb-4`}>Ausrichter</h2>
       {error && (
         <div className="mb-3 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
       )}

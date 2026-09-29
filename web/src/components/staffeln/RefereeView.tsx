@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import type { RefereeStat } from '../../lib/staffeln'
+import { SUBSECTION_TITLE } from '../../lib/typography'
 
 const TH = 'bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left'
 const TD = 'px-4 py-3 text-sm text-brand-text'
@@ -24,7 +25,7 @@ export default function RefereeView({ rows }: { rows: RefereeStat[] }) {
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-4 py-3 border-b border-brand-border-subtle">
-        <h2 className="text-sm font-medium text-brand-text">Schiedsrichter</h2>
+        <h2 className={SUBSECTION_TITLE}>Schiedsrichter</h2>
         <p className="text-xs text-brand-text-muted mt-1">
           Gezählt sind die Strafen des Spiels — beide Mannschaften zusammen. Das ist keine
           Bewertung der Person.

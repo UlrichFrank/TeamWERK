@@ -2,6 +2,7 @@ import { FileText, Home, MapPin } from 'lucide-react'
 import type { MatrixCell, MatrixGame, TeamMatrix } from '../../lib/staffeln'
 import { isOwnPlayer } from '../../lib/staffelHighlight'
 import { useMediaQuery } from '../../lib/useMediaQuery'
+import { SUBSECTION_TITLE } from '../../lib/typography'
 
 // Sechs Werte je Begegnung. Ohne "Blau": bwhv_player_games.blue wird konstant
 // als 0 geschrieben, der Parser liest keine blauen Karten — eine Spalte aus
@@ -57,7 +58,7 @@ export default function Spielmatrix({ matrix, ownPlayers, onOpenGame }: {
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-4 py-3 border-b border-brand-border-subtle">
-        <h2 className="text-sm font-medium text-brand-text">{matrix.team}</h2>
+        <h2 className={SUBSECTION_TITLE}>{matrix.team}</h2>
         <p className="text-xs text-brand-text-muted mt-1">
           {matrix.games.length} {matrix.games.length === 1 ? 'Spiel' : 'Spiele'}, davon{' '}
           {matrix.reportGames} mit Spielbericht.
