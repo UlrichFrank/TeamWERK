@@ -2,7 +2,7 @@
 
 ## 1. Fundament: Rollen-Konstanten und Gate
 
-- [ ] 1.1 `web/src/lib/typography.ts` anlegen: `PAGE_TITLE`, `ENTRY_TITLE`, `MODAL_TITLE`, `SECTION_TITLE`, `SUBSECTION_TITLE`, `OVERLINE`, `MENU_ITEM`, `MENU_ITEM_DANGER` mit den Werten aus design.md §2 und je einem Kommentar zur Rolle. Prüfen: `pnpm -C web exec tsc -b` ist grün.
+- [x] 1.1 `web/src/lib/typography.ts` anlegen: `PAGE_TITLE`, `ENTRY_TITLE`, `MODAL_TITLE`, `SECTION_TITLE`, `SUBSECTION_TITLE`, `OVERLINE`, `MENU_ITEM`, `MENU_ITEM_DANGER` mit den Werten aus design.md §2 und je einem Kommentar zur Rolle. Prüfen: `pnpm -C web exec tsc -b` ist grün.
 - [ ] 1.2 `web/src/lib/__tests__/typography.gate.test.ts` nach dem Vorbild von `buttonStyles.gate.test.ts`. Er prüft Überschriften-Regel und Menüeintrag-Regel (design.md §3), enthält eine Allowlist mit Verwaist-Check, Poison-Tests (handgesetzte `<h2>` wird gemeldet; `${SECTION_TITLE} mb-4 truncate` besteht; `<h2>` ohne Klasse wird gemeldet; `role="menuitem"` ohne Konstante wird gemeldet) und eine Liste `MIGRATION_PENDING`, die genau die heute verstoßenden Dateien enthält. Die Liste schrumpft je Gruppe; ein Eintrag, dessen Datei nicht mehr verstößt, lässt den Test fehlschlagen. Prüfen: `pnpm -C web exec vitest run src/lib/__tests__/typography.gate.test.ts` ist grün.
 - [ ] 1.3 `docs/agent/05-frontend.md`: Abschnitt „Typografie-Rollen“ mit Tabelle der Rollen (Rolle → Verwendung, ohne Strings abzutippen), Fundstelle `lib/typography.ts`, Verweis auf das Gate. Die Zeilen „Seitentitel“ und „Modal-Kopf“ unter Styling verweisen auf die Konstanten. `docs/agent/08-verification.md` bekommt einen Eintrag „Typografie-Gate“. Prüfen: Doku gelesen und ohne Widerspruch zu design.md.
 
