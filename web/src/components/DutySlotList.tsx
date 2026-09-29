@@ -14,7 +14,7 @@ import PersonChip from './PersonChip'
 import ActionMenu from './ActionMenu'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
-import { BTN_PRIMARY, BTN_DANGER, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, BTN_SMALL_DANGER, INPUT } from '../lib/buttonStyles'
 import { MODAL_TITLE } from '../lib/typography'
 
 // Bewusst schlank: Board liefert nur Namen inline; Avatar/Kontakt lädt
@@ -275,12 +275,12 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
                       Kommentieren) wandert ins ⋮-Menü — bisher nur mobile. */}
                   <div className="hidden sm:flex items-center justify-end gap-2">
                     {!hideClaimActions && s.claimed_by_me && !isPast && (
-                      <button onClick={() => unclaim(s.id)} className="text-xs bg-brand-danger text-white font-medium px-2 py-1 rounded hover:bg-brand-danger/90 transition-colors">
+                      <button onClick={() => unclaim(s.id)} className={BTN_SMALL_DANGER}>
                         Austragen
                       </button>
                     )}
                     {!hideClaimActions && !s.claimed_by_me && s.vacancies > 0 && !isPast && (
-                      <button onClick={() => claim(s.id)} className="text-xs bg-brand-yellow text-brand-black font-medium px-2 py-1 rounded hover:bg-brand-black hover:text-brand-yellow transition-colors">
+                      <button onClick={() => claim(s.id)} className={BTN_SMALL}>
                         Eintragen
                       </button>
                     )}

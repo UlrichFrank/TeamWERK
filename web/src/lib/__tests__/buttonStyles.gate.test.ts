@@ -39,6 +39,8 @@ const METRICS: { constant: string; metric: string }[] = [
   { constant: 'BTN_DANGER', metric: 'bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium' },
   { constant: 'BTN_SECONDARY', metric: 'border border-brand-border text-brand-text rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium' },
   { constant: 'BTN_SMALL', metric: 'bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium' },
+  { constant: 'BTN_SMALL_DANGER', metric: 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium' },
+  { constant: 'BTN_PRIMARY_SPLIT_MAIN', metric: 'bg-brand-yellow text-brand-black rounded-l-md border-r border-brand-black/20 px-4 py-2.5 sm:py-2 text-sm font-medium' },
   { constant: 'INPUT', metric: 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle' },
 ]
 

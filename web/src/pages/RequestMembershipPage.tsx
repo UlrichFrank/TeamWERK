@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { INPUT, LABEL } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 import { ENTRY_TITLE, PAGE_TITLE } from '../lib/typography'
 
 const Sidebar = () => (
@@ -140,7 +140,7 @@ export default function RequestMembershipPage() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-semibold hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className={`w-full ${BTN_PRIMARY}`}
               >
                 Antrag absenden
               </button>

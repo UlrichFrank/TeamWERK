@@ -5,7 +5,7 @@ import { Member, Parent, Phone, Visibility, ChangeDraft } from '../../pages/Prof
 import { UserContact } from '../../pages/ChildProfilePage'
 import ImageCropModal from '../ImageCropModal'
 import Toggle from '../Toggle'
-import { BTN_PRIMARY, INPUT, LABEL } from '../../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_PRIMARY_SPLIT_CARET, BTN_PRIMARY_SPLIT_MAIN, INPUT, LABEL } from '../../lib/buttonStyles'
 import { MENU_ITEM_DANGER, SECTION_TITLE, SUBSECTION_TITLE } from '../../lib/typography'
 
 interface Props {
@@ -294,7 +294,7 @@ export default function ProfileProfilTab({
                 <button
                   onClick={() => photoInputRef.current?.click()}
                   disabled={photoUploading}
-                  className={`bg-brand-yellow text-brand-black px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${photoURL ? 'rounded-l-md border-r border-brand-black/20' : 'rounded-md'}`}
+                  className={photoURL ? BTN_PRIMARY_SPLIT_MAIN : BTN_PRIMARY}
                 >
                   {photoUploading ? 'Hochladen…' : 'Bild hochladen'}
                 </button>
@@ -304,7 +304,7 @@ export default function ProfileProfilTab({
                       onClick={() => setPhotoDropdown(v => !v)}
                       disabled={photoUploading}
                       aria-label="Weitere Optionen"
-                      className="bg-brand-yellow text-brand-black rounded-r-md px-2 py-1.5 hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className={BTN_PRIMARY_SPLIT_CARET}
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>
@@ -444,7 +444,7 @@ export default function ProfileProfilTab({
                 <button
                   onClick={handleAddPhone}
                   disabled={!newPhone.number}
-                  className="bg-brand-yellow text-brand-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   Hinzufügen
                 </button>

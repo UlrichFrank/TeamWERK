@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react'
 import axios from 'axios'
-import { INPUT } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT } from '../lib/buttonStyles'
 import { ENTRY_TITLE } from '../lib/typography'
 
 export default function ForgotPasswordPage() {
@@ -30,7 +30,7 @@ export default function ForgotPasswordPage() {
             type="text" value={email} onChange={e => setEmail(e.target.value)} required placeholder="E-Mail oder Nutzername"
             className={INPUT}
           />
-          <button type="submit" className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
+          <button type="submit" className={`w-full ${BTN_PRIMARY}`}>
             Link anfordern
           </button>
         </form>

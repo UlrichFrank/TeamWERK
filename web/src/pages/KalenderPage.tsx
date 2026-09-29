@@ -16,7 +16,7 @@ import EventSearchInput from '../components/EventSearchInput'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import TeamFilter from '../components/TeamFilter'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
-import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, BTN_SECONDARY, BTN_DANGER, BTN_PRIMARY, LABEL, HEADER_GROUP } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_GROUP, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, LABEL } from '../lib/buttonStyles'
 
 import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
@@ -1172,7 +1172,7 @@ export default function KalenderPage() {
           onClick={goToToday}
           disabled={year === now.getFullYear() && month === now.getMonth()}
           title="Zum aktuellen Monat springen"
-          className="flex items-center gap-1.5 rounded-md px-3 py-2.5 sm:py-2 text-sm font-medium bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={`${BTN_PRIMARY} flex items-center gap-1.5`}
         >
           <CalendarClock className="w-4 h-4" />
           <span>Heute</span>

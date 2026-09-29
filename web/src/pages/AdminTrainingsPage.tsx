@@ -9,7 +9,7 @@ import MapsLink from '../components/MapsLink'
 import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import DeleteReasonFields, { deletionPayload } from '../components/DeleteReasonFields'
 import { errorMessage } from '../lib/errors'
-import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY, INPUT } from '../lib/buttonStyles'
 import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
@@ -490,7 +490,7 @@ export default function AdminTrainingsPage() {
                         </h3>
                         <button
                           onClick={() => openAbmeldModal(s)}
-                          className="bg-brand-yellow text-brand-black rounded-md px-3 py-2.5 sm:py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                          className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
                         >
                           Spieler abmelden
                         </button>

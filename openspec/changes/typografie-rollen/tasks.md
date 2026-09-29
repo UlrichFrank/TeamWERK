@@ -25,7 +25,7 @@
 
 ## 6. Frei nachgebaute Buttons und Tabs
 
-- [ ] 6.1 Gefüllte Buttons ohne Konstante nach Position umstellen (design.md §4): `AdminDutyTemplatesPage` Split-Button → `HEADER_SPLIT_MAIN`/`HEADER_SPLIT_CARET`, `KalenderPage` „Heute“ → `BTN_PRIMARY`, `ProfileProfilTab` Bild-Button, `AdminKaderPage` Löschen → `BTN_DANGER`, `ChatPage` (Modal-Aktionen `w-full` + `BTN_PRIMARY`, Senden-Button), `ForgotPasswordPage`/`RegisterPage`/`ResetPasswordPage`/`RequestMembershipPage` → `BTN_PRIMARY` + `w-full`, `TerminePage` Z. ~1046 sowie die Funde mit `py-1.5 text-sm`/`py-1 text-sm` in `MemberStammdatenTab`, `MeinTeamPage`, `SpieltagDetailModal`, `MembersPage`, `VideosPage`, `AdminTrainingsPage`, `UpdateBanner`. Prüfen: `buttonStyles.gate.test.ts` grün, `pnpm -C web test` grün.
+- [x] 6.1 Gefüllte Buttons ohne Konstante nach Position umstellen (design.md §4): `AdminDutyTemplatesPage` Split-Button → `HEADER_SPLIT_MAIN`/`HEADER_SPLIT_CARET`, `KalenderPage` „Heute“ → `BTN_PRIMARY`, `ProfileProfilTab` Bild-Button, `AdminKaderPage` Löschen → `BTN_DANGER`, `ChatPage` (Modal-Aktionen `w-full` + `BTN_PRIMARY`, Senden-Button), `ForgotPasswordPage`/`RegisterPage`/`ResetPasswordPage`/`RequestMembershipPage` → `BTN_PRIMARY` + `w-full`, `TerminePage` Z. ~1046 sowie die Funde mit `py-1.5 text-sm`/`py-1 text-sm` in `MemberStammdatenTab`, `MeinTeamPage`, `SpieltagDetailModal`, `MembersPage`, `VideosPage`, `AdminTrainingsPage`, `UpdateBanner`. Prüfen: `buttonStyles.gate.test.ts` grün, `pnpm -C web test` grün.
 - [ ] 6.2 Seiten-Tabs in `AdminTrainingsPage` auf `TAB_BAR`/`TAB`/`TAB_ACTIVE`/`TAB_INACTIVE` umstellen. Prüfen: vorhandene Tests der Seite grün.
 
 ## 7. Abschluss

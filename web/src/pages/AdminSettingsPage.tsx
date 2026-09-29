@@ -14,11 +14,8 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import NumberSpinner from '../components/NumberSpinner'
 import { BEITRAGS_KATEGORIEN, kategorieLabel } from '../lib/beitragsKategorien'
 import { errorStatus } from '../lib/errors'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, INPUT, BTN_SECONDARY, LABEL, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, BTN_SMALL_DANGER, INPUT, LABEL, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
-
-// ─── Shared styles ────────────────────────────────────────────────────────────
-const BTN_DANGER_SM = 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
 
 // ─── Verein Tab ───────────────────────────────────────────────────────────────
 
@@ -466,7 +463,7 @@ function SaisonsTab() {
                           <button
                             onClick={() => handleDelete(s.id)}
                             disabled={deleting === s.id}
-                            className={BTN_DANGER_SM}
+                            className={BTN_SMALL_DANGER}
                           >
                             {deleting === s.id ? 'Löschen…' : 'Löschen'}
                           </button>
@@ -1065,7 +1062,7 @@ function AusrichterKachel() {
                   ) : (
                     <>
                       <button type="button" onClick={() => { setEditId(a.id); setEditName(a.name) }} className={`${BTN_SMALL} mr-2`}>Umbenennen</button>
-                      <button type="button" onClick={() => toggleAktiv(a)} className={`${a.aktiv ? BTN_DANGER_SM : BTN_SMALL} mr-2`}>{a.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
+                      <button type="button" onClick={() => toggleAktiv(a)} className={`${a.aktiv ? BTN_SMALL_DANGER : BTN_SMALL} mr-2`}>{a.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
                       <button
                         type="button"
                         onClick={() => openDeleteConfirm(a)}
@@ -1348,7 +1345,7 @@ function StammvereineTab() {
                       <button
                         type="button"
                         onClick={() => toggleAktiv(v)}
-                        className={v.aktiv ? BTN_DANGER_SM : BTN_SMALL}
+                        className={v.aktiv ? BTN_SMALL_DANGER : BTN_SMALL}
                       >{v.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
                     </>
                   )}

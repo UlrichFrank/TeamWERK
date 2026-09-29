@@ -12,7 +12,7 @@ import HoursInput from '../components/HoursInput'
 import { errorData } from '../lib/errors'
 import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItems'
 import { dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
-import { HEADER_CTRL, HEADER_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
+import { HEADER_CTRL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, LABEL } from '../lib/buttonStyles'
 import { ChevronDown, RefreshCw, Plus } from 'lucide-react'
 import { MENU_ITEM, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
@@ -211,7 +211,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
               <button
                 type="button"
                 onClick={addItem}
-                className="inline-flex items-center gap-1 bg-brand-yellow text-brand-black rounded-l-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className={`${HEADER_SPLIT_MAIN} ${HEADER_PRIMARY}`}
               >
                 <Plus className="w-3.5 h-3.5" />Eintrag hinzufügen
               </button>
@@ -221,7 +221,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                 aria-label="Weitere Aktionen"
                 aria-expanded={showItemMenu}
                 aria-haspopup="menu"
-                className="flex items-center bg-brand-yellow text-brand-black rounded-r-md border-l border-l-brand-black/20 px-2 py-1.5 hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className={`${HEADER_SPLIT_CARET} ${HEADER_PRIMARY}`}
               >
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>

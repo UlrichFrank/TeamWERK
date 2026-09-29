@@ -12,7 +12,7 @@ import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import HoursInput from './HoursInput'
 import { resolveAnchorClock, clockDiffMinutes } from '../lib/duration'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
-import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER, LABEL } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 import { MODAL_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface GameDetail {
@@ -302,7 +302,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               {canEdit && (
                 <button
                   onClick={() => setShowAddSlot(true)}
-                  className="inline-flex items-center gap-1 text-sm bg-brand-yellow text-brand-black px-3 py-1.5 rounded-md font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
                 >
                   <Plus className="w-3.5 h-3.5" />Dienst hinzufügen
                 </button>

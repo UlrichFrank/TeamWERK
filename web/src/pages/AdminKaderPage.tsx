@@ -14,7 +14,7 @@ import StaffelPicker from '../components/StaffelPicker'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
 import { buildTeamLongName, compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
-import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, BTN_SECONDARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
 import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface Season {
@@ -799,7 +799,7 @@ export default function AdminKaderPage() {
               <button
                 onClick={handleDeleteKader}
                 disabled={deleting}
-                className="px-4 py-2 text-sm bg-brand-danger text-white font-medium rounded-md hover:bg-brand-danger/90 transition-colors disabled:opacity-50"
+                className={BTN_DANGER}
               >
                 {deleting ? 'Löschen…' : 'Löschen'}
               </button>

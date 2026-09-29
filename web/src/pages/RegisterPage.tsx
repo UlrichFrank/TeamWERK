@@ -2,7 +2,7 @@ import { useState, useEffect, FormEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import PasswordInput from '../components/forms/PasswordInput'
-import { INPUT, LABEL } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 import { ENTRY_TITLE } from '../lib/typography'
 
 export default function RegisterPage() {
@@ -108,7 +108,7 @@ export default function RegisterPage() {
           </div>
           <button
             type="submit"
-            className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+            className={`w-full ${BTN_PRIMARY}`}
           >
             Konto erstellen
           </button>
