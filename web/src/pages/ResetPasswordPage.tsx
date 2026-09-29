@@ -2,6 +2,8 @@ import { useState, FormEvent } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import PasswordInput from '../components/forms/PasswordInput'
+import { ENTRY_TITLE } from '../lib/typography'
+import { BTN_PRIMARY } from '../lib/buttonStyles'
 
 export default function ResetPasswordPage() {
   const [params] = useSearchParams()
@@ -23,7 +25,7 @@ export default function ResetPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-sm bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
-        <h1 className="text-xl font-bold mb-6 text-brand-text">Neues Passwort setzen</h1>
+        <h1 className={`${ENTRY_TITLE} mb-6`}>Neues Passwort setzen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">
@@ -39,7 +41,7 @@ export default function ResetPasswordPage() {
             placeholder="Neues Passwort"
           />
           <p className="text-xs text-brand-text-muted">Mindestens 12 Zeichen.</p>
-          <button type="submit" className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors">
+          <button type="submit" className={`w-full ${BTN_PRIMARY}`}>
             Passwort speichern
           </button>
         </form>

@@ -1,4 +1,5 @@
 import { BTN_PRIMARY } from '../../lib/buttonStyles'
+import { SECTION_TITLE } from '../../lib/typography'
 interface Member {
   dsgvo_verarbeitung?: boolean
   dsgvo_verarbeitung_date?: string
@@ -44,7 +45,7 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
     <div className="space-y-6">
       {/* Sichtbarkeit für Mitglieder */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text mb-1">Sichtbarkeit</h2>
+        <h2 className={`${SECTION_TITLE} mb-1`}>Sichtbarkeit</h2>
         <p className="text-xs text-brand-text-subtle mb-3">
           Wenn aktiviert, sehen auch Mitglieder anderer Mannschaften Namen und Rückmeldung
           dieses Mitglieds bei gemeinsamen Multi-Team-Terminen.
@@ -75,7 +76,7 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
 
       {/* DSGVO */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text mb-4">Datenschutz (DSGVO)</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Datenschutz (DSGVO)</h2>
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input

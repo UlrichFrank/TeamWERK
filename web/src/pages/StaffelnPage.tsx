@@ -25,6 +25,7 @@ import StandingsChart from '../components/staffeln/StandingsChart'
 import Spielmatrix from '../components/staffeln/Spielmatrix'
 import { GoalTablesView, FairPlayView, DistributionView } from '../components/staffeln/TeamStatsViews'
 import RefereeView from '../components/staffeln/RefereeView'
+import { PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 type Tab =
   | 'tabelle' | 'spielplan' | 'kreuztabelle' | 'verlauf'
@@ -177,7 +178,7 @@ export default function StaffelnPage() {
   if (staffeln.length === 0) {
     return (
       <div>
-        <h1 className="text-2xl font-bold text-brand-text mb-4">Staffeln</h1>
+        <h1 className={`${PAGE_TITLE} mb-4`}>Staffeln</h1>
           <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
             Für diese Saison ist noch keiner Mannschaft eine Staffel zugeordnet. Der Vorstand
             pflegt sie unter Verwaltung → Kader, direkt an der Mannschaft.
@@ -189,7 +190,7 @@ export default function StaffelnPage() {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <h1 className="text-2xl font-bold text-brand-text">Staffeln</h1>
+        <h1 className={PAGE_TITLE}>Staffeln</h1>
         <div className="flex items-center gap-2">
           <select
             className={HEADER_FIELD}
@@ -364,7 +365,7 @@ function VerlaufView({ staffelId, days, ownTeams, matrices, ownPlayers, onOpenGa
       <StandingsChart days={days} ownTeams={ownTeams} />
       {teams.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium text-brand-text">Spielerübersicht</h2>
+          <h2 className={SUBSECTION_TITLE}>Spielerübersicht</h2>
           <select
             className={HEADER_FIELD}
             value={auswahl}
@@ -617,7 +618,7 @@ function Ranking({
   return (
     <div className={CARD}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
-        <h2 className="text-sm font-medium text-brand-text">{title}</h2>
+        <h2 className={SUBSECTION_TITLE}>{title}</h2>
         {hint && <p className="text-xs text-brand-text-muted mt-1">{hint}</p>}
       </div>
       <ul>

@@ -12,8 +12,9 @@ import HoursInput from '../components/HoursInput'
 import { errorData } from '../lib/errors'
 import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItems'
 import { dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
-import { HEADER_CTRL, HEADER_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
+import { HEADER_CTRL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, LABEL } from '../lib/buttonStyles'
 import { ChevronDown, RefreshCw, Plus } from 'lucide-react'
+import { MENU_ITEM, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface DutyType {
   id: number
@@ -204,13 +205,13 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
 
       <div className="bg-brand-surface-card rounded-xl border border-brand-border-subtle p-4">
         <div className="flex items-center justify-between mb-4 gap-3">
-          <h3 className="font-semibold text-brand-text">Dienst-Einträge</h3>
+          <h3 className={SUBSECTION_TITLE}>Dienst-Einträge</h3>
           <div className="relative shrink-0">
             <div className="flex">
               <button
                 type="button"
                 onClick={addItem}
-                className="inline-flex items-center gap-1 bg-brand-yellow text-brand-black rounded-l-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className={`${HEADER_SPLIT_MAIN} ${HEADER_PRIMARY}`}
               >
                 <Plus className="w-3.5 h-3.5" />Eintrag hinzufügen
               </button>
@@ -220,7 +221,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                 aria-label="Weitere Aktionen"
                 aria-expanded={showItemMenu}
                 aria-haspopup="menu"
-                className="flex items-center bg-brand-yellow text-brand-black rounded-r-md border-l border-l-brand-black/20 px-2 py-1.5 hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className={`${HEADER_SPLIT_CARET} ${HEADER_PRIMARY}`}
               >
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
@@ -231,7 +232,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                   type="button"
                   role="menuitem"
                   onClick={refreshFromDutyTypes}
-                  className="w-full flex items-start gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                  className={`${MENU_ITEM} !items-start`}
                 >
                   <RefreshCw className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
@@ -629,7 +630,7 @@ export default function AdminDutyTemplatesPage() {
     <div className="max-w-4xl">
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-          <h1 className="text-2xl font-bold">Dienstplan-Vorlagen</h1>
+          <h1 className={PAGE_TITLE}>Dienstplan-Vorlagen</h1>
           <button
             onClick={openCreateModal}
             className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}

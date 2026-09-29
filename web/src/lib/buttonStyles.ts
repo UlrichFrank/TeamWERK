@@ -132,6 +132,35 @@ export const BTN_SMALL =
   'hover:bg-brand-black hover:text-brand-yellow transition-colors ' +
   'disabled:opacity-40 disabled:cursor-not-allowed'
 
+/**
+ * Destruktiver kleiner Button in einer Tabellen- oder Listenzeile (Austragen,
+ * Dokument löschen) — Maße wie `BTN_SMALL`, Farbe wie `BTN_DANGER`.
+ */
+export const BTN_SMALL_DANGER =
+  'bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium ' +
+  'hover:bg-brand-danger/90 transition-colors ' +
+  'disabled:opacity-40 disabled:cursor-not-allowed'
+
+/**
+ * Linke Hälfte eines Split-Buttons in Primary-Größe (Karten-Aktion mit
+ * Zusatzmenü, etwa „Bild hochladen“ + Entfernen). Gegenstück zu
+ * `HEADER_SPLIT_MAIN` außerhalb der Kopfzeile.
+ */
+export const BTN_PRIMARY_SPLIT_MAIN =
+  'bg-brand-yellow text-brand-black rounded-l-md border-r border-brand-black/20 px-4 py-2.5 sm:py-2 text-sm font-medium ' +
+  'hover:bg-brand-black hover:text-brand-yellow transition-colors ' +
+  'disabled:opacity-40 disabled:cursor-not-allowed'
+
+/**
+ * Rechte Hälfte (Caret). Ohne Text wäre sie flacher als die linke Hälfte;
+ * `inline-flex items-center` im `inline-flex`-Elternteil streckt sie auf
+ * dieselbe Höhe.
+ */
+export const BTN_PRIMARY_SPLIT_CARET =
+  'inline-flex items-center bg-brand-yellow text-brand-black rounded-r-md px-2 ' +
+  'hover:bg-brand-black hover:text-brand-yellow transition-colors ' +
+  'disabled:opacity-40 disabled:cursor-not-allowed'
+
 /** Destruktive Formular- und Modal-Aktion. */
 export const BTN_DANGER =
   'bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium ' +

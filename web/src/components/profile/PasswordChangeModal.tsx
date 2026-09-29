@@ -6,6 +6,7 @@ import { useEscapeKey } from '../../lib/useEscapeKey'
 import { useDialogA11y } from '../../lib/useDialogA11y'
 import { errorStatus } from '../../lib/errors'
 import PasswordInput from '../forms/PasswordInput'
+import { MODAL_TITLE } from '../../lib/typography'
 
 interface Props {
   onClose: () => void
@@ -60,7 +61,7 @@ export default function PasswordChangeModal({ onClose, logout }: Props) {
         className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Passwort ändern</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Passwort ändern</h2>
           <button type="button" onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

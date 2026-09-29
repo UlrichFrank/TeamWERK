@@ -5,6 +5,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 import { BTN_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 const MAX_OPTIONS = 10
 const MIN_OPTIONS_ON_SCREEN = 2
@@ -88,7 +89,7 @@ export default function ChatPollCreateModal({ convId, onClose, onCreated }: Prop
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Umfrage erstellen</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Umfrage erstellen</h2>
           <button
             onClick={onClose}
             aria-label="Schließen"

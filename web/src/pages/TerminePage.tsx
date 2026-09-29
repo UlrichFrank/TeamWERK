@@ -22,6 +22,7 @@ import EventSearchInput from '../components/EventSearchInput'
 import FilterEmptyState from '../components/FilterEmptyState'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
 import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, BTN_SECONDARY, INPUT, HEADER_GROUP } from '../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
@@ -588,7 +589,7 @@ export default function TerminePage() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text shrink-0">Termine</h1>
+        <h1 className={`${PAGE_TITLE} shrink-0`}>Termine</h1>
         <div className={HEADER_GROUP}>
           {/* Auch auf Mobile bedienbar: als Icon-Button mit Zähler braucht der
               Filter nicht mehr den Platz, an dem das frühere <select> mit dem
@@ -988,7 +989,7 @@ export default function TerminePage() {
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h2 id="matrix-rsvp-title" className="text-base font-semibold text-brand-text">{m.is_self ? 'Ich' : m.name}</h2>
+                  <h2 id="matrix-rsvp-title" className={MODAL_TITLE}>{m.is_self ? 'Ich' : m.name}</h2>
                   <p className="text-sm text-brand-text-muted">
                     {typeLabel} {formatColumnDate(ev.date)} {ev.time}{ev.title && ev.event_type !== 'training' ? ` – ${ev.title}` : ''}
                   </p>
@@ -1023,7 +1024,7 @@ export default function TerminePage() {
       {pendingRSVP && (
         <div className="fixed inset-0 z-50 bg-brand-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
-            <h2 className="text-base font-semibold text-brand-text mb-1">
+            <h2 className={`${MODAL_TITLE} mb-1`}>
               {pendingRSVP.status === 'declined' ? 'Absagen' : 'Vielleicht'}
               {pendingChildName && <span className="font-normal text-brand-text-muted"> – {pendingChildName}</span>}
             </h2>

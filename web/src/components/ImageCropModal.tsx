@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { X, ZoomIn } from 'lucide-react'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 const CANVAS_SIZE = 320
 const EXPORT_SIZE = 600
@@ -266,7 +267,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id={titleId} className="font-semibold text-brand-text">Bildausschnitt wählen</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Bildausschnitt wählen</h2>
           <button onClick={onCancel} className="text-brand-text-muted hover:text-brand-text" aria-label="Schließen">
             <X className="w-5 h-5" />
           </button>

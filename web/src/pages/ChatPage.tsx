@@ -67,9 +67,11 @@ import CreatorExitChoiceModal from "../components/CreatorExitChoiceModal";
 import ChatPollCreateModal from "../components/ChatPollCreateModal";
 import ChatPollCard from "../components/ChatPollCard";
 import ChatPollVotesModal from "../components/ChatPollVotesModal";
-import { BTN_SMALL, HEADER_CTRL_ICON, HEADER_NEUTRAL, INPUT, LABEL } from '../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL_ICON, HEADER_NEUTRAL, INPUT, LABEL } from '../lib/buttonStyles'
 import ChatSearchModal, { type SearchHit } from "../components/ChatSearchModal";
 import ActionMenu from "../components/ActionMenu";
+import { MODAL_TITLE } from '../lib/typography';
+import { PAGE_TITLE } from '../lib/typography';
 
 interface ConvMember {
   id: number;
@@ -1644,7 +1646,7 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-brand-text flex items-center gap-2">
+        <h1 className={`${PAGE_TITLE} flex items-center gap-2`}>
           Nachrichten
         </h1>
         <button
@@ -1695,7 +1697,7 @@ export default function ChatPage() {
               <div className="p-3 border-b border-brand-border-subtle">
                 <button
                   onClick={() => setShowNewModal(true)}
-                  className="w-full bg-brand-yellow text-brand-black rounded-md px-3 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center justify-center gap-1.5"
+                  className={`w-full ${BTN_PRIMARY} flex items-center justify-center gap-1.5`}
                 >
                   <Plus className="w-4 h-4" />
                   Neues Gespräch
@@ -1754,7 +1756,7 @@ export default function ChatPage() {
                 <div className="p-3 border-b border-brand-border-subtle">
                   <button
                     onClick={() => setShowBroadcastModal(true)}
-                    className="w-full bg-brand-yellow text-brand-black rounded-md px-3 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors flex items-center justify-center gap-1.5"
+                    className={`w-full ${BTN_PRIMARY} flex items-center justify-center gap-1.5`}
                   >
                     <Megaphone className="w-4 h-4" />
                     Mitteilung senden
@@ -3044,7 +3046,7 @@ function NewConversationModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">Neues Gespräch</h2>
+          <h2 className={MODAL_TITLE}>Neues Gespräch</h2>
           <button onClick={onClose} aria-label="Schließen">
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>
@@ -3167,7 +3169,7 @@ function NewConversationModal({
             selected.length === 0 ||
             (type === "group" && !groupName.trim())
           }
-          className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={`w-full ${BTN_PRIMARY}`}
         >
           {loading ? "Erstelle…" : "Gespräch starten"}
         </button>
@@ -3321,7 +3323,7 @@ function BroadcastModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">
+          <h2 className={MODAL_TITLE}>
             Mitteilung senden
           </h2>
           <button onClick={onClose} aria-label="Schließen">
@@ -3437,7 +3439,7 @@ function BroadcastModal({
         <button
           onClick={submit}
           disabled={loading || (!body.trim() && !image) || picked.size === 0}
-          className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={`w-full ${BTN_PRIMARY}`}
         >
           {loading ? "Sende…" : "Mitteilung senden"}
         </button>
@@ -3478,7 +3480,7 @@ function BroadcastEditModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">
+          <h2 className={MODAL_TITLE}>
             Mitteilung bearbeiten
           </h2>
           <button onClick={onClose} aria-label="Schließen">
@@ -3502,7 +3504,7 @@ function BroadcastEditModal({
         <button
           onClick={submit}
           disabled={loading || !body.trim()}
-          className="w-full bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={`w-full ${BTN_PRIMARY}`}
         >
           {loading ? "Speichere…" : "Speichern"}
         </button>

@@ -14,6 +14,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { openBlobNatively } from '../lib/openFileNatively'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 import { BTN_DANGER, BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ function NewFolderModal({ parentId, onCreated, onClose }: {
     <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="font-semibold text-brand-text">Neuer Ordner</h2>
+          <h2 className={MODAL_TITLE}>Neuer Ordner</h2>
           <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
@@ -165,7 +166,7 @@ function UploadModal({ folderId, onUploaded, onClose }: {
     <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="font-semibold text-brand-text">Datei hochladen</h2>
+          <h2 className={MODAL_TITLE}>Datei hochladen</h2>
           <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
         </div>
         <div className="space-y-4">
@@ -339,7 +340,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
     <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="font-semibold text-brand-text flex items-center gap-2">
+          <h2 className={`${MODAL_TITLE} flex items-center gap-2`}>
             <Lock className="w-4 h-4" />Berechtigungen
           </h2>
           <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
@@ -548,7 +549,7 @@ function RenameModal({ type, id, currentName, onRenamed, onClose }: {
     <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="font-semibold text-brand-text">Umbenennen</h2>
+          <h2 className={MODAL_TITLE}>Umbenennen</h2>
           <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
         </div>
         <form onSubmit={submit} className="space-y-4">
@@ -732,7 +733,7 @@ export default function DocumentsPage() {
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-brand-text">Dokumente</h1>
+            <h1 className={PAGE_TITLE}>Dokumente</h1>
             {/* Breadcrumb only when inside a subfolder */}
             {breadcrumb.length > 1 && (
               <nav className="flex items-center gap-1 flex-wrap text-sm mt-1">
@@ -951,7 +952,7 @@ export default function DocumentsPage() {
       {confirmDelete && (
         <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
-            <h2 className="font-semibold text-brand-text mb-2">Löschen bestätigen</h2>
+            <h2 className={`${MODAL_TITLE} mb-2`}>Löschen bestätigen</h2>
             <p className="text-sm text-brand-text-muted mb-4">„{confirmDelete.name}" wirklich löschen?</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmDelete(null)} className={BTN_SECONDARY}>Abbrechen</button>

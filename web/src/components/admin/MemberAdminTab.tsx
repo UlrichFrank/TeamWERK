@@ -4,6 +4,7 @@ import { api } from '../../lib/api'
 import { isLikelyNameMatch } from '../../lib/nameMatch'
 import SearchableSelect from '../SearchableSelect'
 import { BTN_PRIMARY, LABEL } from '../../lib/buttonStyles'
+import { SECTION_TITLE } from '../../lib/typography'
 
 interface User {
   id: number
@@ -112,7 +113,7 @@ export default function MemberAdminTab({
     <div className="space-y-6">
       {/* Nutzer verknüpfen */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text mb-4">Nutzer verknüpfen</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Nutzer verknüpfen</h2>
 
         {(currentUser || linkedInvitation) && (
           <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm">
@@ -150,7 +151,7 @@ export default function MemberAdminTab({
 
       {/* Willkommensmail */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text mb-4">Willkommensmail</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Willkommensmail</h2>
 
         {welcomeEmailSentAt ? (
           <div className="flex items-center gap-2 p-3 bg-brand-success-light border border-brand-success/30 rounded-lg text-sm">

@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface EditModalProps {
   isOpen: boolean
@@ -35,7 +36,7 @@ export default function EditModal({ isOpen, title, onClose, onSave, isSaving = f
         className={`relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu ${maxWidthClass} mx-4 w-full max-h-[90vh] overflow-y-auto`}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">{title}</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>{title}</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

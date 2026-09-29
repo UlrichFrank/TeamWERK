@@ -14,6 +14,7 @@ import LineupBadge from '../components/LineupBadge'
 import LineupCheckbox from '../components/LineupCheckbox'
 import type { LineupState } from '../lib/lineup'
 import { BTN_SECONDARY, BTN_DANGER, INPUT } from '../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
@@ -391,7 +392,7 @@ export default function TermineDetailPage() {
   const declineModal = declineTarget ? (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40" onClick={() => setDeclineTarget(null)}>
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-        <h2 className="font-semibold text-brand-text mb-1">Absagen für {declineTarget.name}</h2>
+        <h2 className={`${MODAL_TITLE} mb-1`}>Absagen für {declineTarget.name}</h2>
         <p className="text-sm text-brand-text-muted mb-4">Grund angeben (optional)</p>
         <input
           ref={declineInputRef}
@@ -435,7 +436,7 @@ export default function TermineDetailPage() {
           <div className="flex items-start gap-3">
             <Dumbbell className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
             <div className="flex-1 min-w-0">
-              <h1 className={`text-2xl font-bold text-brand-text ${session.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>
+              <h1 className={`${PAGE_TITLE} ${session.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>
                 {fmtDate(session.date)}
               </h1>
               {session.status === 'cancelled' && (
@@ -579,7 +580,7 @@ export default function TermineDetailPage() {
         <div className="flex items-start gap-3">
           <Icon className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold text-brand-text">{fmtDate(g.date)}</h1>
+            <h1 className={PAGE_TITLE}>{fmtDate(g.date)}</h1>
             <p className="text-brand-text-muted mt-1">{gameLabel}</p>
             <div className="mt-3 flex items-center gap-2 text-sm text-brand-text-muted">
               <Clock className="w-4 h-4" />
@@ -820,7 +821,7 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
     <div className="bg-brand-surface-card rounded-xl shadow overflow-hidden">
       <div className="h-1 bg-brand-yellow" />
       <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="font-semibold text-brand-text">Teilnahme</h2>
+        <h2 className={SECTION_TITLE}>Teilnahme</h2>
         {lineupMap !== undefined && (
           <LineupBadge
             state={lineupAnySet ? 'in' : 'open'}

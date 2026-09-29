@@ -16,6 +16,7 @@ import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, se
 import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_GROUP } from '../lib/buttonStyles'
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
 import AushilfeBadge from '../components/AushilfeBadge'
+import { PAGE_TITLE } from '../lib/typography'
 
 interface BoardGroup {
   game_id: number | null
@@ -271,7 +272,7 @@ export default function DutyPage() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text shrink-0">Dienste</h1>
+        <h1 className={`${PAGE_TITLE} shrink-0`}>Dienste</h1>
         <div className={HEADER_GROUP}>
           {/* Nur ab zwei Mannschaften — bei einer einzigen filtert der Knopf nichts.
               Auf Mobile bedienbar (Icon + Zähler), anders als das frühere <select>. */}

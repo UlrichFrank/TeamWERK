@@ -5,6 +5,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
 import { GENDER_LABEL } from '../lib/teamName'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface Season {
   id: number
@@ -136,7 +137,7 @@ export default function CopyKaderModal({ toSeasonId, toSeasonName, onDone, onClo
         className="bg-white rounded-xl shadow-2xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] overflow-y-auto"
       >
         <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-          <h2 id={titleId} className="font-semibold text-base text-brand-text">Kader kopieren → {toSeasonName}</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Kader kopieren → {toSeasonName}</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

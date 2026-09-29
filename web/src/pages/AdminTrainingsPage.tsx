@@ -9,7 +9,8 @@ import MapsLink from '../components/MapsLink'
 import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import DeleteReasonFields, { deletionPayload } from '../components/DeleteReasonFields'
 import { errorMessage } from '../lib/errors'
-import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 const WEEKDAY_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
@@ -350,17 +351,15 @@ export default function AdminTrainingsPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-brand-text mb-6">Trainings verwalten</h1>
+      <h1 className={`${PAGE_TITLE} mb-6`}>Trainings verwalten</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-brand-surface-card rounded-lg p-1 border border-brand-border-subtle w-fit">
+      <div className={`${TAB_BAR} mb-6`}>
         {(['serien', 'einzeltermine'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-              activeTab === tab ? 'bg-brand-yellow text-brand-black' : 'text-brand-text-muted hover:text-brand-text'
-            }`}
+            className={`${TAB} ${activeTab === tab ? TAB_ACTIVE : TAB_INACTIVE}`}
           >
             {tab === 'serien' ? 'Trainingsserien' : 'Einzeltermine'}
           </button>
@@ -380,7 +379,7 @@ export default function AdminTrainingsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-black/40" onClick={() => closeDeleteConfirm()}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-brand-text text-lg">
+              <h2 className={MODAL_TITLE}>
                 {deleteConfirm.type === 'series' ? 'Serie löschen' : 'Einzeltermin löschen'}
               </h2>
               <button onClick={() => closeDeleteConfirm()} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
@@ -484,12 +483,12 @@ export default function AdminTrainingsPage() {
                   {expandedSeries.has(s.id) && (
                     <div className="border-t border-brand-border-subtle px-4 py-3 bg-white/40">
                       <div className="flex items-center justify-between gap-2 mb-2">
-                        <h3 className="text-sm font-semibold text-brand-text flex items-center gap-1.5">
+                        <h3 className={`${SUBSECTION_TITLE} flex items-center gap-1.5`}>
                           <Ban className="w-4 h-4 text-brand-text-muted" /> Dauerhaft abgemeldete Spieler
                         </h3>
                         <button
                           onClick={() => openAbmeldModal(s)}
-                          className="bg-brand-yellow text-brand-black rounded-md px-3 py-2.5 sm:py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                          className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
                         >
                           Spieler abmelden
                         </button>
@@ -582,7 +581,7 @@ export default function AdminTrainingsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-black/40" onClick={() => setSeriesModal(null)}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-brand-text text-lg">
+              <h2 className={MODAL_TITLE}>
                 {isNewSeries ? 'Neue Trainingsserie' : 'Serie bearbeiten'}
               </h2>
               <button onClick={() => setSeriesModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
@@ -714,7 +713,7 @@ export default function AdminTrainingsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-black/40" onClick={() => setAbmeldModal(null)}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-brand-text text-lg">Spieler abmelden</h2>
+              <h2 className={MODAL_TITLE}>Spieler abmelden</h2>
               <button onClick={() => setAbmeldModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -778,7 +777,7 @@ export default function AdminTrainingsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-black/40" onClick={() => setSessionModal(null)}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-brand-text text-lg">
+              <h2 className={MODAL_TITLE}>
                 {isNewSession ? 'Neuer Einzeltermin' : 'Termin bearbeiten'}
               </h2>
               <button onClick={() => setSessionModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">

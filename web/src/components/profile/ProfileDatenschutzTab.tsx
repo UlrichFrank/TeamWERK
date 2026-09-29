@@ -3,6 +3,7 @@ import { api } from '../../lib/api'
 import Toggle from '../Toggle'
 import { Member, ChangeDraft } from '../../pages/ProfilePage'
 import { BTN_DANGER, BTN_PRIMARY } from '../../lib/buttonStyles'
+import { SECTION_TITLE } from '../../lib/typography'
 
 interface Props {
   ownMember: Member
@@ -142,7 +143,7 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
       {/* Sichtbarkeit */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <div className="p-6 pb-2">
-          <h2 className="font-semibold text-brand-text-muted mb-1">Sichtbarkeit</h2>
+          <h2 className={`${SECTION_TITLE} mb-1`}>Sichtbarkeit</h2>
           <p className="text-xs text-brand-text-subtle mb-3">Steuere, ob du auch für Mitglieder anderer Mannschaften sichtbar bist.</p>
         </div>
         <div className="divide-y divide-brand-border-subtle">
@@ -183,7 +184,7 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
 
       {/* DSGVO — Änderungen laufen über Change-Request */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text mb-1">Datenschutz (DSGVO)</h2>
+        <h2 className={`${SECTION_TITLE} mb-1`}>Datenschutz (DSGVO)</h2>
         <p className="text-xs text-brand-text-subtle mb-4">
           Diese Einwilligungen werden vom Verein dokumentiert. Änderungen musst du anfragen —
           der Vorstand nimmt sie an oder lehnt sie ab.

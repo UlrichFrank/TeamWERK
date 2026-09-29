@@ -5,6 +5,7 @@ import { HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_PRIMARY, BTN
 import ActionMenu from '../components/ActionMenu'
 import MapsLink from '../components/MapsLink'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
+import { MENU_ITEM, MENU_ITEM_DANGER, MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface Venue {
   id: number
@@ -164,7 +165,7 @@ export default function AdminVenuesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-brand-text">Veranstaltungsorte</h1>
+        <h1 className={PAGE_TITLE}>Veranstaltungsorte</h1>
         <div ref={actionsMenuRef} className="relative">
           <div className="flex">
             <button
@@ -183,16 +184,18 @@ export default function AdminVenuesPage() {
             </button>
           </div>
           {showActionsMenu && (
-            <div className="absolute right-0 mt-1 w-44 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
+            <div role="menu" className="absolute right-0 mt-1 w-44 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
               <button
                 onClick={() => { setShowActionsMenu(false); setShowImport(true) }}
-                className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                role="menuitem"
+                className={MENU_ITEM}
               >
                 Import CSV
               </button>
               <button
                 onClick={() => { setShowActionsMenu(false); setShowDeleteAll(true) }}
-                className="w-full text-left px-4 py-2.5 text-sm text-brand-danger hover:bg-brand-danger-light transition-colors"
+                role="menuitem"
+                className={MENU_ITEM_DANGER}
               >
                 Alle löschen
               </button>
@@ -280,7 +283,7 @@ export default function AdminVenuesPage() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold text-brand-text mb-4">
+            <h2 className={`${MODAL_TITLE} mb-4`}>
               {editVenue ? 'Ort bearbeiten' : 'Neuer Veranstaltungsort'}
             </h2>
             {error && (
@@ -381,7 +384,7 @@ export default function AdminVenuesPage() {
       {showImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-brand-text mb-4">CSV importieren</h2>
+            <h2 className={`${MODAL_TITLE} mb-4`}>CSV importieren</h2>
 
             {!importResult ? (
               <>
@@ -473,7 +476,7 @@ export default function AdminVenuesPage() {
       {showDeleteAll && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
-            <h2 className="text-lg font-semibold text-brand-text mb-2">Alle Orte löschen?</h2>
+            <h2 className={`${MODAL_TITLE} mb-2`}>Alle Orte löschen?</h2>
             <p className="text-sm text-brand-text-muted mb-5">Alle Veranstaltungsorte außer der Heimhalle werden unwiderruflich gelöscht.</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setShowDeleteAll(false)} className={BTN_SECONDARY}>Abbrechen</button>
@@ -489,7 +492,7 @@ export default function AdminVenuesPage() {
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
-            <h2 className="text-lg font-semibold text-brand-text mb-2">Ort löschen?</h2>
+            <h2 className={`${MODAL_TITLE} mb-2`}>Ort löschen?</h2>
             <p className="text-sm text-brand-text-muted mb-5">Events die diesem Ort zugeordnet sind, verlieren ihre Ortsangabe.</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeleteConfirm(null)} className={BTN_SECONDARY}>Abbrechen</button>

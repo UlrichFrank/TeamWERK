@@ -8,6 +8,7 @@ import VideoStatusPill from '../components/VideoStatusPill'
 import CastButton from '../components/CastButton'
 import { fmtBytes, fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL, BTN_SECONDARY, INPUT, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface VideoDetail {
   id: number
@@ -387,7 +388,7 @@ export default function VideoDetailPage() {
     <div className="max-w-3xl">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold break-words">{video.title}</h1>
+          <h1 className={`${PAGE_TITLE} break-words`}>{video.title}</h1>
           <div className="mt-1 flex items-center gap-2 flex-wrap text-sm text-brand-text-muted">
             <VideoStatusPill status={video.status} />
             <span>{video.team_name}</span>
@@ -481,7 +482,7 @@ export default function VideoDetailPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-md">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-              <h2 className="font-semibold text-base text-brand-text">Video bearbeiten</h2>
+              <h2 className={MODAL_TITLE}>Video bearbeiten</h2>
               <button onClick={() => setShowEdit(false)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -546,7 +547,7 @@ export default function VideoDetailPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-              <h2 className="font-semibold text-base text-brand-text">Video löschen</h2>
+              <h2 className={MODAL_TITLE}>Video löschen</h2>
               <button onClick={() => setShowDelete(false)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>

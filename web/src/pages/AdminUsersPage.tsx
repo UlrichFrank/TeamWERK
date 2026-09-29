@@ -17,6 +17,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorMessage } from '../lib/errors'
 import { relativeTime } from '../lib/relativeTime'
 import { BTN_PRIMARY, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
+import { MENU_ITEM, MODAL_TITLE, PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 interface User {
   id: number
@@ -404,7 +405,7 @@ export default function AdminUsersPage() {
       {/* Header */}
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-          <h1 className="text-2xl font-bold">Nutzerverwaltung</h1>
+          <h1 className={PAGE_TITLE}>Nutzerverwaltung</h1>
           <div className="flex flex-wrap items-center gap-2">
             <input
               type="search"
@@ -438,19 +439,21 @@ export default function AdminUsersPage() {
                 </button>
               </div>
               {showDropdown && (
-                <div className="absolute right-0 mt-1 w-48 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                <div role="menu" className="absolute right-0 mt-1 w-48 bg-white border border-brand-border rounded-md shadow-lg z-20">
                   <button
                     onClick={openCreateModal}
-                    className="w-full text-left px-4 py-2.5 text-xs text-brand-text hover:bg-brand-surface-card transition-colors flex items-center gap-2"
+                    role="menuitem"
+                    className={MENU_ITEM}
                   >
-                    <RefreshCw className="w-3.5 h-3.5 text-brand-text-muted" />
+                    <RefreshCw className="w-4 h-4 shrink-0 text-brand-text-muted" />
                     Account anlegen
                   </button>
                   <button
                     onClick={() => { setShowDropdown(false); setShowCsvModal(true) }}
-                    className="w-full text-left px-4 py-2.5 text-xs text-brand-text hover:bg-brand-surface-card transition-colors flex items-center gap-2"
+                    role="menuitem"
+                    className={MENU_ITEM}
                   >
-                    <Upload className="w-3.5 h-3.5 text-brand-text-muted" />
+                    <Upload className="w-4 h-4 shrink-0 text-brand-text-muted" />
                     CSV importieren
                   </button>
                 </div>
@@ -465,7 +468,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Einladung versenden</h2>
+              <h2 className={MODAL_TITLE}>Einladung versenden</h2>
               <button onClick={closeInviteModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -516,7 +519,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Account anlegen</h2>
+              <h2 className={MODAL_TITLE}>Account anlegen</h2>
               <button onClick={closeCreateModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -583,7 +586,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">CSV importieren</h2>
+              <h2 className={MODAL_TITLE}>CSV importieren</h2>
               <button onClick={closeCsvModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -648,7 +651,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Mit Mitglied verknüpfen</h2>
+              <h2 className={MODAL_TITLE}>Mit Mitglied verknüpfen</h2>
               <button onClick={closeLinkModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -694,7 +697,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Proxy-Account aktivieren</h2>
+              <h2 className={MODAL_TITLE}>Proxy-Account aktivieren</h2>
               <button onClick={closeActivateModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -737,7 +740,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Eltern-E-Mail setzen</h2>
+              <h2 className={MODAL_TITLE}>Eltern-E-Mail setzen</h2>
               <button onClick={closeRecoveryModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -781,7 +784,7 @@ export default function AdminUsersPage() {
         <div className="mb-8">
           <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-x-auto">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-brand-text">Ausstehende Anfragen & Einladungen ({filteredRequests.length + filteredInvitations.length})</h2>
+              <h2 className={SECTION_TITLE}>Ausstehende Anfragen & Einladungen ({filteredRequests.length + filteredInvitations.length})</h2>
             </div>
             <table className="w-full text-sm">
               <tbody className="divide-y divide-brand-border-subtle">
@@ -859,7 +862,7 @@ export default function AdminUsersPage() {
       {/* Registered users */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-x-auto mt-6">
         <div className="px-6 py-4 border-b border-brand-border-subtle">
-          <h2 className="font-semibold text-brand-text">Registrierte Nutzer ({total})</h2>
+          <h2 className={SECTION_TITLE}>Registrierte Nutzer ({total})</h2>
         </div>
         <table className="w-full text-sm">
           <tbody className="divide-y divide-brand-border-subtle">

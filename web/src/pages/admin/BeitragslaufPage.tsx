@@ -8,6 +8,7 @@ import { formatBetrag, isValidIBAN, normalizeIBAN } from '../../lib/sepa'
 import { decryptBankData, decryptClubSepa } from '../../lib/bankCrypto'
 import { buildPainXML, saisonStamp, type SepaItem } from '../../lib/sepaXml'
 import { BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_NEUTRAL, HEADER_PRIMARY } from '../../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE } from '../../lib/typography'
 
 
 interface Season { id: number; name: string; is_active: boolean }
@@ -286,7 +287,7 @@ export default function BeitragslaufPage() {
   return (
     <div className="max-w-4xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-bold text-brand-text">Beitragslauf</h1>
+        <h1 className={PAGE_TITLE}>Beitragslauf</h1>
         {preview && (
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setExportDialogOpen(true)} disabled={summary.count === 0} className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}>XML herunterladen</button>
@@ -620,7 +621,7 @@ function Modal({ title, children, onClose }: { title: string; children: React.Re
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4" onClick={onClose}>
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-2xl" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">{title}</h2>
+          <h2 className={MODAL_TITLE}>{title}</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text">
             <X className="w-5 h-5" />
           </button>

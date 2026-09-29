@@ -5,6 +5,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 import type { Poll } from '../pages/ChatPage'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface Props {
   messageId: number
@@ -56,7 +57,7 @@ export default function ChatPollVotesModal({ messageId, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Stimmen</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Stimmen</h2>
           <button
             onClick={onClose}
             aria-label="Schließen"

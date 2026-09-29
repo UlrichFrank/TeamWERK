@@ -5,7 +5,8 @@ import { Member, Parent, Phone, Visibility, ChangeDraft } from '../../pages/Prof
 import { UserContact } from '../../pages/ChildProfilePage'
 import ImageCropModal from '../ImageCropModal'
 import Toggle from '../Toggle'
-import { BTN_PRIMARY, INPUT, LABEL } from '../../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_PRIMARY_SPLIT_CARET, BTN_PRIMARY_SPLIT_MAIN, INPUT, LABEL } from '../../lib/buttonStyles'
+import { MENU_ITEM_DANGER, SECTION_TITLE, SUBSECTION_TITLE } from '../../lib/typography'
 
 interface Props {
   children: Member[]
@@ -279,7 +280,7 @@ export default function ProfileProfilTab({
 
       {/* Profilbild */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Profilbild</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Profilbild</h2>
         <div className="flex gap-4 items-start">
           {photoURL ? (
             <img src={photoURL} alt="Profilbild" className="w-20 h-20 rounded-full object-cover border border-brand-border" />
@@ -293,7 +294,7 @@ export default function ProfileProfilTab({
                 <button
                   onClick={() => photoInputRef.current?.click()}
                   disabled={photoUploading}
-                  className={`bg-brand-yellow text-brand-black px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${photoURL ? 'rounded-l-md border-r border-brand-black/20' : 'rounded-md'}`}
+                  className={photoURL ? BTN_PRIMARY_SPLIT_MAIN : BTN_PRIMARY}
                 >
                   {photoUploading ? 'Hochladen…' : 'Bild hochladen'}
                 </button>
@@ -303,17 +304,18 @@ export default function ProfileProfilTab({
                       onClick={() => setPhotoDropdown(v => !v)}
                       disabled={photoUploading}
                       aria-label="Weitere Optionen"
-                      className="bg-brand-yellow text-brand-black rounded-r-md px-2 py-1.5 hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className={BTN_PRIMARY_SPLIT_CARET}
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>
                     {photoDropdown && (
-                      <div className="absolute left-0 top-full mt-1 w-36 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                      <div role="menu" className="absolute left-0 top-full mt-1 w-36 bg-white border border-brand-border rounded-md shadow-lg z-20">
                         <button
                           onClick={handlePhotoDelete}
-                          className="w-full text-left px-4 py-2.5 text-xs text-brand-danger hover:bg-brand-danger-light transition-colors flex items-center gap-2"
+                          role="menuitem"
+                          className={MENU_ITEM_DANGER}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4 shrink-0" />
                           Bild löschen
                         </button>
                       </div>
@@ -329,7 +331,7 @@ export default function ProfileProfilTab({
 
       {/* Persönliche Daten */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Persönliche Daten</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Persönliche Daten</h2>
         <form onSubmit={handleSave} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -396,7 +398,7 @@ export default function ProfileProfilTab({
 
       {/* Telefonnummern — nur wenn User-Strang vorhanden */}
       {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Telefonnummern</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Telefonnummern</h2>
         <div className="space-y-3">
           {phones.length > 0 && (
             <div className="space-y-2">
@@ -442,7 +444,7 @@ export default function ProfileProfilTab({
                 <button
                   onClick={handleAddPhone}
                   disabled={!newPhone.number}
-                  className="bg-brand-yellow text-brand-black rounded-md px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   Hinzufügen
                 </button>
@@ -465,7 +467,7 @@ export default function ProfileProfilTab({
       {/* Sichtbarkeit — nur wenn User-Strang vorhanden */}
       {(mode !== 'child' || userContact) && <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <div className="p-6 pb-2">
-          <h2 className="font-semibold text-brand-text-muted mb-1">Sichtbarkeit für Mitglieder</h2>
+          <h2 className={`${SECTION_TITLE} mb-1`}>Sichtbarkeit für Mitglieder</h2>
           <p className="text-xs text-brand-text-subtle mb-3">Wähle, welche Kontaktdaten andere Mitglieder sehen dürfen.</p>
         </div>
         <div className="divide-y divide-brand-border-subtle">
@@ -491,10 +493,10 @@ export default function ProfileProfilTab({
       {/* Familie */}
       {(children.length > 0 || parents.length > 0) && (
         <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-          <h2 className="font-semibold text-brand-text-muted mb-4">Familie</h2>
+          <h2 className={`${SECTION_TITLE} mb-4`}>Familie</h2>
           {children.length > 0 && (
             <div className="mb-4">
-              <h3 className="text-sm font-medium text-brand-text-muted mb-2">Meine Kinder</h3>
+              <h3 className={`${SUBSECTION_TITLE} mb-2`}>Meine Kinder</h3>
               <div className="space-y-1">
                 {children.map(c => (
                   <p key={c.id} className="text-sm text-brand-text">• {c.first_name} {c.last_name}</p>
@@ -504,7 +506,7 @@ export default function ProfileProfilTab({
           )}
           {parents.length > 0 && (
             <div>
-              <h3 className="text-sm font-medium text-brand-text-muted mb-2">Erziehungsberechtigte</h3>
+              <h3 className={`${SUBSECTION_TITLE} mb-2`}>Erziehungsberechtigte</h3>
               <div className="space-y-1">
                 {parents.map(p => (
                   <p key={p.id} className="text-sm text-brand-text">• {p.name} ({p.email})</p>

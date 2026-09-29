@@ -5,6 +5,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { FileText, Plus, ExternalLink } from 'lucide-react'
 import { BTN_PRIMARY, BTN_SMALL } from '../lib/buttonStyles'
 import { MATCH_REPORT_STATE_LABEL, type MatchReportState } from '../lib/matchReportState'
+import { OVERLINE, PAGE_TITLE } from '../lib/typography'
 
 type ReportItem = {
     id: number
@@ -70,7 +71,7 @@ export default function MatchReportListPage() {
     return (
         <div>
             <div className="mb-4 sm:mb-6">
-                <h1 className="text-2xl font-bold text-brand-text">Spielberichte</h1>
+                <h1 className={PAGE_TITLE}>Spielberichte</h1>
             </div>
 
             {error && (
@@ -81,7 +82,7 @@ export default function MatchReportListPage() {
 
             {/* Offene Slots — Einstiegs-CTA */}
             <section className="space-y-3 mb-6">
-                <h2 className="text-sm font-medium text-brand-text-muted uppercase">
+                <h2 className={OVERLINE}>
                     Offene Aufträge ({openSlots.length})
                 </h2>
                 {openSlots.length === 0 ? (
@@ -118,7 +119,7 @@ export default function MatchReportListPage() {
 
             {/* Bericht-Liste */}
             <section className="space-y-3">
-                <h2 className="text-sm font-medium text-brand-text-muted uppercase">
+                <h2 className={OVERLINE}>
                     Meine Berichte ({reports.length})
                 </h2>
                 {loading ? (

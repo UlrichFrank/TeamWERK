@@ -13,6 +13,7 @@ import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
 import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
 import { Member, Parent, Phone } from './ProfilePage'
 import { BTN_PRIMARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 export interface UserContact {
   first_name: string
@@ -109,7 +110,7 @@ export default function ChildProfilePage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">{member.first_name}</h1>
+      <h1 className={`${PAGE_TITLE} mb-6`}>{member.first_name}</h1>
 
       <div className={`${TAB_BAR} mb-6`}>
         {tabs.map(tab => (
@@ -136,7 +137,7 @@ export default function ChildProfilePage() {
           <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 mt-6">
             <div className="flex items-center gap-2 mb-2">
               <Mail className="w-5 h-5 text-brand-text-muted" />
-              <h2 className="text-lg font-semibold text-brand-text">Eltern-E-Mail (Passwort-Reset)</h2>
+              <h2 className={SECTION_TITLE}>Eltern-E-Mail (Passwort-Reset)</h2>
             </div>
             <p className="text-sm text-brand-text-muted mb-4">
               An diese Adresse gehen Passwort-Mails für den Account von {member.first_name}. Das Kind selbst kann sie nicht ändern.

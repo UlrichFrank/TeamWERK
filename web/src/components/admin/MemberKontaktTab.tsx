@@ -8,7 +8,8 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useVault } from '../../contexts/VaultContext'
 import { useDialogA11y } from '../../lib/useDialogA11y'
 import { encryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, BTN_SECONDARY, INPUT, LABEL } from '../../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, BTN_SMALL_DANGER, INPUT, LABEL } from '../../lib/buttonStyles'
+import { MODAL_TITLE, SECTION_TITLE } from '../../lib/typography'
 
 const formatIBAN = (raw: string) =>
   raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
@@ -173,7 +174,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
     <div className="space-y-6">
       {/* Bankdaten */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Bankdaten</h2>
 
         {bankdatenDraft && !privateKey && (
           <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
@@ -288,7 +289,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
 
       {/* SEPA-Mandat */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text mb-4">SEPA-Mandat</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>SEPA-Mandat</h2>
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
@@ -331,7 +332,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
                   {canDeleteSepa && (
                     <button
                       onClick={() => setConfirmDelete(true)}
-                      className="flex items-center gap-1.5 bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors"
+                      className={`${BTN_SMALL_DANGER} flex items-center gap-1.5`}
                     >
                       <Trash2 className="w-4 h-4" />
                       Dokument löschen
@@ -345,7 +346,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
                 <button
                   onClick={() => sepaInputRef.current?.click()}
                   disabled={sepaUploading}
-                  className="bg-brand-yellow text-brand-black rounded-md px-3 py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow disabled:opacity-40 transition-colors"
+                  className={BTN_PRIMARY}
                 >
                   {sepaUploading ? 'Hochladen…' : form.sepa_mandat_url ? 'Dokument ersetzen' : 'Dokument hochladen'}
                 </button>
@@ -415,7 +416,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
             aria-labelledby={deleteTitleId}
             className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm"
           >
-            <h2 id={deleteTitleId} className="font-semibold text-brand-text mb-2">Dokument löschen</h2>
+            <h2 id={deleteTitleId} className={`${MODAL_TITLE} mb-2`}>Dokument löschen</h2>
             <p className="text-sm text-brand-text-muted mb-4">Das SEPA-Mandat-Dokument wirklich löschen?</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmDelete(false)} className={BTN_SECONDARY}>Abbrechen</button>

@@ -4,7 +4,8 @@ import { api } from '../../lib/api'
 import { CLUB_FUNCTION_OPTIONS, EXTERN_CLUB_FUNCTIONS } from '../../lib/constants'
 import { useAuth } from '../../contexts/AuthContext'
 import ImageCropModal from '../ImageCropModal'
-import { INPUT, LABEL, BTN_PRIMARY } from '../../lib/buttonStyles'
+import { BTN_PRIMARY, BTN_PRIMARY_SPLIT_CARET, BTN_PRIMARY_SPLIT_MAIN, INPUT, LABEL } from '../../lib/buttonStyles'
+import { MENU_ITEM_DANGER, SECTION_TITLE } from '../../lib/typography'
 
 interface Member {
   id?: number
@@ -177,7 +178,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
     <div className="space-y-6">
       {/* Persönliche Daten */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Persönliche Daten</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Persönliche Daten</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={LABEL}>Vorname</label>
@@ -489,7 +490,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
 
       {/* Foto */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Passfoto</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Passfoto</h2>
         <div className="flex items-center gap-4">
           {photoURL && <img src={photoURL} alt="Passfoto" className="w-20 h-20 rounded-full object-cover" />}
           {!photoURL && <div className="w-20 h-20 rounded-full bg-brand-border-subtle flex items-center justify-center text-brand-text-subtle text-xs">Kein Bild</div>}
@@ -505,7 +506,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                 <button
                   onClick={() => photoInputRef.current?.click()}
                   disabled={photoUploading}
-                  className={`bg-brand-yellow text-brand-black px-3 py-1.5 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${photoURL ? 'rounded-l-md border-r border-brand-black/20' : 'rounded-md'}`}
+                  className={photoURL ? BTN_PRIMARY_SPLIT_MAIN : BTN_PRIMARY}
                 >
                   {photoUploading ? 'Hochladen…' : 'Bild hochladen'}
                 </button>
@@ -515,17 +516,18 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
                       onClick={() => setPhotoDropdown(v => !v)}
                       disabled={photoUploading}
                       aria-label="Weitere Optionen"
-                      className="bg-brand-yellow text-brand-black rounded-r-md px-2 py-1.5 hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className={BTN_PRIMARY_SPLIT_CARET}
                     >
                       <ChevronDown className="w-3.5 h-3.5" />
                     </button>
                     {photoDropdown && (
-                      <div className="absolute left-0 top-full mt-1 w-36 bg-white border border-brand-border rounded-md shadow-lg z-20">
+                      <div role="menu" className="absolute left-0 top-full mt-1 w-36 bg-white border border-brand-border rounded-md shadow-lg z-20">
                         <button
                           onClick={handlePhotoDelete}
-                          className="w-full text-left px-4 py-2.5 text-xs text-brand-danger hover:bg-brand-danger-light transition-colors flex items-center gap-2"
+                          role="menuitem"
+                          className={MENU_ITEM_DANGER}
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4 shrink-0" />
                           Bild löschen
                         </button>
                       </div>

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import PasswordInput from '../components/forms/PasswordInput'
 import { BTN_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
+import { ENTRY_TITLE, PAGE_TITLE } from '../lib/typography'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -33,7 +34,7 @@ export default function LoginPage() {
       {/* Logo Section - Hidden on Mobile */}
       <div className="hidden sm:flex flex-col justify-center items-center sm:w-56 shrink-0 px-8 py-12 text-brand-black">
         <img src="/logo.svg" alt="Team Stuttgart" className="h-20 w-20 mb-6" />
-        <h1 className="text-2xl font-bold mb-1">TeamWERK</h1>
+        <h1 className={`${PAGE_TITLE} mb-1`}>TeamWERK</h1>
         <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
       </div>
 
@@ -43,12 +44,12 @@ export default function LoginPage() {
           {/* Mobile Logo */}
           <div className="sm:hidden flex flex-col items-center mb-8">
             <img src="/logo.svg" alt="Team Stuttgart" className="h-16 w-16 mb-4" />
-            <h1 className="text-2xl font-bold mb-1">TeamWERK</h1>
+            <h1 className={`${PAGE_TITLE} mb-1`}>TeamWERK</h1>
             <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
           </div>
 
           <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
-            <h2 className="text-xl font-bold text-brand-text mb-6">Anmelden</h2>
+            <h2 className={`${ENTRY_TITLE} mb-6`}>Anmelden</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>}
               <div>

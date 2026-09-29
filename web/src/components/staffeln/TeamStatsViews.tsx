@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import type { TeamStat, TeamStats } from '../../lib/staffeln'
 import { isOwnTeam } from '../../lib/staffelHighlight'
 import { sharedRanks } from '../../lib/ranking'
+import { SUBSECTION_TITLE } from '../../lib/typography'
 
 const TH = 'bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left'
 const TD = 'px-4 py-3 text-sm text-brand-text'
@@ -23,7 +24,7 @@ function TeamTable({
   return (
     <div className={CARD}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
-        <h2 className="text-sm font-medium text-brand-text">{title}</h2>
+        <h2 className={SUBSECTION_TITLE}>{title}</h2>
         <p className="text-xs text-brand-text-muted mt-1">{hint}</p>
       </div>
       <div className="overflow-x-auto">

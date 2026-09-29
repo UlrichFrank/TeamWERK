@@ -14,10 +14,8 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import NumberSpinner from '../components/NumberSpinner'
 import { BEITRAGS_KATEGORIEN, kategorieLabel } from '../lib/beitragsKategorien'
 import { errorStatus } from '../lib/errors'
-import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, INPUT, BTN_SECONDARY, LABEL, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
-
-// ─── Shared styles ────────────────────────────────────────────────────────────
-const BTN_DANGER_SM = 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, BTN_SMALL_DANGER, INPUT, LABEL, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 // ─── Verein Tab ───────────────────────────────────────────────────────────────
 
@@ -125,7 +123,7 @@ function VereinTab() {
         </div>
 
         <div className="pt-2 border-t border-brand-border-subtle">
-          <h3 className="text-sm font-semibold text-brand-text mb-3">SEPA-Stammdaten</h3>
+          <h3 className={`${SUBSECTION_TITLE} mb-3`}>SEPA-Stammdaten</h3>
           {!isUnlocked && (
             <div className="mb-3 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
               {sepaEnv
@@ -312,7 +310,7 @@ function SaisonsTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg text-brand-text">Neue Saison</h2>
+              <h2 className={MODAL_TITLE}>Neue Saison</h2>
               <button onClick={() => setShowCreate(false)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -465,7 +463,7 @@ function SaisonsTab() {
                           <button
                             onClick={() => handleDelete(s.id)}
                             disabled={deleting === s.id}
-                            className={BTN_DANGER_SM}
+                            className={BTN_SMALL_DANGER}
                           >
                             {deleting === s.id ? 'Löschen…' : 'Löschen'}
                           </button>
@@ -664,7 +662,7 @@ function BeitraegeTab() {
         const f = forms[kat] ?? { datum: '', betrag: '' }
         return (
           <div key={kat} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-4">
-            <h3 className="text-sm font-semibold text-brand-text mb-3">{kategorieLabel(kat)}</h3>
+            <h3 className={`${SUBSECTION_TITLE} mb-3`}>{kategorieLabel(kat)}</h3>
             <table className="w-full text-sm mb-3">
               <thead>
                 <tr className="text-brand-text-muted text-xs uppercase text-left">
@@ -779,7 +777,7 @@ function BewirtungKachel() {
 
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
-      <h2 className="text-sm font-semibold text-brand-text mb-4">Bewirtung</h2>
+      <h2 className={`${SUBSECTION_TITLE} mb-4`}>Bewirtung</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="bewirtung-verhaeltnis" className={LABEL}>Kuchen je Spiel</label>
@@ -949,7 +947,7 @@ function AusrichterKachel() {
 
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5">
-      <h2 className="text-sm font-semibold text-brand-text mb-4">Ausrichter</h2>
+      <h2 className={`${SUBSECTION_TITLE} mb-4`}>Ausrichter</h2>
       {error && (
         <div className="mb-3 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
       )}
@@ -1064,7 +1062,7 @@ function AusrichterKachel() {
                   ) : (
                     <>
                       <button type="button" onClick={() => { setEditId(a.id); setEditName(a.name) }} className={`${BTN_SMALL} mr-2`}>Umbenennen</button>
-                      <button type="button" onClick={() => toggleAktiv(a)} className={`${a.aktiv ? BTN_DANGER_SM : BTN_SMALL} mr-2`}>{a.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
+                      <button type="button" onClick={() => toggleAktiv(a)} className={`${a.aktiv ? BTN_SMALL_DANGER : BTN_SMALL} mr-2`}>{a.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
                       <button
                         type="button"
                         onClick={() => openDeleteConfirm(a)}
@@ -1089,7 +1087,7 @@ function AusrichterKachel() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg text-brand-text">Ausrichter löschen?</h2>
+              <h2 className={MODAL_TITLE}>Ausrichter löschen?</h2>
               <button onClick={closeDeleteConfirm} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -1347,7 +1345,7 @@ function StammvereineTab() {
                       <button
                         type="button"
                         onClick={() => toggleAktiv(v)}
-                        className={v.aktiv ? BTN_DANGER_SM : BTN_SMALL}
+                        className={v.aktiv ? BTN_SMALL_DANGER : BTN_SMALL}
                       >{v.aktiv ? 'Deaktivieren' : 'Aktivieren'}</button>
                     </>
                   )}
@@ -1396,7 +1394,7 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-brand-text mb-6">Einstellungen</h1>
+      <h1 className={`${PAGE_TITLE} mb-6`}>Einstellungen</h1>
 
       {/* Tab bar */}
       <div className={`${TAB_BAR} mb-6`}>

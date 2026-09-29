@@ -13,6 +13,7 @@ import { useWindowedList } from '../hooks/useWindowedList'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_SECONDARY, INPUT, LABEL } from '../lib/buttonStyles'
 import PersonChip from '../components/PersonChip'
+import { MENU_ITEM, MODAL_TITLE, OVERLINE, PAGE_TITLE } from '../lib/typography'
 
 interface Member {
   id: number; first_name: string; last_name: string
@@ -396,7 +397,7 @@ export default function MembersPage() {
     <div>
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-          <h1 className="text-2xl font-bold">Mitglieder</h1>
+          <h1 className={PAGE_TITLE}>Mitglieder</h1>
           <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-end gap-2">
             <input
               type="search"
@@ -467,13 +468,15 @@ export default function MembersPage() {
                 </div>
                 {showActionsMenu && (
                   <div
+                    role="menu"
                     className="absolute right-0 mt-1 w-52 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden"
                     onBlur={() => setShowActionsMenu(false)}
                   >
                     {isAdmin && (
                       <button
                         onClick={() => { setShowActionsMenu(false); setShowImport(true) }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                        role="menuitem"
+                        className={MENU_ITEM}
                       >
                         Import CSV
                       </button>
@@ -481,7 +484,8 @@ export default function MembersPage() {
                     {canBulkSepa && (
                       <button
                         onClick={() => { setShowActionsMenu(false); setShowSepaBulk(true) }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                        role="menuitem"
+                        className={MENU_ITEM}
                       >
                         Import SEPA-Mandate
                       </button>
@@ -489,7 +493,8 @@ export default function MembersPage() {
                     {isAdmin && (
                       <button
                         onClick={() => { setShowActionsMenu(false); handleExport() }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                        role="menuitem"
+                        className={MENU_ITEM}
                       >
                         Export CSV
                       </button>
@@ -576,7 +581,7 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-              <h2 className="font-semibold text-base text-brand-text">Neues Mitglied anlegen</h2>
+              <h2 className={MODAL_TITLE}>Neues Mitglied anlegen</h2>
               <button onClick={resetNew} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -639,7 +644,7 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-              <h2 className="font-semibold text-base text-brand-text">CSV-Import</h2>
+              <h2 className={MODAL_TITLE}>CSV-Import</h2>
               <button onClick={resetImport} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -920,7 +925,7 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-              <h2 className="font-semibold text-base text-brand-text">SEPA-Mandate importieren</h2>
+              <h2 className={MODAL_TITLE}>SEPA-Mandate importieren</h2>
               <button onClick={resetSepaBulk} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -1017,14 +1022,16 @@ function SepaBulkSection({ title, tone, entries, emptyText, showReason }: {
   emptyText: string
   showReason?: boolean
 }) {
+  // Zustandsfarbe über der Rollenfarbe von OVERLINE (gedämpft): ohne `!`
+  // entschiede die CSS-Reihenfolge, welche der beiden Textfarben gewinnt.
   const headerClass = tone === 'ok'
-    ? 'text-brand-green'
+    ? '!text-brand-green'
     : tone === 'warn'
-      ? 'text-brand-danger'
-      : 'text-brand-text-muted'
+      ? '!text-brand-danger'
+      : ''
   return (
     <section>
-      <h3 className={`text-xs uppercase font-semibold ${headerClass}`}>
+      <h3 className={`${OVERLINE} ${headerClass}`}>
         {title} ({entries.length})
       </h3>
       {entries.length === 0 ? (
@@ -1047,7 +1054,7 @@ function SepaBulkSection({ title, tone, entries, emptyText, showReason }: {
 function SepaBulkAmbiguousSection({ entries }: { entries: SepaBulkAmbiguous[] }) {
   return (
     <section>
-      <h3 className="text-xs uppercase font-semibold text-brand-warning">
+      <h3 className={`${OVERLINE} !text-brand-warning`}>
         Mehrdeutig ({entries.length})
       </h3>
       {entries.length === 0 ? (

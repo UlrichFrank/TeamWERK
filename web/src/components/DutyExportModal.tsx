@@ -5,6 +5,7 @@ import { errorStatus } from '../lib/errors'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY, INPUT, BTN_SECONDARY } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 // Dienst-CSV über einen wählbaren Zeitraum (GET /api/duty-slots/export).
 //
@@ -84,7 +85,7 @@ export default function DutyExportModal({ isOpen, monthStart, monthEnd, onClose 
         className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu max-w-lg mx-4 w-full"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Dienste als CSV</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Dienste als CSV</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

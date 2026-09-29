@@ -1,12 +1,13 @@
 import { useState, FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { INPUT, LABEL } from '../lib/buttonStyles'
+import { BTN_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
+import { ENTRY_TITLE, PAGE_TITLE } from '../lib/typography'
 
 const Sidebar = () => (
   <div className="hidden sm:flex flex-col justify-center items-center sm:w-56 shrink-0 px-8 py-12 text-brand-black">
     <img src="/logo.svg" alt="Team Stuttgart" className="h-20 w-20 mb-6" />
-    <h1 className="text-2xl font-bold mb-1">TeamWERK</h1>
+    <h1 className={`${PAGE_TITLE} mb-1`}>TeamWERK</h1>
     <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
   </div>
 )
@@ -14,7 +15,7 @@ const Sidebar = () => (
 const MobileLogo = () => (
   <div className="sm:hidden flex flex-col items-center mb-8">
     <img src="/logo.svg" alt="Team Stuttgart" className="h-16 w-16 mb-4" />
-    <h1 className="text-2xl font-bold mb-1">TeamWERK</h1>
+    <h1 className={`${PAGE_TITLE} mb-1`}>TeamWERK</h1>
     <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
   </div>
 )
@@ -51,7 +52,7 @@ export default function RequestMembershipPage() {
           <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
             <MobileLogo />
             <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
-              <h2 className="text-xl font-bold mb-2">Antrag gesendet!</h2>
+              <h2 className={`${ENTRY_TITLE} mb-2`}>Antrag gesendet!</h2>
               <p className="text-sm text-brand-text-muted">
                 Dein Antrag wurde weitergeleitet. Du erhältst eine E-Mail sobald er bearbeitet wurde.
               </p>
@@ -74,7 +75,7 @@ export default function RequestMembershipPage() {
         <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
           <MobileLogo />
           <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
-            <h2 className="text-2xl font-bold mb-1">Beitrittsantrag</h2>
+            <h2 className={`${ENTRY_TITLE} mb-1`}>Beitrittsantrag</h2>
             <p className="text-sm text-brand-text-muted mb-6">Team Stuttgart – TeamWERK</p>
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && <p className="text-brand-danger text-sm">{error}</p>}
@@ -139,7 +140,7 @@ export default function RequestMembershipPage() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-brand-yellow text-brand-black rounded-md py-2.5 sm:py-2 text-sm font-semibold hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                className={`w-full ${BTN_PRIMARY}`}
               >
                 Antrag absenden
               </button>

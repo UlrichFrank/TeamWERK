@@ -9,6 +9,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, INPUT } from '../lib/buttonStyles'
 import { MATCH_REPORT_STATE_LABEL, type MatchReportState } from '../lib/matchReportState'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 const MAX_IMAGES = 10
 
@@ -313,7 +314,7 @@ export default function MatchReportFormPage() {
     return (
         <div className="space-y-4 sm:space-y-6">
             <div className="flex items-center justify-between gap-4 flex-wrap">
-                <h1 className="text-2xl font-bold text-brand-text">Spielbericht</h1>
+                <h1 className={PAGE_TITLE}>Spielbericht</h1>
                 <span className="inline-flex rounded-full px-2 py-0.5 text-xs font-medium bg-brand-border-subtle text-brand-text-muted">
                     {MATCH_REPORT_STATE_LABEL[report.state] ?? report.state}
                 </span>
@@ -489,7 +490,7 @@ export default function MatchReportFormPage() {
                         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md space-y-3"
                         onClick={e => e.stopPropagation()}
                     >
-                        <h2 id="return-title" className="text-base font-semibold text-brand-text">Bericht zurückgeben</h2>
+                        <h2 id="return-title" className={MODAL_TITLE}>Bericht zurückgeben</h2>
                         <p className="text-sm text-brand-text-muted">
                             Der Autor kann den Bericht danach wieder bearbeiten und erneut einreichen. Er bekommt deinen Kommentar als Benachrichtigung.
                         </p>

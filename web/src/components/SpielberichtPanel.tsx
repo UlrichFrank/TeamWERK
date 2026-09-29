@@ -6,6 +6,7 @@ import {
 } from '../lib/staffeln'
 import { HEADER_CTRL, HEADER_PRIMARY, HEADER_NEUTRAL } from '../lib/buttonStyles'
 import TorMomentum from './staffeln/TorMomentum'
+import { SUBSECTION_TITLE } from '../lib/typography'
 
 const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4'
 const TH = 'bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-2 text-left'
@@ -124,7 +125,7 @@ function Mannschaftsliste({ title, players }: { title: string; players: PlayerLi
   if (players.length === 0) return null
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
-      <h3 className="text-sm font-medium text-brand-text px-3 py-2 border-b border-brand-border-subtle inline-flex items-center gap-1">
+      <h3 className={`${SUBSECTION_TITLE} px-3 py-2 border-b border-brand-border-subtle inline-flex items-center gap-1`}>
         <Users className="w-4 h-4" /> {title}
       </h3>
       <div className="overflow-x-auto">
@@ -199,7 +200,7 @@ function Spielverlauf({ report, halfDurationMinutes }: { report: ReportDetail; h
   return (
     <div className={CARD}>
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <h3 className="text-sm font-medium text-brand-text inline-flex items-center gap-1">
+        <h3 className={`${SUBSECTION_TITLE} inline-flex items-center gap-1`}>
           <Activity className="w-4 h-4" /> Spielverlauf
         </h3>
         <div className="flex gap-2" role="group" aria-label="Darstellung des Spielverlaufs">
@@ -280,7 +281,7 @@ function Verlauf({ events }: { events: EventLine[] }) {
   if (events.length === 0) return null
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
-      <h3 className="text-sm font-medium text-brand-text px-3 py-2 border-b border-brand-border-subtle">
+      <h3 className={`${SUBSECTION_TITLE} px-3 py-2 border-b border-brand-border-subtle`}>
         Ereignisse
       </h3>
       <ul className="divide-y divide-brand-border-subtle">

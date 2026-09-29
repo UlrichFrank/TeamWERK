@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import TrainingDiaryStatsView from '../components/TrainingDiaryStatsView'
 import { buildTeamShortNames } from '../lib/teamName'
 import { HEADER_FIELD } from '../lib/buttonStyles'
+import { PAGE_TITLE } from '../lib/typography'
 
 interface TeamRef {
   id: number
@@ -42,7 +43,7 @@ export default function TeamTrainingstagebuchPage() {
   return (
     <div className="max-w-3xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-brand-text">Trainingstagebuch</h1>
+        <h1 className={PAGE_TITLE}>Trainingstagebuch</h1>
         <select
           value={teamId ?? ''}
           onChange={e => navigate(`/team/${e.target.value}/trainingstagebuch`)}

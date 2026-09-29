@@ -11,6 +11,7 @@ import MemberDatenschutzTab from '../components/admin/MemberDatenschutzTab'
 import MemberFamilieTab from '../components/admin/MemberFamilieTab'
 import MemberAdminTab from '../components/admin/MemberAdminTab'
 import { TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { PAGE_TITLE } from '../lib/typography'
 
 interface Member {
   id: number
@@ -371,7 +372,7 @@ export default function MemberDetailPage() {
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">{isNew ? 'Mitglied anlegen' : 'Mitglied bearbeiten'}</h1>
+        <h1 className={PAGE_TITLE}>{isNew ? 'Mitglied anlegen' : 'Mitglied bearbeiten'}</h1>
       </div>
 
       {/* Tab Navigation */}

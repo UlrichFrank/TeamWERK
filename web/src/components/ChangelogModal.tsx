@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface Entry {
   type: 'feat' | 'fix'
@@ -71,7 +72,7 @@ export default function ChangelogModal({ onClose }: Props) {
         className="bg-white rounded-t-xl sm:rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full sm:max-w-lg max-h-[80vh] flex flex-col"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle shrink-0">
-          <h2 id={titleId} className="text-base font-bold text-brand-text">Versionshistorie</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Versionshistorie</h2>
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-brand-border-subtle transition-colors"

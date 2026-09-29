@@ -6,6 +6,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 import { BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface ConvMember { id: number; name: string }
 interface ChatUser { id: number; name: string }
@@ -113,7 +114,7 @@ export default function ConversationParticipantsModal({
         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] flex flex-col"
       >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">
+          <h2 id={titleId} className={MODAL_TITLE}>
             {editing ? 'Teilnehmer bearbeiten' : 'Teilnehmer'}
           </h2>
           <div className="flex items-center gap-1">

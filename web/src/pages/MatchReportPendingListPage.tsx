@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { FileText, AlertTriangle, Image as ImageIcon } from 'lucide-react'
 import { BTN_SMALL } from '../lib/buttonStyles'
+import { PAGE_TITLE } from '../lib/typography'
 
 type PendingItem = {
     id: number
@@ -52,7 +53,7 @@ export default function MatchReportPendingListPage() {
     return (
         <div>
             <div className="mb-4 sm:mb-6">
-                <h1 className="text-2xl font-bold text-brand-text">Berichte zur Prüfung</h1>
+                <h1 className={PAGE_TITLE}>Berichte zur Prüfung</h1>
             </div>
 
             {loading ? (

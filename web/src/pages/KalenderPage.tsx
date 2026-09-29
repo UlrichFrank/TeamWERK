@@ -16,7 +16,7 @@ import EventSearchInput from '../components/EventSearchInput'
 import EventTypeFilter, { type EventTypeFilterEntry } from '../components/EventTypeFilter'
 import TeamFilter from '../components/TeamFilter'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
-import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, BTN_SECONDARY, BTN_DANGER, BTN_PRIMARY, LABEL, HEADER_GROUP } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_GROUP, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, LABEL } from '../lib/buttonStyles'
 
 import TrainingEditModal from '../components/TrainingEditModal'
 import GameEditModal from '../components/GameEditModal'
@@ -38,6 +38,7 @@ import {
   describeHostError,
   type GameDayHost,
 } from '../components/GameDayHostPicker'
+import { MENU_ITEM, MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 // Dieselben vier Typen wie auf /termine (TERMINE_TYPES) — im Compact-Modus
 // klappt EventTypeFilter sie in ein Dropdown, weil vier Einzel-Buttons neben
@@ -1034,7 +1035,7 @@ export default function KalenderPage() {
         </div>
       )}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
+        <h1 className={`${PAGE_TITLE} shrink-0`}>Kalender</h1>
         {/* Auch auf Mobile bedienbar (Icon + Zähler), anders als das frühere
             <select>, für das neben Typ-Filter und Suchfeld der Platz fehlte. */}
         <TeamFilter
@@ -1125,7 +1126,7 @@ export default function KalenderPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setShowEventMenu(false); setShowH4AImport(true) }}
-                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      className={MENU_ITEM}
                     >
                       <Download className="w-4 h-4 shrink-0" />
                       Spielplan aus Handball4All
@@ -1135,7 +1136,7 @@ export default function KalenderPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setShowEventMenu(false); setShowBulkRegen(true) }}
-                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      className={MENU_ITEM}
                     >
                       <RefreshCw className="w-4 h-4 shrink-0" />
                       Dienste aktualisieren
@@ -1145,7 +1146,7 @@ export default function KalenderPage() {
                     <button
                       role="menuitem"
                       onClick={() => { setShowEventMenu(false); setShowDutyExport(true) }}
-                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                      className={MENU_ITEM}
                     >
                       <FileSpreadsheet className="w-4 h-4 shrink-0" />
                       Dienste als CSV
@@ -1171,7 +1172,7 @@ export default function KalenderPage() {
           onClick={goToToday}
           disabled={year === now.getFullYear() && month === now.getMonth()}
           title="Zum aktuellen Monat springen"
-          className="flex items-center gap-1.5 rounded-md px-3 py-2.5 sm:py-2 text-sm font-medium bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className={`${BTN_PRIMARY} flex items-center gap-1.5`}
         >
           <CalendarClock className="w-4 h-4" />
           <span>Heute</span>
@@ -1362,7 +1363,7 @@ export default function KalenderPage() {
           <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
             {wizardStep === 1 && (
               <div>
-                <h2 className="text-lg font-bold mb-6 text-brand-text">Welche Art von Event?</h2>
+                <h2 className={`${MODAL_TITLE} mb-6`}>Welche Art von Event?</h2>
                 <div className="space-y-3">
                   {(['heim', 'auswärts', 'generisch'] as const).map(type => (
                     <button
@@ -1438,7 +1439,7 @@ export default function KalenderPage() {
 
             {wizardStep === 2 && (eventType === 'heim' || eventType === 'auswärts' || eventType === 'generisch') && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Event-Details</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Event-Details</h2>
                 <div className="space-y-3">
                   <div>
                     <label className={LABEL}>Datum *</label>
@@ -1566,7 +1567,7 @@ export default function KalenderPage() {
 
             {wizardStep === 2 && eventType === 'training' && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Einzeltraining anlegen</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Einzeltraining anlegen</h2>
                 <div className="space-y-3">
                   <div>
                     <label className={LABEL}>Titel</label>
@@ -1636,7 +1637,7 @@ export default function KalenderPage() {
 
             {wizardStep === 2 && eventType === 'serie' && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Trainingsserie anlegen</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Trainingsserie anlegen</h2>
                 <div className="space-y-3">
                   <div>
                     <label className={LABEL}>Wochentag *</label>
@@ -1717,7 +1718,7 @@ export default function KalenderPage() {
 
             {wizardStep === 2 && eventType === 'abwesenheit' && !absencePreviewEvents && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Abwesenheit eintragen</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Abwesenheit eintragen</h2>
                 <div className="space-y-4">
                   {user?.isParent && absenceChildren.length > 1 && (
                     <div>
@@ -1820,7 +1821,7 @@ export default function KalenderPage() {
                 <div className="flex items-start gap-3 mb-4">
                   <AlertTriangle className="w-5 h-5 text-brand-danger shrink-0 mt-0.5" />
                   <div>
-                    <h2 className="text-base font-semibold text-brand-text">Folgende Trainings &amp; Spiele werden automatisch abgesagt</h2>
+                    <h2 className={SUBSECTION_TITLE}>Folgende Trainings &amp; Spiele werden automatisch abgesagt</h2>
                     <p className="text-sm text-brand-text-muted mt-1">Bestätigte Zusagen werden zurückgezogen, offene Termine abgesagt.</p>
                   </div>
                 </div>
@@ -1853,7 +1854,7 @@ export default function KalenderPage() {
 
             {wizardStep === 3 && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Dienstplan-Vorlage</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Dienstplan-Vorlage</h2>
                 {(() => {
                   const filteredTemplates = templates.filter(t => t.template_type === eventType)
                   return (
@@ -1902,7 +1903,7 @@ export default function KalenderPage() {
 
             {wizardStep === 4 && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Dienste bestätigen</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Dienste bestätigen</h2>
                 {preview.length === 0 ? (
                   <p className="text-sm text-brand-text-muted mb-4">Keine Dienste vorhanden.</p>
                 ) : (

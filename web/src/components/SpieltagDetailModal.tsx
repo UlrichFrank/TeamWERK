@@ -12,7 +12,8 @@ import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import HoursInput from './HoursInput'
 import { resolveAnchorClock, clockDiffMinutes } from '../lib/duration'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
-import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER, LABEL } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface GameDetail {
   id: number
@@ -270,12 +271,12 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         <div className="flex items-start justify-between mb-4">
           <div className="min-w-0">
             {loading ? (
-              <h2 id={mainTitleId} className="text-lg font-bold text-brand-text">Laden…</h2>
+              <h2 id={mainTitleId} className={MODAL_TITLE}>Laden…</h2>
             ) : notFound ? (
-              <h2 id={mainTitleId} className="text-lg font-bold text-brand-text">Spiel nicht gefunden</h2>
+              <h2 id={mainTitleId} className={MODAL_TITLE}>Spiel nicht gefunden</h2>
             ) : game ? (
               <>
-                <h2 id={mainTitleId} className="text-lg font-bold text-brand-text truncate">
+                <h2 id={mainTitleId} className={`${MODAL_TITLE} truncate`}>
                   {game.event_type === 'generisch' ? (game.opponent || '(kein Name)') : `Team vs ${game.opponent || '(kein Gegner)'}`}
                 </h2>
                 <p className="text-brand-text-muted text-sm mt-0.5">{game.team_display_long_csv || (game.teams ? formatTeamList(game.teams, 'long') : '')}</p>
@@ -297,11 +298,11 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         {!loading && !notFound && game && (
           <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-4">
             <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border-subtle">
-              <h3 className="font-semibold text-brand-text">Dienste</h3>
+              <h3 className={SUBSECTION_TITLE}>Dienste</h3>
               {canEdit && (
                 <button
                   onClick={() => setShowAddSlot(true)}
-                  className="inline-flex items-center gap-1 text-sm bg-brand-yellow text-brand-black px-3 py-1.5 rounded-md font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors"
+                  className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}
                 >
                   <Plus className="w-3.5 h-3.5" />Dienst hinzufügen
                 </button>
@@ -333,7 +334,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               aria-labelledby={addSlotTitleId}
               className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
-              <h3 id={addSlotTitleId} className="font-bold mb-4 text-brand-text">Dienst hinzufügen</h3>
+              <h3 id={addSlotTitleId} className={`${MODAL_TITLE} mb-4`}>Dienst hinzufügen</h3>
               <div className="space-y-3">
                 <div>
                   <label className={LABEL}>Diensttyp *</label>
@@ -424,7 +425,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               aria-labelledby={editSlotTitleId}
               className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
-              <h3 id={editSlotTitleId} className="font-bold mb-4 text-brand-text">Dienst bearbeiten</h3>
+              <h3 id={editSlotTitleId} className={`${MODAL_TITLE} mb-4`}>Dienst bearbeiten</h3>
               <p className="text-sm text-brand-text-muted mb-3 font-medium">{editSlot.duty_type_name}</p>
               <div className="space-y-3">
                 <div>
@@ -493,7 +494,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               aria-labelledby={deleteSlotTitleId}
               className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
-              <h3 id={deleteSlotTitleId} className="font-bold mb-2 text-brand-text">Dienst löschen?</h3>
+              <h3 id={deleteSlotTitleId} className={`${MODAL_TITLE} mb-2`}>Dienst löschen?</h3>
               <p className="text-sm text-brand-text-muted mb-4">Dieser Dienst wird endgültig gelöscht.</p>
               <DeleteReasonFields
                 idPrefix="slot-delete"
@@ -524,7 +525,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               aria-labelledby={deleteGameTitleId}
               className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
-              <h3 id={deleteGameTitleId} className="font-bold mb-2 text-brand-text">Spiel löschen?</h3>
+              <h3 id={deleteGameTitleId} className={`${MODAL_TITLE} mb-2`}>Spiel löschen?</h3>
               <p className="text-sm text-brand-text-muted mb-1">
                 <strong>{game.event_type === 'generisch' ? (game.opponent || '(kein Name)') : `Team vs ${game.opponent || '(kein Gegner)'}`}</strong> ({dateFormatted})
               </p>

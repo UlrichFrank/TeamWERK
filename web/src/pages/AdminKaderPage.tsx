@@ -14,7 +14,8 @@ import StaffelPicker from '../components/StaffelPicker'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
 import { buildTeamLongName, compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
-import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, BTN_SECONDARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 interface Season {
   id: number
@@ -397,7 +398,7 @@ export default function AdminKaderPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold">Kader</h1>
+          <h1 className={PAGE_TITLE}>Kader</h1>
           {seasons.length > 0 && (
             <select
               value={selectedSeason?.id ?? ''}
@@ -512,7 +513,7 @@ export default function AdminKaderPage() {
                   {/* Card header */}
                   <div className="px-5 py-3 border-b border-brand-border-subtle flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <h2 className="font-semibold text-sm truncate text-brand-text">{title}</h2>
+                      <h2 className={`${SUBSECTION_TITLE} truncate`}>{title}</h2>
                       {k.birth_years.length > 0 && (
                         <span className="text-xs bg-brand-yellow text-brand-black px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
                           {birthYearLabel(k.birth_years)}
@@ -698,7 +699,7 @@ export default function AdminKaderPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
-              <h3 className="font-semibold text-base text-brand-text">Neue Mannschaft anlegen</h3>
+              <h3 className={MODAL_TITLE}>Neue Mannschaft anlegen</h3>
             </div>
             <div className="px-6 py-5 space-y-3">
               <div>
@@ -781,7 +782,7 @@ export default function AdminKaderPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
-              <h3 className="font-semibold text-base text-brand-text">Kader löschen?</h3>
+              <h3 className={MODAL_TITLE}>Kader löschen?</h3>
             </div>
             <div className="px-6 py-5">
               <p className="text-sm text-brand-text-muted">
@@ -798,7 +799,7 @@ export default function AdminKaderPage() {
               <button
                 onClick={handleDeleteKader}
                 disabled={deleting}
-                className="px-4 py-2 text-sm bg-brand-danger text-white font-medium rounded-md hover:bg-brand-danger/90 transition-colors disabled:opacity-50"
+                className={BTN_DANGER}
               >
                 {deleting ? 'Löschen…' : 'Löschen'}
               </button>

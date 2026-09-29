@@ -10,6 +10,7 @@ import EventNoteEditor from './EventNoteEditor'
 import GameDayHostSection from './GameDayHostPicker'
 import { api } from '../lib/api'
 import { BTN_PRIMARY, INPUT, BTN_SECONDARY } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface VenueRef {
   id: number
@@ -181,7 +182,7 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
               : type === 'training'
               ? <Dumbbell className="w-5 h-5 text-brand-green" />
               : <AbsenceIcon className="w-5 h-5 text-brand-text-muted" />}
-            <h2 id={titleId} className="text-lg font-bold text-brand-text">
+            <h2 id={titleId} className={MODAL_TITLE}>
               {type === 'game' ? eventTypeLabel
                 : type === 'training' ? (training?.title || 'Training')
                 : editing ? (editType === 'vacation' ? 'Urlaub' : 'Verletzung') + ' bearbeiten'

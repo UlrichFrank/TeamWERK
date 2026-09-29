@@ -101,7 +101,7 @@ describe('AdminUsersPage — „Testen als" bei Proxy-Accounts', () => {
     renderPage('admin')
 
     await openRowMenu('Mia')
-    const action = await screen.findByRole('button', { name: 'Testen als' })
+    const action = await screen.findByRole('menuitem', { name: 'Testen als' })
     fireEvent.click(action)
 
     expect(startImpersonation).toHaveBeenCalledWith(42, 'Mia Muster')
@@ -113,7 +113,7 @@ describe('AdminUsersPage — „Testen als" bei Proxy-Accounts', () => {
 
     await openRowMenu('Mia')
     await waitFor(() => expect(screen.getByText('Löschen')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: 'Testen als' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Testen als' })).toBeNull()
   })
 
   test('Admin-Konten bleiben von der Impersonation ausgenommen', async () => {
@@ -122,6 +122,6 @@ describe('AdminUsersPage — „Testen als" bei Proxy-Accounts', () => {
 
     await openRowMenu('Andrea')
     await waitFor(() => expect(screen.getByText('Löschen')).toBeInTheDocument())
-    expect(screen.queryByRole('button', { name: 'Testen als' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Testen als' })).toBeNull()
   })
 })

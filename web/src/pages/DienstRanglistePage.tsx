@@ -12,6 +12,7 @@ import {
   toggleTeamId,
   type TeamFilterOption,
 } from '../lib/teamFilter'
+import { PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 // Siehe openspec/changes/dienste-familien-rangliste. GET /api/duty-fairness/rangliste
 // liefert serverseitig bereits sortiert (rank 1..n, keine geteilten Plätze) und
@@ -134,7 +135,7 @@ function RanglisteBlockCard({ block }: { block: RanglisteBlock }) {
   return (
     <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
       <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
-        <h2 className="font-semibold text-brand-text">{block.teamLabel}</h2>
+        <h2 className={SECTION_TITLE}>{block.teamLabel}</h2>
         <span className="text-xs text-brand-text-muted">
           Fair-Anteil: {formatDiensteZahl(block.soll)} {block.soll === 1 ? 'Dienst' : 'Dienste'} pro Kind
         </span>
@@ -221,7 +222,7 @@ export default function DienstRanglistePage() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text shrink-0">Dienst-Rangliste</h1>
+        <h1 className={`${PAGE_TITLE} shrink-0`}>Dienst-Rangliste</h1>
         {teamOptions.length > 1 && (
           <TeamFilter teams={teamOptions} active={activeTeamIds} onToggle={toggleTeam} compact={compact} />
         )}

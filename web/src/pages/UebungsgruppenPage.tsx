@@ -9,6 +9,7 @@ import ActionMenu from '../components/ActionMenu'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorData } from '../lib/errors'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY, INPUT } from '../lib/buttonStyles'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface Person {
   id: number
@@ -124,7 +125,7 @@ export default function UebungsgruppenPage() {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text">Übungsgruppen</h1>
+        <h1 className={PAGE_TITLE}>Übungsgruppen</h1>
         <button
           onClick={() => { setShowCreate(true); setCreateName('') }}
           className={`${HEADER_CTRL} ${HEADER_PRIMARY} whitespace-nowrap`}
@@ -212,7 +213,7 @@ export default function UebungsgruppenPage() {
       {showCreate && (
         <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
-            <h2 className="text-lg font-semibold text-brand-text mb-4">Neue Übungsgruppe</h2>
+            <h2 className={`${MODAL_TITLE} mb-4`}>Neue Übungsgruppe</h2>
             <label className="block text-xs font-medium text-brand-text-muted mb-1">Name</label>
             <input
               autoFocus
@@ -240,7 +241,7 @@ export default function UebungsgruppenPage() {
       {renaming && (
         <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
-            <h2 className="text-lg font-semibold text-brand-text mb-4">Übungsgruppe umbenennen</h2>
+            <h2 className={`${MODAL_TITLE} mb-4`}>Übungsgruppe umbenennen</h2>
             <input
               autoFocus
               value={renameValue}
@@ -266,7 +267,7 @@ export default function UebungsgruppenPage() {
       {deleteConfirm && (
         <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
-            <h2 className="text-lg font-semibold text-brand-text mb-2">Übungsgruppe löschen</h2>
+            <h2 className={`${MODAL_TITLE} mb-2`}>Übungsgruppe löschen</h2>
             <p className="text-sm text-brand-text-muted mb-5">
               „{deleteConfirm.name}" wird gelöscht. Solange Trainingstermine an der Gruppe
               hängen, ist das nicht möglich.

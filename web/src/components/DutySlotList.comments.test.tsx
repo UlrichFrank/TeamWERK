@@ -125,7 +125,7 @@ describe('DutySlotList — Kommentar-Modal (on-demand)', () => {
     // Ohne vorhandene Kommentare ist das Icon nicht da — Öffnen läuft über das
     // ⋮-Menü ("Kommentieren").
     fireEvent.click(screen.getAllByLabelText('Aktionen')[0])
-    fireEvent.click(screen.getAllByRole('button', { name: 'Kommentieren' })[0])
+    fireEvent.click(screen.getAllByRole('menuitem', { name: 'Kommentieren' })[0])
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/duty-slots/100/comments'))
 
     fireEvent.change(screen.getByLabelText('Dein Kommentar'), { target: { value: 'Käsekuchen' } })
@@ -151,7 +151,7 @@ describe('DutySlotList — "Kommentieren" im ⋮-Menü', () => {
       </MemoryRouter>,
     )
     fireEvent.click(screen.getByLabelText('Aktionen'))
-    expect(screen.queryByRole('button', { name: 'Kommentieren' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Kommentieren' })).toBeNull()
   })
 
   test('erscheint mit eigener Zuteilung, sowohl im Desktop- als auch im Mobile-Menü', () => {
@@ -173,7 +173,7 @@ describe('DutySlotList — "Kommentieren" im ⋮-Menü', () => {
     for (const trigger of triggers) {
       fireEvent.click(trigger)
     }
-    const kommentierenEntries = screen.getAllByRole('button', { name: 'Kommentieren' })
+    const kommentierenEntries = screen.getAllByRole('menuitem', { name: 'Kommentieren' })
     expect(kommentierenEntries).toHaveLength(2)
   })
 })
@@ -197,8 +197,8 @@ describe('DutySlotList — ⋮-Menü auch auf Desktop', () => {
     const triggers = screen.getAllByLabelText('Aktionen')
     expect(triggers.length).toBeGreaterThan(0)
     fireEvent.click(triggers[0])
-    expect(screen.getAllByRole('button', { name: 'Bearbeiten' })[0]).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: 'Anleitung' })[0]).toBeInTheDocument()
+    expect(screen.getAllByRole('menuitem', { name: 'Bearbeiten' })[0]).toBeInTheDocument()
+    expect(screen.getAllByRole('menuitem', { name: 'Anleitung' })[0]).toBeInTheDocument()
     // Eintragen/Austragen sind kein Menü-Eintrag im Desktop-Menü.
     expect(screen.queryAllByRole('button', { name: 'Eintragen' }).length).toBeGreaterThan(0)
   })

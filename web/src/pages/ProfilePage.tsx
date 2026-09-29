@@ -12,6 +12,7 @@ import ProfileDatenschutzTab from '../components/profile/ProfileDatenschutzTab'
 import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
 import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
 import { TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { PAGE_TITLE } from '../lib/typography'
 
 export interface Member {
   id: number; first_name: string; last_name: string
@@ -128,7 +129,7 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">Mein Profil</h1>
+      <h1 className={`${PAGE_TITLE} mb-6`}>Mein Profil</h1>
 
       {/* Tab Navigation */}
       <div className={`${TAB_BAR} mb-6`}>

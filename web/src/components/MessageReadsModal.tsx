@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { useEscapeKey } from "../lib/useEscapeKey";
 import { useDialogA11y } from "../lib/useDialogA11y";
 import { errorMessage } from "../lib/errors";
+import { MODAL_TITLE } from '../lib/typography';
 
 interface Reader {
   userId: number;
@@ -68,7 +69,7 @@ export default function MessageReadsModal({ target, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4 shrink-0">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Gelesen von</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Gelesen von</h2>
           <button
             onClick={onClose}
             aria-label="Schließen"
