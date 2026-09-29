@@ -1059,98 +1059,103 @@ export default function KalenderPage() {
             ariaLabel="Kalender filtern"
           />
         </div>
-        {canSeeTeamAbsences && (
-          <button
-            onClick={() => {
-              const next = !showTeamAbsences
-              setShowTeamAbsences(next)
-              sessionStorage.setItem('kalender_show_team_absences', String(next))
-              loadAbsences(next, teamFilterParam)
-            }}
-            aria-label="Mannschaftsabwesenheiten"
-            title="Mannschaftsabwesenheiten"
-            className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
-              showTeamAbsences
-                ? 'bg-brand-blue text-white border-brand-blue'
-                : HEADER_NEUTRAL
-            }`}
-          >
-            <UserX className="w-3.5 h-3.5" />
-            {!compact && <span>Abwesenheit</span>}
-          </button>
-        )}
-        {(canEdit || canCreateAbsence || canImportGames || canBulkRegenDuties || canExportDuties) && (
-          <div ref={eventMenuRef} className="relative shrink-0">
-            <div className="flex">
-              {(canEdit || canCreateAbsence) && (
-                <button
-                  onClick={() => {
-                    if (!canEdit && canCreateAbsence) {
-                      setEventType('abwesenheit')
-                      setWizardStep(2)
-                      if (user?.isParent && absenceChildren.length === 0) loadAbsenceChildren()
-                    }
-                    setShowCreate(true)
-                  }}
-                  aria-label={canEdit ? 'Event' : 'Abwesenheit'}
-                  className={`${(canImportGames || canBulkRegenDuties)
-                    ? HEADER_SPLIT_MAIN
-                    : (compact ? HEADER_CTRL_ICON : HEADER_CTRL)} ${HEADER_PRIMARY}`}
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  {!compact && <span>{canEdit ? 'Event' : 'Abwesenheit'}</span>}
-                </button>
-              )}
-              {(canImportGames || canBulkRegenDuties || canExportDuties) && (
-                <button
-                  onClick={() => setShowEventMenu(v => !v)}
-                  aria-label="Weitere Aktionen"
-                  aria-expanded={showEventMenu}
-                  aria-haspopup="menu"
-                  className={`${canEdit || canCreateAbsence
-                    ? HEADER_SPLIT_CARET
-                    : HEADER_CTRL_ICON} ${HEADER_PRIMARY}`}
-                >
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            {showEventMenu && (canImportGames || canBulkRegenDuties || canExportDuties) && (
-              <div role="menu" className="absolute right-0 mt-1 w-60 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
-                {canImportGames && (
+        {/* Aktionen als Gruppe mit ml-auto: bricht die Kopfzeile auf Mobile um
+            (HEADER_GROUP füllt mit flex-1 die erste Zeile), stehen sie
+            rechtsbündig statt links unter der Überschrift. */}
+        <div className="ml-auto flex items-center gap-2">
+          {canSeeTeamAbsences && (
+            <button
+              onClick={() => {
+                const next = !showTeamAbsences
+                setShowTeamAbsences(next)
+                sessionStorage.setItem('kalender_show_team_absences', String(next))
+                loadAbsences(next, teamFilterParam)
+              }}
+              aria-label="Mannschaftsabwesenheiten"
+              title="Mannschaftsabwesenheiten"
+              className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
+                showTeamAbsences
+                  ? 'bg-brand-blue text-white border-brand-blue'
+                  : HEADER_NEUTRAL
+              }`}
+            >
+              <UserX className="w-3.5 h-3.5" />
+              {!compact && <span>Abwesenheit</span>}
+            </button>
+          )}
+          {(canEdit || canCreateAbsence || canImportGames || canBulkRegenDuties || canExportDuties) && (
+            <div ref={eventMenuRef} className="relative shrink-0">
+              <div className="flex">
+                {(canEdit || canCreateAbsence) && (
                   <button
-                    role="menuitem"
-                    onClick={() => { setShowEventMenu(false); setShowH4AImport(true) }}
-                    className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                    onClick={() => {
+                      if (!canEdit && canCreateAbsence) {
+                        setEventType('abwesenheit')
+                        setWizardStep(2)
+                        if (user?.isParent && absenceChildren.length === 0) loadAbsenceChildren()
+                      }
+                      setShowCreate(true)
+                    }}
+                    aria-label={canEdit ? 'Event' : 'Abwesenheit'}
+                    className={`${(canImportGames || canBulkRegenDuties)
+                      ? HEADER_SPLIT_MAIN
+                      : (compact ? HEADER_CTRL_ICON : HEADER_CTRL)} ${HEADER_PRIMARY}`}
                   >
-                    <Download className="w-4 h-4 shrink-0" />
-                    Spielplan aus Handball4All
+                    <Plus className="w-3.5 h-3.5" />
+                    {!compact && <span>{canEdit ? 'Event' : 'Abwesenheit'}</span>}
                   </button>
                 )}
-                {canBulkRegenDuties && (
+                {(canImportGames || canBulkRegenDuties || canExportDuties) && (
                   <button
-                    role="menuitem"
-                    onClick={() => { setShowEventMenu(false); setShowBulkRegen(true) }}
-                    className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                    onClick={() => setShowEventMenu(v => !v)}
+                    aria-label="Weitere Aktionen"
+                    aria-expanded={showEventMenu}
+                    aria-haspopup="menu"
+                    className={`${canEdit || canCreateAbsence
+                      ? HEADER_SPLIT_CARET
+                      : HEADER_CTRL_ICON} ${HEADER_PRIMARY}`}
                   >
-                    <RefreshCw className="w-4 h-4 shrink-0" />
-                    Dienste aktualisieren
-                  </button>
-                )}
-                {canExportDuties && (
-                  <button
-                    role="menuitem"
-                    onClick={() => { setShowEventMenu(false); setShowDutyExport(true) }}
-                    className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 shrink-0" />
-                    Dienste als CSV
+                    <ChevronDown className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
-            )}
-          </div>
-        )}
+              {showEventMenu && (canImportGames || canBulkRegenDuties || canExportDuties) && (
+                <div role="menu" className="absolute right-0 mt-1 w-60 bg-white border border-brand-border rounded-md shadow-lg z-20 overflow-hidden">
+                  {canImportGames && (
+                    <button
+                      role="menuitem"
+                      onClick={() => { setShowEventMenu(false); setShowH4AImport(true) }}
+                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                    >
+                      <Download className="w-4 h-4 shrink-0" />
+                      Spielplan aus Handball4All
+                    </button>
+                  )}
+                  {canBulkRegenDuties && (
+                    <button
+                      role="menuitem"
+                      onClick={() => { setShowEventMenu(false); setShowBulkRegen(true) }}
+                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                    >
+                      <RefreshCw className="w-4 h-4 shrink-0" />
+                      Dienste aktualisieren
+                    </button>
+                  )}
+                  {canExportDuties && (
+                    <button
+                      role="menuitem"
+                      onClick={() => { setShowEventMenu(false); setShowDutyExport(true) }}
+                      className="w-full flex items-center gap-2 text-left px-4 py-2.5 text-sm text-brand-text hover:bg-brand-surface-card transition-colors"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 shrink-0" />
+                      Dienste als CSV
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Month navigation */}
