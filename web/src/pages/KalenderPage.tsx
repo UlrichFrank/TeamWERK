@@ -38,6 +38,7 @@ import {
   describeHostError,
   type GameDayHost,
 } from '../components/GameDayHostPicker'
+import { MODAL_TITLE } from '../lib/typography'
 
 // Dieselben vier Typen wie auf /termine (TERMINE_TYPES) — im Compact-Modus
 // klappt EventTypeFilter sie in ein Dropdown, weil vier Einzel-Buttons neben
@@ -1362,7 +1363,7 @@ export default function KalenderPage() {
           <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
             {wizardStep === 1 && (
               <div>
-                <h2 className="text-lg font-bold mb-6 text-brand-text">Welche Art von Event?</h2>
+                <h2 className={`${MODAL_TITLE} mb-6`}>Welche Art von Event?</h2>
                 <div className="space-y-3">
                   {(['heim', 'auswärts', 'generisch'] as const).map(type => (
                     <button
@@ -1438,7 +1439,7 @@ export default function KalenderPage() {
 
             {wizardStep === 2 && (eventType === 'heim' || eventType === 'auswärts' || eventType === 'generisch') && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Event-Details</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Event-Details</h2>
                 <div className="space-y-3">
                   <div>
                     <label className={LABEL}>Datum *</label>
@@ -1566,7 +1567,7 @@ export default function KalenderPage() {
 
             {wizardStep === 2 && eventType === 'training' && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Einzeltraining anlegen</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Einzeltraining anlegen</h2>
                 <div className="space-y-3">
                   <div>
                     <label className={LABEL}>Titel</label>
@@ -1636,7 +1637,7 @@ export default function KalenderPage() {
 
             {wizardStep === 2 && eventType === 'serie' && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Trainingsserie anlegen</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Trainingsserie anlegen</h2>
                 <div className="space-y-3">
                   <div>
                     <label className={LABEL}>Wochentag *</label>
@@ -1717,7 +1718,7 @@ export default function KalenderPage() {
 
             {wizardStep === 2 && eventType === 'abwesenheit' && !absencePreviewEvents && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Abwesenheit eintragen</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Abwesenheit eintragen</h2>
                 <div className="space-y-4">
                   {user?.isParent && absenceChildren.length > 1 && (
                     <div>
@@ -1853,7 +1854,7 @@ export default function KalenderPage() {
 
             {wizardStep === 3 && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Dienstplan-Vorlage</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Dienstplan-Vorlage</h2>
                 {(() => {
                   const filteredTemplates = templates.filter(t => t.template_type === eventType)
                   return (
@@ -1902,7 +1903,7 @@ export default function KalenderPage() {
 
             {wizardStep === 4 && (
               <div>
-                <h2 className="text-lg font-bold mb-4 text-brand-text">Dienste bestätigen</h2>
+                <h2 className={`${MODAL_TITLE} mb-4`}>Dienste bestätigen</h2>
                 {preview.length === 0 ? (
                   <p className="text-sm text-brand-text-muted mb-4">Keine Dienste vorhanden.</p>
                 ) : (

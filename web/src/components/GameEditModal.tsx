@@ -48,6 +48,7 @@ interface AvailableTeam {
 
 import type { RegenSummary } from './RegenSummaryCard'
 import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface Props {
   game: Game
@@ -168,7 +169,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">
+          <h2 id={titleId} className={MODAL_TITLE}>
             {isGeneric ? 'Event bearbeiten' : 'Spieltag bearbeiten'}
           </h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">

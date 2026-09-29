@@ -9,6 +9,7 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, BTN_SMALL, INPUT } from '../lib/buttonStyles'
 import { MATCH_REPORT_STATE_LABEL, type MatchReportState } from '../lib/matchReportState'
+import { MODAL_TITLE } from '../lib/typography'
 
 const MAX_IMAGES = 10
 
@@ -489,7 +490,7 @@ export default function MatchReportFormPage() {
                         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md space-y-3"
                         onClick={e => e.stopPropagation()}
                     >
-                        <h2 id="return-title" className="text-base font-semibold text-brand-text">Bericht zurückgeben</h2>
+                        <h2 id="return-title" className={MODAL_TITLE}>Bericht zurückgeben</h2>
                         <p className="text-sm text-brand-text-muted">
                             Der Autor kann den Bericht danach wieder bearbeiten und erneut einreichen. Er bekommt deinen Kommentar als Benachrichtigung.
                         </p>

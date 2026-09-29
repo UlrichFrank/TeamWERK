@@ -6,6 +6,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { BTN_PRIMARY, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 // Tages-Ausrichter im Kalender (heimspieltag-ausrichter, design.md Decision 9/10).
 //
@@ -170,7 +171,7 @@ export function GameDayHostPreviewDialog({ preview, targetName, busy, error, onC
         className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Ausrichter wechseln?</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Ausrichter wechseln?</h2>
           <button onClick={onCancel} disabled={busy} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

@@ -7,6 +7,7 @@ import { errorStatus } from '../lib/errors'
 import { DUTY_INSTRUCTION_TEMPLATE } from '../lib/dutyInstructionTemplate'
 import MarkdownRenderer from './MarkdownRenderer'
 import { BTN_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface DutyInstructionEditorModalProps {
   dutyTypeId: number
@@ -77,7 +78,7 @@ export default function DutyInstructionEditorModal({
         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]"
       >
         <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
-          <h2 id={titleId} className="font-semibold text-lg text-brand-text">Anleitung: {dutyTypeName}</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Anleitung: {dutyTypeName}</h2>
           <button
             onClick={onClose}
             aria-label="Schließen"

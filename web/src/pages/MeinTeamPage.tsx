@@ -7,6 +7,7 @@ import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 import { BTN_PRIMARY, BTN_SMALL, INPUT, BTN_SECONDARY } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface TrainerEntry { userId: number; memberId: number; name: string }
 interface Responsibility { id: number; label: string }
@@ -797,7 +798,7 @@ function RosterSection({ roster, teamId, penalties, penaltyHidden, penaltyUnit, 
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4" onClick={() => setUnitPreview(null)}>
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-md w-full max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-bold text-brand-text">
+              <h3 className={MODAL_TITLE}>
                 Einheit wechseln: {unitPreview.from === 'euro' ? 'Euro' : 'Striche'} → {unitPreview.to === 'euro' ? 'Euro' : 'Striche'}
               </h3>
               <button onClick={() => setUnitPreview(null)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">

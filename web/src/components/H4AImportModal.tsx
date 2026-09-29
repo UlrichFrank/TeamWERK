@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_PRIMARY, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 // Import des H4A-Spielplans in zwei Schritten:
 //   1. Zugangsdaten + Periode  → POST /games/import/h4a/preview  (liest Handball4All)
@@ -246,7 +247,7 @@ export default function H4AImportModal({ isOpen, onClose, onImported }: Props) {
         className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu max-w-4xl mx-4 w-full max-h-[90vh] flex flex-col"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Spielplan aus Handball4All importieren</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Spielplan aus Handball4All importieren</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

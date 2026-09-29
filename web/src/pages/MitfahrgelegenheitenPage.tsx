@@ -13,6 +13,7 @@ import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, se
 import TeamFilter from '../components/TeamFilter'
 import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, INPUT, LABEL, HEADER_GROUP } from '../lib/buttonStyles'
 import { useCompactHeader } from '../hooks/useCompactHeader'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface CarpoolEntry {
   id: number
@@ -309,7 +310,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-brand-black/40">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-brand-text">Mitfahrgelegenheit eintragen</h2>
+          <h2 className={MODAL_TITLE}>Mitfahrgelegenheit eintragen</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>
@@ -448,7 +449,7 @@ function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, 
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-brand-black/40">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-semibold text-brand-text">{isRide ? 'Mitfahren' : 'Platz anbieten'}</h2>
+          <h2 className={MODAL_TITLE}>{isRide ? 'Mitfahren' : 'Platz anbieten'}</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

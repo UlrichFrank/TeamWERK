@@ -14,6 +14,7 @@ import LineupBadge from '../components/LineupBadge'
 import LineupCheckbox from '../components/LineupCheckbox'
 import type { LineupState } from '../lib/lineup'
 import { BTN_SECONDARY, BTN_DANGER, INPUT } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
@@ -391,7 +392,7 @@ export default function TermineDetailPage() {
   const declineModal = declineTarget ? (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40" onClick={() => setDeclineTarget(null)}>
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-        <h2 className="font-semibold text-brand-text mb-1">Absagen für {declineTarget.name}</h2>
+        <h2 className={`${MODAL_TITLE} mb-1`}>Absagen für {declineTarget.name}</h2>
         <p className="text-sm text-brand-text-muted mb-4">Grund angeben (optional)</p>
         <input
           ref={declineInputRef}

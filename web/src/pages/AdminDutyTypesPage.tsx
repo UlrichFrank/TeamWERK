@@ -11,6 +11,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { hoursToDisplay, parseHoursInput, resolveAnchorClock, addMinutesToTime, dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
 import { BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface DutyType {
   id: number
@@ -427,7 +428,7 @@ export default function AdminDutyTypesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg text-brand-text">Neuer Diensttyp</h2>
+              <h2 className={MODAL_TITLE}>Neuer Diensttyp</h2>
               <button
                 onClick={() => { setShowCreateModal(false); setCreate(emptyCreate()) }}
                 aria-label="Schließen"

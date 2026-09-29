@@ -8,7 +8,7 @@
 
 ## 2. Modal-Titel
 
-- [ ] 2.1 `EditModal` und alle Modal-/Dialog-Köpfe (`<h2>`/`<h3>` in Modals, zusätzlich per Suche Modal-Köpfe als `<div>`/`<p>` mit `text-lg font-(bold|semibold)`) auf `MODAL_TITLE` umstellen, Layout-Klassen bleiben. Die Dateien aus `MIGRATION_PENDING` entfernen, die danach sauber sind. Prüfen: Gate grün, `pnpm -C web test` grün.
+- [x] 2.1 `EditModal` und alle Modal-/Dialog-Köpfe (`<h2>`/`<h3>` in Modals, zusätzlich per Suche Modal-Köpfe als `<div>`/`<p>` mit `text-lg font-(bold|semibold)`) auf `MODAL_TITLE` umstellen, Layout-Klassen bleiben. Die Dateien aus `MIGRATION_PENDING` entfernen, die danach sauber sind. Prüfen: Gate grün, `pnpm -C web test` grün.
 
 ## 3. Seiten- und Einstiegstitel
 

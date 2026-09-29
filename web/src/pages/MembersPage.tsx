@@ -13,6 +13,7 @@ import { useWindowedList } from '../hooks/useWindowedList'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { BTN_PRIMARY, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_SECONDARY, INPUT, LABEL } from '../lib/buttonStyles'
 import PersonChip from '../components/PersonChip'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface Member {
   id: number; first_name: string; last_name: string
@@ -576,7 +577,7 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-              <h2 className="font-semibold text-base text-brand-text">Neues Mitglied anlegen</h2>
+              <h2 className={MODAL_TITLE}>Neues Mitglied anlegen</h2>
               <button onClick={resetNew} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -639,7 +640,7 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-              <h2 className="font-semibold text-base text-brand-text">CSV-Import</h2>
+              <h2 className={MODAL_TITLE}>CSV-Import</h2>
               <button onClick={resetImport} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -920,7 +921,7 @@ export default function MembersPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
-              <h2 className="font-semibold text-base text-brand-text">SEPA-Mandate importieren</h2>
+              <h2 className={MODAL_TITLE}>SEPA-Mandate importieren</h2>
               <button onClick={resetSepaBulk} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>

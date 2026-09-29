@@ -15,6 +15,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorData } from '../lib/errors'
 import { buildTeamLongName, compareAgeClass, type TrainingGroupCategory } from '../lib/teamName'
 import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, BTN_SECONDARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface Season {
   id: number
@@ -698,7 +699,7 @@ export default function AdminKaderPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
-              <h3 className="font-semibold text-base text-brand-text">Neue Mannschaft anlegen</h3>
+              <h3 className={MODAL_TITLE}>Neue Mannschaft anlegen</h3>
             </div>
             <div className="px-6 py-5 space-y-3">
               <div>
@@ -781,7 +782,7 @@ export default function AdminKaderPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
-              <h3 className="font-semibold text-base text-brand-text">Kader löschen?</h3>
+              <h3 className={MODAL_TITLE}>Kader löschen?</h3>
             </div>
             <div className="px-6 py-5">
               <p className="text-sm text-brand-text-muted">

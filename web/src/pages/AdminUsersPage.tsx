@@ -17,6 +17,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorStatus, errorMessage } from '../lib/errors'
 import { relativeTime } from '../lib/relativeTime'
 import { BTN_PRIMARY, HEADER_FIELD, HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface User {
   id: number
@@ -465,7 +466,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Einladung versenden</h2>
+              <h2 className={MODAL_TITLE}>Einladung versenden</h2>
               <button onClick={closeInviteModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -516,7 +517,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Account anlegen</h2>
+              <h2 className={MODAL_TITLE}>Account anlegen</h2>
               <button onClick={closeCreateModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -583,7 +584,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">CSV importieren</h2>
+              <h2 className={MODAL_TITLE}>CSV importieren</h2>
               <button onClick={closeCsvModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -648,7 +649,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Mit Mitglied verknüpfen</h2>
+              <h2 className={MODAL_TITLE}>Mit Mitglied verknüpfen</h2>
               <button onClick={closeLinkModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -694,7 +695,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Proxy-Account aktivieren</h2>
+              <h2 className={MODAL_TITLE}>Proxy-Account aktivieren</h2>
               <button onClick={closeActivateModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -737,7 +738,7 @@ export default function AdminUsersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg">Eltern-E-Mail setzen</h2>
+              <h2 className={MODAL_TITLE}>Eltern-E-Mail setzen</h2>
               <button onClick={closeRecoveryModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>

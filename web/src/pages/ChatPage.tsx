@@ -70,6 +70,7 @@ import ChatPollVotesModal from "../components/ChatPollVotesModal";
 import { BTN_SMALL, HEADER_CTRL_ICON, HEADER_NEUTRAL, INPUT, LABEL } from '../lib/buttonStyles'
 import ChatSearchModal, { type SearchHit } from "../components/ChatSearchModal";
 import ActionMenu from "../components/ActionMenu";
+import { MODAL_TITLE } from '../lib/typography';
 
 interface ConvMember {
   id: number;
@@ -3044,7 +3045,7 @@ function NewConversationModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">Neues Gespräch</h2>
+          <h2 className={MODAL_TITLE}>Neues Gespräch</h2>
           <button onClick={onClose} aria-label="Schließen">
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>
@@ -3321,7 +3322,7 @@ function BroadcastModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">
+          <h2 className={MODAL_TITLE}>
             Mitteilung senden
           </h2>
           <button onClick={onClose} aria-label="Schließen">
@@ -3478,7 +3479,7 @@ function BroadcastEditModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-brand-text">
+          <h2 className={MODAL_TITLE}>
             Mitteilung bearbeiten
           </h2>
           <button onClick={onClose} aria-label="Schließen">

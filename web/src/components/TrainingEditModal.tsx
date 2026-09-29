@@ -6,6 +6,7 @@ import VenuePicker from './VenuePicker'
 import RsvpDefaultsEditor, { type RsvpDefault } from './RsvpDefaultsEditor'
 import DeleteReasonFields, { deletionPayload } from './DeleteReasonFields'
 import { INPUT, BTN_SECONDARY, BTN_DANGER, BTN_PRIMARY, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface VenueRef { id: number; name: string; street: string; city: string; postal_code: string; note: string }
 
@@ -176,7 +177,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
         className="bg-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Training bearbeiten</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Training bearbeiten</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>

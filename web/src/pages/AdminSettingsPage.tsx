@@ -15,6 +15,7 @@ import NumberSpinner from '../components/NumberSpinner'
 import { BEITRAGS_KATEGORIEN, kategorieLabel } from '../lib/beitragsKategorien'
 import { errorStatus } from '../lib/errors'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, INPUT, BTN_SECONDARY, LABEL, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const BTN_DANGER_SM = 'bg-brand-danger text-white rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
@@ -312,7 +313,7 @@ function SaisonsTab() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg text-brand-text">Neue Saison</h2>
+              <h2 className={MODAL_TITLE}>Neue Saison</h2>
               <button onClick={() => setShowCreate(false)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>
@@ -1089,7 +1090,7 @@ function AusrichterKachel() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-md mx-4 flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0 border-b border-brand-border-subtle">
-              <h2 className="font-semibold text-lg text-brand-text">Ausrichter löschen?</h2>
+              <h2 className={MODAL_TITLE}>Ausrichter löschen?</h2>
               <button onClick={closeDeleteConfirm} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
                 <X className="w-5 h-5" />
               </button>

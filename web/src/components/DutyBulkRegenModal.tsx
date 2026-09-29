@@ -7,6 +7,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { useAusrichterOptions } from './GameDayHostPicker'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 // Massen-Regeneration der Dienst-Slots über einen wählbaren Zeitraum
 // (openspec/changes/duty-bulk-regen). Jede Eingabe-Änderung löst — entprellt und mit
@@ -261,7 +262,7 @@ export default function DutyBulkRegenModal({ isOpen, onClose, onApplied }: Props
         className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu max-w-4xl mx-4 w-full max-h-[90vh] flex flex-col"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Dienste aktualisieren</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Dienste aktualisieren</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
             <X className="w-5 h-5" />
           </button>

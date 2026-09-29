@@ -4,6 +4,7 @@ import { ChevronDown, MapPin, Plus, X } from 'lucide-react'
 import { api } from '../lib/api'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { BTN_SECONDARY, BTN_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 export interface Venue {
   id: number
@@ -175,7 +176,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
             aria-labelledby={newVenueTitleId}
             className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md"
           >
-            <h2 id={newVenueTitleId} className="text-lg font-semibold text-brand-text mb-4">Neuen Ort anlegen</h2>
+            <h2 id={newVenueTitleId} className={`${MODAL_TITLE} mb-4`}>Neuen Ort anlegen</h2>
             {error && (
               <p className="mb-3 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</p>
             )}

@@ -5,6 +5,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 import { BTN_PRIMARY, BTN_SECONDARY } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 interface ConvMember { id: number; name: string }
 
@@ -66,7 +67,7 @@ export default function CreatorExitChoiceModal({ convId, ownerId, members, onClo
         className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id={titleId} className="text-lg font-bold text-brand-text">Gruppe verlassen</h2>
+          <h2 id={titleId} className={MODAL_TITLE}>Gruppe verlassen</h2>
           <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>

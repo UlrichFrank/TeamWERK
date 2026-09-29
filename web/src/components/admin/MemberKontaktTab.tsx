@@ -9,6 +9,7 @@ import { useVault } from '../../contexts/VaultContext'
 import { useDialogA11y } from '../../lib/useDialogA11y'
 import { encryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, BTN_SECONDARY, INPUT, LABEL } from '../../lib/buttonStyles'
+import { MODAL_TITLE } from '../../lib/typography'
 
 const formatIBAN = (raw: string) =>
   raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
@@ -415,7 +416,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
             aria-labelledby={deleteTitleId}
             className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm"
           >
-            <h2 id={deleteTitleId} className="font-semibold text-brand-text mb-2">Dokument löschen</h2>
+            <h2 id={deleteTitleId} className={`${MODAL_TITLE} mb-2`}>Dokument löschen</h2>
             <p className="text-sm text-brand-text-muted mb-4">Das SEPA-Mandat-Dokument wirklich löschen?</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setConfirmDelete(false)} className={BTN_SECONDARY}>Abbrechen</button>

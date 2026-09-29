@@ -15,6 +15,7 @@ import ActionMenu from './ActionMenu'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
 import { BTN_PRIMARY, BTN_DANGER, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
+import { MODAL_TITLE } from '../lib/typography'
 
 // Bewusst schlank: Board liefert nur Namen inline; Avatar/Kontakt lädt
 // PersonChip on-demand über GET /api/users/{id}/contact (Sichtbarkeitsregeln
@@ -324,7 +325,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
             aria-labelledby="duty-no-instruction-title"
             className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
           >
-            <h2 id="duty-no-instruction-title" className="text-lg font-bold mb-2 text-brand-text">Keine Anleitung</h2>
+            <h2 id="duty-no-instruction-title" className={`${MODAL_TITLE} mb-2`}>Keine Anleitung</h2>
             <p className="text-sm text-brand-text-muted mb-4">
               Für diesen Dienst gibt es noch keine Anleitung.
             </p>
@@ -350,7 +351,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
             aria-labelledby="duty-claim-dialog-title"
             className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
           >
-            <h2 id="duty-claim-dialog-title" className="text-lg font-bold mb-3 text-brand-text">Dienst übernehmen für…</h2>
+            <h2 id="duty-claim-dialog-title" className={`${MODAL_TITLE} mb-3`}>Dienst übernehmen für…</h2>
             <div className="space-y-2 mb-4">
               <label className="flex items-center gap-3 p-2.5 rounded-lg border border-brand-border-subtle cursor-pointer hover:bg-brand-surface-card transition-colors">
                 <input
@@ -406,7 +407,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
             aria-labelledby="duty-comment-modal-title"
             className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
           >
-            <h2 id="duty-comment-modal-title" className="text-lg font-bold mb-3 text-brand-text">Kommentare</h2>
+            <h2 id="duty-comment-modal-title" className={`${MODAL_TITLE} mb-3`}>Kommentare</h2>
             {commentModalLoading ? (
               <p className="text-sm text-brand-text-muted mb-4">Lädt…</p>
             ) : (
