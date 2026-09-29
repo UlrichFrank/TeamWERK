@@ -4,8 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import DutySlotList, { type BoardSlot } from './DutySlotList'
 import { PersonContactProvider } from '../contexts/PersonContactContext'
 
-// openspec/changes/dienste-erweiterter-kader: Eingetragene aus dem erweiterten
-// Kader tragen das Kennzeichen „Aushilfe“ neben dem Namen.
+// Eingetragene aus dem erweiterten Kader tragen im Slot bewusst KEIN
+// „Erw. Kader“-Kennzeichen — auf Mobile überlagerte es die übrigen Namen.
 
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 1, name: 'Alice', role: 'standard' } }),
@@ -19,8 +19,8 @@ function slot(assignees: BoardSlot['assignees']): BoardSlot {
   }
 }
 
-describe('DutySlotList — Aushilfe-Kennzeichen', () => {
-  test('nur die Aushilfe trägt das Kennzeichen', () => {
+describe('DutySlotList — kein Aushilfe-Kennzeichen am Slot', () => {
+  test('auch die Aushilfe trägt kein Kennzeichen, ihr Name bleibt sichtbar', () => {
     render(
       <MemoryRouter>
         <PersonContactProvider>
@@ -34,9 +34,9 @@ describe('DutySlotList — Aushilfe-Kennzeichen', () => {
         </PersonContactProvider>
       </MemoryRouter>,
     )
-    const badges = screen.getAllByText('Erw. Kader')
-    expect(badges).toHaveLength(1)
-    expect(badges[0].parentElement?.textContent).toContain('Jonas Keller')
+    expect(screen.queryByText('Erw. Kader')).not.toBeInTheDocument()
+    expect(screen.getByText('Jonas Keller')).toBeInTheDocument()
+    expect(screen.getByText('Sabine Roth')).toBeInTheDocument()
   })
 
   test('ohne Aushilfe kein Kennzeichen', () => {

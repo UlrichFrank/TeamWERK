@@ -11,7 +11,6 @@ import { useDialogA11y } from '../lib/useDialogA11y'
 import { useWindowedList } from '../hooks/useWindowedList'
 import WindowedTableBody from './WindowedTableBody'
 import PersonChip from './PersonChip'
-import AushilfeBadge from './AushilfeBadge'
 import ActionMenu from './ActionMenu'
 import { AUDIENCE_LABELS } from '../lib/constants'
 import type { ProxyChild } from '../pages/DutyPage'
@@ -260,11 +259,10 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
                     )}
                     {s.assignees && s.assignees.length > 0 && (
                       <div className="flex flex-wrap justify-end gap-1">
+                        {/* Kein „Erw. Kader“-Kennzeichen je Person: auf Mobile
+                            überlagerte es die Namen der übrigen Eingetragenen. */}
                         {s.assignees.map((a, i) => (
-                          <span key={i} className="inline-flex items-center gap-1">
-                            <PersonChip userId={a.user_id} name={a.name} />
-                            {a.aushilfe && <AushilfeBadge />}
-                          </span>
+                          <PersonChip key={i} userId={a.user_id} name={a.name} />
                         ))}
                       </div>
                     )}
