@@ -34,14 +34,30 @@ Marke: Schwarz `#181310`, Gelb `#FDE400`, Weiß `#FFFFFF`; sekundär Blau `#3E4A
 - **Button Danger:** `bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
 - **Input:** `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
 - **Weitere Konstanten** (ebenfalls aus `buttonStyles.ts` importieren, nicht abtippen): `INPUT` (= Input oben), `LABEL` (`block text-sm font-medium text-brand-text-muted mb-1`), `BTN_SECONDARY` (Abbrechen/Zurück neben einer Formular-Aktion — gleiche Höhe wie `BTN_PRIMARY`, auch auf Mobile), `TAB_BAR`/`TAB`/`TAB_ACTIVE`/`TAB_INACTIVE` (Tab-Leisten: scrollen auf Mobile horizontal, brechen nie um) und `HEADER_GROUP` (Filter-/Suchgruppe in einer umbrechenden Kopfzeile — `min-w-[12rem]` statt `min-w-0`, sonst quetscht sie sich auf Mobile unter die Nachbar-Buttons).
-- **Modal-Backdrop:** `bg-brand-black/40` (Bild-Vollansichten `bg-brand-black/80`); Modal-Kopf wie `EditModal` (Titel `text-lg font-bold`, Schließen als `<X>` mit `aria-label`).
-- **Seitentitel:** `text-2xl font-bold` — auch auf Detailseiten. `<main>` setzt `text-brand-text` als Grundfarbe.
+- **Modal-Backdrop:** `bg-brand-black/40` (Bild-Vollansichten `bg-brand-black/80`); Modal-Kopf wie `EditModal` (Titel `MODAL_TITLE`, Schließen als `<X>` mit `aria-label`).
+- **Seitentitel:** `PAGE_TITLE` — auch auf Detailseiten. `<main>` setzt `text-brand-text` als Grundfarbe.
 - **Card:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6` (Tabellen-Container: `… overflow-hidden`)
 - **Modal:** `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6`
 - **Alert Info:** `p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text`
 - **Alert Fehler:** `p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger`
 - **Tabellen-Header (th):** `bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left`
 - **Tabellen-Row:** `hover:bg-brand-table-select transition-colors` / Zelle `px-4 py-3 text-sm text-brand-text`
+
+## Typografie-Rollen
+
+Überschriften und Menüeinträge haben je **Rolle** genau ein Aussehen. Das heißt nicht, dass alle gleich aussehen: Die Rollen bilden eine absteigende Treppe, und keine tiefere Ebene ist größer oder kräftiger als ihre übergeordnete. Die Klassen-Strings stehen in `web/src/lib/typography.ts` und werden importiert, nicht abgetippt. Der Aufrufer hängt nur Layout-Klassen (`mb-*`, `truncate`, `flex …`) oder Zustandsfarben an, **nie** eine Größen- oder Schnittklasse.
+
+| Konstante | Rolle |
+|---|---|
+| `PAGE_TITLE` | `<h1>` einer App-Seite, auch Detailseiten |
+| `ENTRY_TITLE` | Kartentitel auf Einstiegsseiten (Anmelden, Registrieren, Passwort) — eine Stufe kleiner, weil darüber die Marke steht |
+| `MODAL_TITLE` | Kopf eines Modals/Dialogs |
+| `SECTION_TITLE` | Abschnitt einer Seite, Kartenkopf |
+| `SUBSECTION_TITLE` | Gliederung innerhalb eines Abschnitts oder Modals |
+| `OVERLINE` | kleine Versal-Zwischenzeile (wie der Tabellenkopf) |
+| `MENU_ITEM` / `MENU_ITEM_DANGER` | Eintrag in Dropdown-/Aktionsmenüs, immer mit `role="menuitem"` |
+
+Der Tag (`h1`/`h2`/`h3`) folgt der Dokumentgliederung, die Rolle dem Aussehen. Eine Karte auf einer Seite ist `SECTION_TITLE`, egal ob sie im Profil oder im Admin-Bereich steht. `typography.gate.test.ts` meldet jede `<h1>`–`<h3>` ohne Rollen-Konstante oder mit handgesetzter Größen- bzw. Schnittklasse sowie jedes `role="menuitem"` ohne `MENU_ITEM*`. Ausnahmen (Markdown-Renderer, Viewer-Kopfleiste) stehen begründet in der Allowlist.
 
 **Icons (lucide-react):** Keine Unicode/Emojis in JSX. `☰`→`<Menu>`, `✕`→`<X>`, `⋮`→`<MoreVertical>`, `▸/▾`→`<ChevronRight>/<ChevronDown>`, `✓`→`<Check>`, `⚠`→`<AlertTriangle>`, `🗑`→`<Trash2>`, `«/»`→`<ChevronsLeft>/<ChevronsRight>`, Heim→`<Home>`, Auswärts→`<MapPin>`. Größen `w-4 h-4` (inline) · `w-5 h-5` (Buttons/Nav) · `w-6 h-6` (standalone). Icon-only-Buttons brauchen `aria-label`.
 
