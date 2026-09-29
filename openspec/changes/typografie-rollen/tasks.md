@@ -16,7 +16,7 @@
 
 ## 4. Abschnitts-, Unterabschnitts- und Zwischenüberschriften
 
-- [ ] 4.1 Profil-Tabs (`components/profile/*`) und Mitglieder-Tabs (`components/admin/Member*Tab.tsx`) auf `SECTION_TITLE` umstellen (die bisherigen gedämpften Köpfe). `MIGRATION_PENDING` nachziehen. Prüfen: Gate grün, betroffene Vitest-Dateien grün.
+- [x] 4.1 Profil-Tabs (`components/profile/*`) und Mitglieder-Tabs (`components/admin/Member*Tab.tsx`) auf `SECTION_TITLE` umstellen (die bisherigen gedämpften Köpfe). `MIGRATION_PENDING` nachziehen. Prüfen: Gate grün, betroffene Vitest-Dateien grün.
 - [ ] 4.2 Alle übrigen `<h2>`/`<h3>` in `pages/` und `components/` nach Rolle einordnen: Abschnitt einer Seite oder Karte → `SECTION_TITLE`, Gliederung darunter → `SUBSECTION_TITLE`, Versal-Zwischenzeile → `OVERLINE`. `MIGRATION_PENDING` nachziehen. Prüfen: Gate grün, `pnpm -C web test` grün.
 
 ## 5. Menüeinträge

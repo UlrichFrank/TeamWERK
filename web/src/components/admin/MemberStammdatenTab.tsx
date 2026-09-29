@@ -5,6 +5,7 @@ import { CLUB_FUNCTION_OPTIONS, EXTERN_CLUB_FUNCTIONS } from '../../lib/constant
 import { useAuth } from '../../contexts/AuthContext'
 import ImageCropModal from '../ImageCropModal'
 import { INPUT, LABEL, BTN_PRIMARY } from '../../lib/buttonStyles'
+import { SECTION_TITLE } from '../../lib/typography'
 
 interface Member {
   id?: number
@@ -177,7 +178,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
     <div className="space-y-6">
       {/* Persönliche Daten */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Persönliche Daten</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Persönliche Daten</h2>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className={LABEL}>Vorname</label>
@@ -489,7 +490,7 @@ export default function MemberStammdatenTab({ form, memberId, isNew, drafts, onF
 
       {/* Foto */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Passfoto</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Passfoto</h2>
         <div className="flex items-center gap-4">
           {photoURL && <img src={photoURL} alt="Passfoto" className="w-20 h-20 rounded-full object-cover" />}
           {!photoURL && <div className="w-20 h-20 rounded-full bg-brand-border-subtle flex items-center justify-center text-brand-text-subtle text-xs">Kein Bild</div>}

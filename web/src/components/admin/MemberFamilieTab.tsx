@@ -4,6 +4,7 @@ import { errorStatus } from '../../lib/errors'
 import { isFullNameMatch, isLastNameMatch } from '../../lib/nameMatch'
 import SearchableSelect from '../SearchableSelect'
 import { BTN_PRIMARY } from '../../lib/buttonStyles'
+import { SECTION_TITLE } from '../../lib/typography'
 
 interface User {
   id: number
@@ -90,7 +91,7 @@ export default function MemberFamilieTab({
   return (
     <div className="space-y-6">
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Erziehungsberechtigte</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Erziehungsberechtigte</h2>
 
         {linkedParents.length > 0 && (
           <div className="space-y-2 mb-6">
@@ -140,7 +141,7 @@ export default function MemberFamilieTab({
 
       {memberId && memberUserId == null && (
         <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-          <h2 className="font-semibold text-brand-text-muted mb-2">Proxy-Account</h2>
+          <h2 className={`${SECTION_TITLE} mb-2`}>Proxy-Account</h2>
           <p className="text-sm text-brand-text-muted mb-4">
             Dieses Mitglied hat keinen Nutzeraccount. Ein Proxy-Account ermöglicht die Zuordnung im Dienstsystem,
             ohne dass sich das Mitglied einloggen kann.

@@ -3,6 +3,7 @@ import { Copy, Check, Trash2, Smartphone } from 'lucide-react'
 import { api } from '../../lib/api'
 import Toggle from '../Toggle'
 import { BTN_DANGER, BTN_PRIMARY } from '../../lib/buttonStyles'
+import { SECTION_TITLE, SUBSECTION_TITLE } from '../../lib/typography'
 
 type Toggles = {
   include_heim: boolean
@@ -123,7 +124,7 @@ export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { ap
     <div className="space-y-6">
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <div className="p-6 pb-2">
-          <h2 className="font-semibold text-brand-text-muted mb-1">Kalender-Abo</h2>
+          <h2 className={`${SECTION_TITLE} mb-1`}>Kalender-Abo</h2>
           <p className="text-xs text-brand-text-subtle mb-3">
             Abonniere diesen Link in Google Calendar, Apple Kalender oder Outlook. Der Link ist privat — teile ihn nicht.
           </p>
@@ -144,7 +145,7 @@ export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { ap
 
       {token && (
         <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-          <h3 className="font-semibold text-brand-text-muted mb-2">Feed-URL</h3>
+          <h3 className={`${SUBSECTION_TITLE} mb-2`}>Feed-URL</h3>
           <div className="flex items-center gap-2 mb-4">
             <input
               type="text"
@@ -168,7 +169,7 @@ export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { ap
 
       {token && (
         <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 space-y-5">
-          <h3 className="font-semibold text-brand-text-muted">Anleitung: Kalender abonnieren</h3>
+          <h3 className={SUBSECTION_TITLE}>Anleitung: Kalender abonnieren</h3>
 
           <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
             <strong>Hinweis:</strong> Dieser Link enthält ausschließlich deine eigenen Termine.

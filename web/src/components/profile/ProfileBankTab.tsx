@@ -3,6 +3,7 @@ import { api } from '../../lib/api'
 import { encryptBankData } from '../../lib/bankCrypto'
 import { Member, ChangeDraft } from '../../pages/ProfilePage'
 import { BTN_PRIMARY, INPUT, LABEL } from '../../lib/buttonStyles'
+import { SECTION_TITLE } from '../../lib/typography'
 
 interface Props {
   ownMember: Member | null
@@ -76,7 +77,7 @@ export default function ProfileBankTab({ ownMember }: Props) {
   return (
     <div className="space-y-6">
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Bankdaten</h2>
 
         {/* Statusanzeige */}
         <div className="space-y-2 mb-6">

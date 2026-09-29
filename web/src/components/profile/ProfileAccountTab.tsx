@@ -2,6 +2,7 @@ import { useState } from 'react'
 import PasswordChangeModal from './PasswordChangeModal'
 import EmailChangeModal from './EmailChangeModal'
 import { BTN_PRIMARY, LABEL } from '../../lib/buttonStyles'
+import { SECTION_TITLE } from '../../lib/typography'
 
 interface Props {
   user: { email?: string } | null
@@ -17,7 +18,7 @@ export default function ProfileAccountTab({ user, logout, recoveryEmail }: Props
     <div className="space-y-6">
       {/* Kontoangaben */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Kontoangaben</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Kontoangaben</h2>
         <div>
           <label className={LABEL}>E-Mail</label>
           <input
@@ -43,7 +44,7 @@ export default function ProfileAccountTab({ user, logout, recoveryEmail }: Props
 
       {/* Sicherheit */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Sicherheit</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Sicherheit</h2>
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setShowPwModal(true)}

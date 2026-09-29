@@ -9,7 +9,7 @@ import { useVault } from '../../contexts/VaultContext'
 import { useDialogA11y } from '../../lib/useDialogA11y'
 import { encryptFile, decryptBankData, BankEnvelope } from '../../lib/bankCrypto'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, BTN_SECONDARY, INPUT, LABEL } from '../../lib/buttonStyles'
-import { MODAL_TITLE } from '../../lib/typography'
+import { MODAL_TITLE, SECTION_TITLE } from '../../lib/typography'
 
 const formatIBAN = (raw: string) =>
   raw.replace(/\s/g, '').toUpperCase().match(/.{1,4}/g)?.join(' ') ?? ''
@@ -174,7 +174,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
     <div className="space-y-6">
       {/* Bankdaten */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text-muted mb-4">Bankdaten</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>Bankdaten</h2>
 
         {bankdatenDraft && !privateKey && (
           <div className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
@@ -289,7 +289,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
 
       {/* SEPA-Mandat */}
       <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
-        <h2 className="font-semibold text-brand-text mb-4">SEPA-Mandat</h2>
+        <h2 className={`${SECTION_TITLE} mb-4`}>SEPA-Mandat</h2>
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
