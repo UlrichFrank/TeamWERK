@@ -14,7 +14,7 @@ import { useMediaQuery } from '../lib/useMediaQuery'
 import { openBlobNatively } from '../lib/openFileNatively'
 import { buildTeamShortNames, type TeamForName } from '../lib/teamName'
 import { BTN_DANGER, BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY, BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -733,7 +733,7 @@ export default function DocumentsPage() {
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-brand-text">Dokumente</h1>
+            <h1 className={PAGE_TITLE}>Dokumente</h1>
             {/* Breadcrumb only when inside a subfolder */}
             {breadcrumb.length > 1 && (
               <nav className="flex items-center gap-1 flex-wrap text-sm mt-1">

@@ -1,6 +1,7 @@
 import { useState, FormEvent } from 'react'
 import axios from 'axios'
 import { INPUT } from '../lib/buttonStyles'
+import { ENTRY_TITLE } from '../lib/typography'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -23,7 +24,7 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-sm bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
-        <h1 className="text-xl font-bold mb-6 text-brand-text">Passwort zurücksetzen</h1>
+        <h1 className={`${ENTRY_TITLE} mb-6`}>Passwort zurücksetzen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text" value={email} onChange={e => setEmail(e.target.value)} required placeholder="E-Mail oder Nutzername"

@@ -13,7 +13,7 @@ import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, se
 import TeamFilter from '../components/TeamFilter'
 import { BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, INPUT, LABEL, HEADER_GROUP } from '../lib/buttonStyles'
 import { useCompactHeader } from '../hooks/useCompactHeader'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface CarpoolEntry {
   id: number
@@ -847,7 +847,7 @@ export default function MitfahrgelegenheitenPage() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text shrink-0">Mitfahrten</h1>
+        <h1 className={`${PAGE_TITLE} shrink-0`}>Mitfahrten</h1>
         <div className={HEADER_GROUP}>
           {allTeams.length > 1 && (
             <TeamFilter

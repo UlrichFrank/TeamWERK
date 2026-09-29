@@ -12,6 +12,7 @@ import {
   toggleTeamId,
   type TeamFilterOption,
 } from '../lib/teamFilter'
+import { PAGE_TITLE } from '../lib/typography'
 
 // Siehe openspec/changes/dienste-familien-rangliste. GET /api/duty-fairness/rangliste
 // liefert serverseitig bereits sortiert (rank 1..n, keine geteilten Plätze) und
@@ -221,7 +222,7 @@ export default function DienstRanglistePage() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text shrink-0">Dienst-Rangliste</h1>
+        <h1 className={`${PAGE_TITLE} shrink-0`}>Dienst-Rangliste</h1>
         {teamOptions.length > 1 && (
           <TeamFilter teams={teamOptions} active={activeTeamIds} onToggle={toggleTeam} compact={compact} />
         )}

@@ -10,7 +10,7 @@ import RsvpDefaultsEditor, { type RsvpDefault } from '../components/RsvpDefaults
 import DeleteReasonFields, { deletionPayload } from '../components/DeleteReasonFields'
 import { errorMessage } from '../lib/errors'
 import { BTN_PRIMARY, INPUT, BTN_SECONDARY, BTN_DANGER } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 const WEEKDAY_LABELS = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 const WEEKDAY_SHORT = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
@@ -351,7 +351,7 @@ export default function AdminTrainingsPage() {
 
   return (
     <div className="max-w-3xl">
-      <h1 className="text-2xl font-bold text-brand-text mb-6">Trainings verwalten</h1>
+      <h1 className={`${PAGE_TITLE} mb-6`}>Trainings verwalten</h1>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-brand-surface-card rounded-lg p-1 border border-brand-border-subtle w-fit">

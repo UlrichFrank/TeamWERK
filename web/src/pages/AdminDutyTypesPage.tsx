@@ -11,7 +11,7 @@ import { useEscapeKey } from '../lib/useEscapeKey'
 import { AUDIENCE_OPTIONS } from '../lib/constants'
 import { hoursToDisplay, parseHoursInput, resolveAnchorClock, addMinutesToTime, dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
 import { BTN_PRIMARY, HEADER_CTRL, HEADER_PRIMARY, INPUT, BTN_SECONDARY, LABEL } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface DutyType {
   id: number
@@ -413,7 +413,7 @@ export default function AdminDutyTypesPage() {
       {/* Header */}
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-          <h1 className="text-2xl font-bold">Diensttypen</h1>
+          <h1 className={PAGE_TITLE}>Diensttypen</h1>
           <button
             onClick={() => setShowCreateModal(true)}
             className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}

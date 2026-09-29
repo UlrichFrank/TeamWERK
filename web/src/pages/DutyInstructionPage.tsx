@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { api } from '../lib/api'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import { PAGE_TITLE } from '../lib/typography'
 
 interface DutyTypeItem {
   id: number
@@ -82,7 +83,7 @@ export default function DutyInstructionPage() {
   return (
     <div className="max-w-3xl">
       {coldStart && <FallbackBackButton />}
-      <h1 className="text-2xl font-bold mb-1">Anleitung: {item.name}</h1>
+      <h1 className={`${PAGE_TITLE} mb-1`}>Anleitung: {item.name}</h1>
       {updatedLabel && (
         <p className="text-xs text-brand-text-muted mb-6">Zuletzt geändert am {updatedLabel}</p>
       )}

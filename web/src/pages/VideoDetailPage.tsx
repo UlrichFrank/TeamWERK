@@ -8,7 +8,7 @@ import VideoStatusPill from '../components/VideoStatusPill'
 import CastButton from '../components/CastButton'
 import { fmtBytes, fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SMALL, HEADER_CTRL, HEADER_DANGER, HEADER_NEUTRAL, BTN_SECONDARY, INPUT, LABEL } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface VideoDetail {
   id: number
@@ -388,7 +388,7 @@ export default function VideoDetailPage() {
     <div className="max-w-3xl">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold break-words">{video.title}</h1>
+          <h1 className={`${PAGE_TITLE} break-words`}>{video.title}</h1>
           <div className="mt-1 flex items-center gap-2 flex-wrap text-sm text-brand-text-muted">
             <VideoStatusPill status={video.status} />
             <span>{video.team_name}</span>

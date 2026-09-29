@@ -7,7 +7,7 @@ import PersonChip from '../components/PersonChip'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
 import { BTN_PRIMARY, BTN_SMALL, INPUT, BTN_SECONDARY } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface TrainerEntry { userId: number; memberId: number; name: string }
 interface Responsibility { id: number; label: string }
@@ -1004,7 +1004,7 @@ export default function MeinTeamPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-brand-text">Mein Team</h1>
+        <h1 className={PAGE_TITLE}>Mein Team</h1>
         {myTeams.length > 1 && (
           <p className="text-sm text-brand-text-muted mt-0.5">{myTeams.length} Teams</p>
         )}

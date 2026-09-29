@@ -12,6 +12,7 @@ import VideoStatusPill from '../components/VideoStatusPill'
 import { fmtBytes, fmtDuration, fmtVideoDate } from '../lib/videoFormat'
 import { buildTeamShortNames } from '../lib/teamName'
 import { BTN_PRIMARY, HEADER_CTRL, HEADER_FIELD, HEADER_PRIMARY } from '../lib/buttonStyles'
+import { PAGE_TITLE } from '../lib/typography'
 
 interface VideoItem {
   id: number
@@ -200,7 +201,7 @@ export default function VideosPage() {
     <div>
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-          <h1 className="text-2xl font-bold">Videos</h1>
+          <h1 className={PAGE_TITLE}>Videos</h1>
           <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-end gap-2">
             <select
               value={teamFilter}

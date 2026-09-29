@@ -14,6 +14,7 @@ import { toggleTeamID, refreshItemsFromDutyTypes } from '../lib/dutyTemplateItem
 import { dynamicSpanImpossible, IMPOSSIBLE_SPAN_MESSAGE } from '../lib/duration'
 import { HEADER_CTRL, HEADER_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 import { ChevronDown, RefreshCw, Plus } from 'lucide-react'
+import { PAGE_TITLE } from '../lib/typography'
 
 interface DutyType {
   id: number
@@ -629,7 +630,7 @@ export default function AdminDutyTemplatesPage() {
     <div className="max-w-4xl">
       <div className="mb-4 sm:mb-6">
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-          <h1 className="text-2xl font-bold">Dienstplan-Vorlagen</h1>
+          <h1 className={PAGE_TITLE}>Dienstplan-Vorlagen</h1>
           <button
             onClick={openCreateModal}
             className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}

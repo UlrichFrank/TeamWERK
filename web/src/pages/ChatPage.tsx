@@ -71,6 +71,7 @@ import { BTN_SMALL, HEADER_CTRL_ICON, HEADER_NEUTRAL, INPUT, LABEL } from '../li
 import ChatSearchModal, { type SearchHit } from "../components/ChatSearchModal";
 import ActionMenu from "../components/ActionMenu";
 import { MODAL_TITLE } from '../lib/typography';
+import { PAGE_TITLE } from '../lib/typography';
 
 interface ConvMember {
   id: number;
@@ -1645,7 +1646,7 @@ export default function ChatPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-brand-text flex items-center gap-2">
+        <h1 className={`${PAGE_TITLE} flex items-center gap-2`}>
           Nachrichten
         </h1>
         <button

@@ -22,7 +22,7 @@ import EventSearchInput from '../components/EventSearchInput'
 import FilterEmptyState from '../components/FilterEmptyState'
 import { parseQuery, matchesQuery } from '../lib/eventFilter'
 import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_FIELD, HEADER_NEUTRAL, HEADER_PRIMARY, BTN_SECONDARY, INPUT, HEADER_GROUP } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
@@ -589,7 +589,7 @@ export default function TerminePage() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text shrink-0">Termine</h1>
+        <h1 className={`${PAGE_TITLE} shrink-0`}>Termine</h1>
         <div className={HEADER_GROUP}>
           {/* Auch auf Mobile bedienbar: als Icon-Button mit Zähler braucht der
               Filter nicht mehr den Platz, an dem das frühere <select> mit dem

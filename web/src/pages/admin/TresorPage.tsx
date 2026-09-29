@@ -5,6 +5,7 @@ import { useVault } from '../../contexts/VaultContext'
 import { useLiveUpdates } from '../../hooks/useLiveUpdates'
 import { generateVaultSetup } from '../../lib/crypto'
 import { BTN_PRIMARY, BTN_SECONDARY, INPUT } from '../../lib/buttonStyles'
+import { PAGE_TITLE } from '../../lib/typography'
 const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6'
 const ALERT_ERR = 'p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger'
 const ALERT_INFO = 'p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text'
@@ -117,7 +118,7 @@ export default function TresorPage() {
     <div className="max-w-xl space-y-6">
       <div className="flex items-center gap-2">
         <ShieldCheck className="w-6 h-6 text-brand-text" />
-        <h1 className="text-2xl font-bold text-brand-text">Bankdaten-Tresor</h1>
+        <h1 className={PAGE_TITLE}>Bankdaten-Tresor</h1>
       </div>
 
       {configured === null && <p className="text-sm text-brand-text-muted">Lädt…</p>}

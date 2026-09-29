@@ -9,7 +9,7 @@ import ActionMenu from '../components/ActionMenu'
 import { useEscapeKey } from '../lib/useEscapeKey'
 import { errorData } from '../lib/errors'
 import { BTN_DANGER, BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_PRIMARY, INPUT } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface Person {
   id: number
@@ -125,7 +125,7 @@ export default function UebungsgruppenPage() {
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold text-brand-text">Übungsgruppen</h1>
+        <h1 className={PAGE_TITLE}>Übungsgruppen</h1>
         <button
           onClick={() => { setShowCreate(true); setCreateName('') }}
           className={`${HEADER_CTRL} ${HEADER_PRIMARY} whitespace-nowrap`}

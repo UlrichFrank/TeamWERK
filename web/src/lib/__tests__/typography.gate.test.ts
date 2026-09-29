@@ -34,7 +34,26 @@ type Rule = 'heading' | 'menuitem'
  * Begründete Ausnahmen. Ein Eintrag, dessen Fundstelle verschwunden ist, lässt
  * den Test ebenfalls fehlschlagen.
  */
-const ALLOWLIST: { file: string; rule: Rule; count: number; reason: string }[] = []
+const ALLOWLIST: { file: string; rule: Rule; count: number; reason: string }[] = [
+  {
+    file: 'components/MarkdownRenderer.tsx',
+    rule: 'heading',
+    count: 3,
+    reason: 'Gerenderter Markdown-Inhalt (Dienst-Anleitungen) hat eine eigene Dokument-Hierarchie h1–h3 innerhalb einer Karte, keine App-Rollen.',
+  },
+  {
+    file: 'pages/SepaMandatViewerPage.tsx',
+    rule: 'heading',
+    count: 3,
+    reason: 'Dateiname in der Kopfleiste eines Vollbild-Viewers — eine Werkzeugleiste, keine Seitenüberschrift.',
+  },
+  {
+    file: 'components/FileViewer.tsx',
+    rule: 'heading',
+    count: 1,
+    reason: 'Dateiname in der Kopfleiste eines Vollbild-Viewers — eine Werkzeugleiste, keine Seitenüberschrift.',
+  },
+]
 
 /**
  * Übergangsliste während der Migration: Dateien, die heute noch verstoßen.
@@ -48,9 +67,7 @@ const MIGRATION_PENDING: string[] = [
   'components/admin/MemberKontaktTab.tsx',
   'components/admin/MemberStammdatenTab.tsx',
   'components/AttendanceStatsView.tsx',
-  'components/FileViewer.tsx',
   'components/H4AImportModal.tsx',
-  'components/MarkdownRenderer.tsx',
   'components/profile/ProfileAccountTab.tsx',
   'components/profile/ProfileBankTab.tsx',
   'components/profile/ProfileDatenschutzTab.tsx',
@@ -64,48 +81,22 @@ const MIGRATION_PENDING: string[] = [
   'components/staffeln/RefereeView.tsx',
   'components/staffeln/Spielmatrix.tsx',
   'components/staffeln/TeamStatsViews.tsx',
-  'pages/admin/BeitragslaufPage.tsx',
-  'pages/admin/TresorPage.tsx',
-  'pages/admin/WartungsmodusPage.tsx',
   'pages/AdminDutyTemplatesPage.tsx',
-  'pages/AdminDutyTypesPage.tsx',
   'pages/AdminKaderPage.tsx',
   'pages/AdminSettingsPage.tsx',
   'pages/AdminTrainingsPage.tsx',
   'pages/AdminUsersPage.tsx',
-  'pages/AdminVenuesPage.tsx',
-  'pages/ChatPage.tsx',
   'pages/ChildProfilePage.tsx',
-  'pages/DashboardPage.tsx',
   'pages/DatenschutzPage.tsx',
   'pages/DienstRanglistePage.tsx',
-  'pages/DocumentsPage.tsx',
-  'pages/DutyInstructionPage.tsx',
-  'pages/DutyPage.tsx',
-  'pages/ForgotPasswordPage.tsx',
   'pages/KalenderPage.tsx',
-  'pages/LoginPage.tsx',
-  'pages/MatchReportFormPage.tsx',
   'pages/MatchReportListPage.tsx',
-  'pages/MatchReportPendingListPage.tsx',
   'pages/MeinTeamPage.tsx',
-  'pages/MemberDetailPage.tsx',
   'pages/MembersPage.tsx',
   'pages/MitfahrgelegenheitenPage.tsx',
-  'pages/ProfilAnwesenheitPage.tsx',
-  'pages/ProfilePage.tsx',
-  'pages/ProfilTrainingstagebuchPage.tsx',
-  'pages/RegisterPage.tsx',
-  'pages/RequestMembershipPage.tsx',
-  'pages/ResetPasswordPage.tsx',
-  'pages/SepaMandatViewerPage.tsx',
   'pages/StaffelnPage.tsx',
   'pages/TeamAnwesenheitPage.tsx',
-  'pages/TeamTrainingstagebuchPage.tsx',
   'pages/TermineDetailPage.tsx',
-  'pages/TerminePage.tsx',
-  'pages/UebungsgruppenPage.tsx',
-  'pages/VideoDetailPage.tsx',
   'pages/VideosPage.tsx',
 ]
 

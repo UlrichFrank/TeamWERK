@@ -8,7 +8,7 @@ import { formatBetrag, isValidIBAN, normalizeIBAN } from '../../lib/sepa'
 import { decryptBankData, decryptClubSepa } from '../../lib/bankCrypto'
 import { buildPainXML, saisonStamp, type SepaItem } from '../../lib/sepaXml'
 import { BTN_PRIMARY, BTN_SECONDARY, HEADER_CTRL, HEADER_NEUTRAL, HEADER_PRIMARY } from '../../lib/buttonStyles'
-import { MODAL_TITLE } from '../../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../../lib/typography'
 
 
 interface Season { id: number; name: string; is_active: boolean }
@@ -287,7 +287,7 @@ export default function BeitragslaufPage() {
   return (
     <div className="max-w-4xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-bold text-brand-text">Beitragslauf</h1>
+        <h1 className={PAGE_TITLE}>Beitragslauf</h1>
         {preview && (
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setExportDialogOpen(true)} disabled={summary.count === 0} className={`${HEADER_CTRL} ${HEADER_PRIMARY}`}>XML herunterladen</button>

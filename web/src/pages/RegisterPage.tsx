@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import PasswordInput from '../components/forms/PasswordInput'
 import { INPUT, LABEL } from '../lib/buttonStyles'
+import { ENTRY_TITLE } from '../lib/typography'
 
 export default function RegisterPage() {
   const [params] = useSearchParams()
@@ -65,7 +66,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
       <div className="w-full max-w-sm bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8">
-        <h1 className="text-xl font-bold mb-6 text-brand-text">Konto erstellen</h1>
+        <h1 className={`${ENTRY_TITLE} mb-6`}>Konto erstellen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">

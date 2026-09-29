@@ -5,7 +5,7 @@ import { HEADER_PRIMARY, HEADER_SPLIT_CARET, HEADER_SPLIT_MAIN, BTN_PRIMARY, BTN
 import ActionMenu from '../components/ActionMenu'
 import MapsLink from '../components/MapsLink'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 interface Venue {
   id: number
@@ -165,7 +165,7 @@ export default function AdminVenuesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-brand-text">Veranstaltungsorte</h1>
+        <h1 className={PAGE_TITLE}>Veranstaltungsorte</h1>
         <div ref={actionsMenuRef} className="relative">
           <div className="flex">
             <button

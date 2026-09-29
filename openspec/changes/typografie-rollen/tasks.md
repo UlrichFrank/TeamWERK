@@ -12,7 +12,7 @@
 
 ## 3. Seiten- und Einstiegstitel
 
-- [ ] 3.1 Alle `<h1>` der App-Seiten auf `PAGE_TITLE` umstellen, inklusive des Template-Literals in `TermineDetailPage` (Zustandsklassen `line-through opacity-60` bleiben). Einstiegsseiten (`LoginPage`-„Anmelden“, `RegisterPage`, `ForgotPasswordPage`, `ResetPasswordPage`) bekommen `ENTRY_TITLE`, die „TeamWERK“-Marke auf der Login-Seite `PAGE_TITLE`. `SepaMandatViewerPage` und `FileViewer`-Kopfleiste sowie `MarkdownRenderer` kommen mit Begründung in die Allowlist. `MIGRATION_PENDING` nachziehen. Prüfen: Gate grün, `pnpm -C web test` grün.
+- [x] 3.1 Alle `<h1>` der App-Seiten auf `PAGE_TITLE` umstellen, inklusive des Template-Literals in `TermineDetailPage` (Zustandsklassen `line-through opacity-60` bleiben). Einstiegsseiten (`LoginPage`-„Anmelden“, `RegisterPage`, `ForgotPasswordPage`, `ResetPasswordPage`) bekommen `ENTRY_TITLE`, die „TeamWERK“-Marke auf der Login-Seite `PAGE_TITLE`. `SepaMandatViewerPage` und `FileViewer`-Kopfleiste sowie `MarkdownRenderer` kommen mit Begründung in die Allowlist. `MIGRATION_PENDING` nachziehen. Prüfen: Gate grün, `pnpm -C web test` grün.
 
 ## 4. Abschnitts-, Unterabschnitts- und Zwischenüberschriften
 

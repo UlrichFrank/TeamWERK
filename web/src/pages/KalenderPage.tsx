@@ -38,7 +38,7 @@ import {
   describeHostError,
   type GameDayHost,
 } from '../components/GameDayHostPicker'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 // Dieselben vier Typen wie auf /termine (TERMINE_TYPES) — im Compact-Modus
 // klappt EventTypeFilter sie in ein Dropdown, weil vier Einzel-Buttons neben
@@ -1035,7 +1035,7 @@ export default function KalenderPage() {
         </div>
       )}
       <div className="flex items-center gap-2 mb-6 flex-wrap">
-        <h1 className="text-2xl font-bold shrink-0">Kalender</h1>
+        <h1 className={`${PAGE_TITLE} shrink-0`}>Kalender</h1>
         {/* Auch auf Mobile bedienbar (Icon + Zähler), anders als das frühere
             <select>, für das neben Typ-Filter und Suchfeld der Platz fehlte. */}
         <TeamFilter

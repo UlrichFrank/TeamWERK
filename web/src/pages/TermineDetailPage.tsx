@@ -14,7 +14,7 @@ import LineupBadge from '../components/LineupBadge'
 import LineupCheckbox from '../components/LineupCheckbox'
 import type { LineupState } from '../lib/lineup'
 import { BTN_SECONDARY, BTN_DANGER, INPUT } from '../lib/buttonStyles'
-import { MODAL_TITLE } from '../lib/typography'
+import { MODAL_TITLE, PAGE_TITLE } from '../lib/typography'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
 
@@ -436,7 +436,7 @@ export default function TermineDetailPage() {
           <div className="flex items-start gap-3">
             <Dumbbell className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
             <div className="flex-1 min-w-0">
-              <h1 className={`text-2xl font-bold text-brand-text ${session.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>
+              <h1 className={`${PAGE_TITLE} ${session.status === 'cancelled' ? 'line-through opacity-60' : ''}`}>
                 {fmtDate(session.date)}
               </h1>
               {session.status === 'cancelled' && (
@@ -580,7 +580,7 @@ export default function TermineDetailPage() {
         <div className="flex items-start gap-3">
           <Icon className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold text-brand-text">{fmtDate(g.date)}</h1>
+            <h1 className={PAGE_TITLE}>{fmtDate(g.date)}</h1>
             <p className="text-brand-text-muted mt-1">{gameLabel}</p>
             <div className="mt-3 flex items-center gap-2 text-sm text-brand-text-muted">
               <Clock className="w-4 h-4" />

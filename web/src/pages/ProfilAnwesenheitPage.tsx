@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api'
 import AttendanceStatsView from '../components/AttendanceStatsView'
 import SaisonbilanzPanel from '../components/SaisonbilanzPanel'
+import { PAGE_TITLE } from '../lib/typography'
 
 interface MemberRef { id: number; first_name: string; last_name: string; club_functions?: string[] }
 
@@ -86,7 +87,7 @@ export default function ProfilAnwesenheitPage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold text-brand-text mb-6">Anwesenheit</h1>
+      <h1 className={`${PAGE_TITLE} mb-6`}>Anwesenheit</h1>
       <ProfilAnwesenheitContent forcedMemberId={forced} />
     </div>
   )

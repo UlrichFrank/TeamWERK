@@ -15,6 +15,7 @@ import EventNoteIndicator from '../components/EventNoteIndicator'
 import AushilfeBadge from '../components/AushilfeBadge'
 import { relativeTime } from '../lib/relativeTime'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
+import { PAGE_TITLE } from '../lib/typography'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -857,7 +858,7 @@ export default function DashboardPage() {
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-brand-text">Übersicht</h1>
+        <h1 className={PAGE_TITLE}>Übersicht</h1>
         {data.currentSeason && (
           <p className="text-sm text-brand-text-muted mt-0.5">Saison {data.currentSeason.name}</p>
         )}

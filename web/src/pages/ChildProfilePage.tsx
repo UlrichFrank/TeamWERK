@@ -13,6 +13,7 @@ import { ProfilAnwesenheitContent } from './ProfilAnwesenheitPage'
 import { ProfilTrainingstagebuchContent } from './ProfilTrainingstagebuchPage'
 import { Member, Parent, Phone } from './ProfilePage'
 import { BTN_PRIMARY, INPUT, TAB, TAB_ACTIVE, TAB_BAR, TAB_INACTIVE } from '../lib/buttonStyles'
+import { PAGE_TITLE } from '../lib/typography'
 
 export interface UserContact {
   first_name: string
@@ -109,7 +110,7 @@ export default function ChildProfilePage() {
 
   return (
     <div className="max-w-4xl">
-      <h1 className="text-2xl font-bold mb-6">{member.first_name}</h1>
+      <h1 className={`${PAGE_TITLE} mb-6`}>{member.first_name}</h1>
 
       <div className={`${TAB_BAR} mb-6`}>
         {tabs.map(tab => (
