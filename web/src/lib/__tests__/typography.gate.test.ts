@@ -55,14 +55,6 @@ const ALLOWLIST: { file: string; rule: Rule; count: number; reason: string }[] =
   },
 ]
 
-/**
- * Übergangsliste während der Migration: Dateien, die heute noch verstoßen.
- * Schrumpft je Task-Gruppe; eine Datei, die nicht mehr verstößt, muss hier
- * raus (sonst rot) — die Liste kann also nur kleiner werden.
- */
-const MIGRATION_PENDING: string[] = [
-]
-
 interface Tag {
   name: string
   text: string
@@ -211,7 +203,6 @@ describe('Überschriften und Menüeinträge nutzen lib/typography', () => {
 
   it('keine handgesetzte Überschrift und kein Menüeintrag ohne Konstante', () => {
     const offending = all.filter(v => {
-      if (MIGRATION_PENDING.includes(v.rel)) return false
       const allowed = ALLOWLIST.find(a => a.file === v.rel && a.rule === v.rule)?.count ?? 0
       return countBy(all, v.rel, v.rule) > allowed
     })
@@ -219,11 +210,6 @@ describe('Überschriften und Menüeinträge nutzen lib/typography', () => {
       offending.map(v => `${v.rel}:${v.line} ${v.msg} — Konstante aus '../lib/typography' importieren.`),
       '\n',
     ).toEqual([])
-  })
-
-  it('MIGRATION_PENDING enthält nur Dateien, die noch verstoßen', () => {
-    const clean = MIGRATION_PENDING.filter(f => !all.some(v => v.rel === f))
-    expect(clean, '\nDatei verstößt nicht mehr — aus MIGRATION_PENDING entfernen.\n').toEqual([])
   })
 
   it('keine verwaisten Allowlist-Einträge', () => {
