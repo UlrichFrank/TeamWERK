@@ -184,8 +184,9 @@ func (w *objWorld) newMedia() int {
 		`INSERT INTO media (disk_name, mime_type, size, uploaded_by) VALUES (?, 'image/png', 4, ?)`,
 		uniq("b-media")+".png", w.bUserID)
 	convID := w.newConversation()
-	w.ins(`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
+	msgID := w.ins(`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
 		convID, w.bUserID, mediaID)
+	w.exec(`INSERT INTO message_media (message_id, media_id, position) VALUES (?, ?, 0)`, msgID, mediaID)
 	return mediaID
 }
 
