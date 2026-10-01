@@ -52,26 +52,31 @@ function cellBox(title: string) {
 }
 
 describe('TerminMatrix — Aufstellung', () => {
-  test('aufgestellt: grüne Fläche, Symbol weiß', () => {
+  test('aufgestellt: nur grüner Rahmen (2 px), keine Fläche, Symbol behält seine Farbe', () => {
     renderMatrix()
     const box = cellBox('zugesagt · aufgestellt')
     expect(box.dataset.lineup).toBe('in')
-    expect(box.className).toContain('bg-brand-green')
-    expect(box.querySelector('svg')!.getAttribute('class')).toContain('text-white')
+    expect(box.className).toContain('border-2')
+    expect(box.className).toContain('border-brand-green')
+    expect(box.className).not.toContain('bg-brand-green')
+    expect(box.querySelector('svg')!.getAttribute('class')).toContain('text-brand-green')
   })
 
-  test('nicht aufgestellt: graue Fläche, Kreis dunkler als auf weißem Grund', () => {
+  test('nicht aufgestellt: gestrichelt mit Diagonale, keine graue Fläche', () => {
     renderMatrix()
     const box = cellBox('keine Rückmeldung · nicht aufgestellt')
-    expect(box.className).toContain('bg-brand-border')
-    expect(box.querySelector('svg')!.getAttribute('class')).toContain('text-brand-text-muted')
+    expect(box.className).toContain('border-2')
+    expect(box.className).toContain('border-dashed')
+    expect(box.className).toContain('linear-gradient(to_bottom_right')
+    expect(box.className).not.toContain('bg-brand-border')
   })
 
-  test('offen: nur gestrichelter Rahmen, innen transparent', () => {
+  test('offen: nur gestrichelter Rahmen, ohne Diagonale', () => {
     renderMatrix()
     const box = cellBox('zugesagt · Aufstellung offen')
     expect(box.className).toContain('border-dashed')
     expect(box.className).toContain('bg-transparent')
+    expect(box.className).not.toContain('linear-gradient')
   })
 
   test('Trainingszelle ohne Aufstellungsfläche', () => {
