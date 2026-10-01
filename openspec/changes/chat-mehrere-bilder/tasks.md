@@ -36,4 +36,4 @@
 
 - [x] 6.1 `docs/agent/06-gotchas.md` um einen Absatz „Chat-Alben" ergänzen: Zuordnungstabellen als Quelle der Wahrheit, `media_id` = Position 0 nur für CHECK und Altclients, `canSee` liest ausschließlich die Tabellen, Seeds müssen `message_media` mitschreiben, Raster mit fester Geometrie wegen des Platzhalter-Gotchas. Verifikation: Review des Abschnitts.
 - [ ] 6.2 Prod-Vorabprüfung auf doppelt referenzierte `media_id` (Abfrage aus design.md, Risks) vorbereiten und als Deploy-Hinweis in den PR aufnehmen. Verifikation: Abfrage im PR-Text.
-- [ ] 6.3 `/verify-change` ausführen und `openspec validate chat-mehrere-bilder --strict` grün.
+- [x] 6.3 `/verify-change` ausführen und `openspec validate chat-mehrere-bilder --strict` grün.
