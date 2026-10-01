@@ -132,7 +132,13 @@ func (h *Handler) Upload(w http.ResponseWriter, r *http.Request) {
 
 // canSee beantwortet die Sichtbarkeit eines Bildes über das referenzierende
 // Objekt: Hochladender, Mitglied der Konversation, in der eine Nachricht das
-// Bild trägt, oder Empfänger einer Mitteilung mit diesem Bild.
+// Bild trägt, oder Empfänger einer Mitteilung mit diesem Bild — an welcher
+// Album-Position auch immer.
+//
+// Gelesen werden ausschließlich die Zuordnungstabellen message_media und
+// broadcast_media (Migration 071), nicht die Kompatibilitätsspalten
+// messages.media_id/broadcasts.media_id: zwei Quellen für dieselbe Frage wären
+// genau die Drift, die der Unique-Index auf media_id verhindern soll.
 //
 // Die Konversations-Bedingung fragt bewusst OHNE `left_at IS NULL` — analog
 // chat.isMember: wer die Gruppe verlassen hat, behält den Verlauf und damit
@@ -143,12 +149,13 @@ func (h *Handler) canSee(ctx context.Context, mediaID, userID int) (bool, error)
 	var ok bool
 	err := h.db.QueryRowContext(ctx, `
 		SELECT EXISTS(SELECT 1 FROM media WHERE id = ? AND uploaded_by = ?)
-		    OR EXISTS(SELECT 1 FROM messages m
+		    OR EXISTS(SELECT 1 FROM message_media mm
+		              JOIN messages m ON m.id = mm.message_id
 		              JOIN conversation_members cm ON cm.conversation_id = m.conversation_id
-		              WHERE m.media_id = ? AND cm.user_id = ?)
-		    OR EXISTS(SELECT 1 FROM broadcasts b
-		              JOIN broadcast_reads br ON br.broadcast_id = b.id
-		              WHERE b.media_id = ? AND br.user_id = ?)`,
+		              WHERE mm.media_id = ? AND cm.user_id = ?)
+		    OR EXISTS(SELECT 1 FROM broadcast_media bm
+		              JOIN broadcast_reads br ON br.broadcast_id = bm.broadcast_id
+		              WHERE bm.media_id = ? AND br.user_id = ?)`,
 		mediaID, userID, mediaID, userID, mediaID, userID).Scan(&ok)
 	return ok, err
 }

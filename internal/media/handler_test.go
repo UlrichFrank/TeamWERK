@@ -341,11 +341,7 @@ func TestServe_KonversationsmitgliedOK(t *testing.T) {
 			t.Fatalf("conversation_members: %v", err)
 		}
 	}
-	if _, err := db.Exec(
-		`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
-		convID, sender, mediaID); err != nil {
-		t.Fatalf("messages: %v", err)
-	}
+	attachToMessage(t, db, convID, sender, mediaID)
 
 	getRes := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID),
 		testutil.Token(t, empfaenger, "standard", nil))
@@ -373,11 +369,7 @@ func TestServe_AusgetretenesMitgliedOK(t *testing.T) {
 	db.Exec(`INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)`, convID, sender)
 	db.Exec(`INSERT INTO conversation_members (conversation_id, user_id, left_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
 		convID, ausgetreten)
-	if _, err := db.Exec(
-		`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
-		convID, sender, mediaID); err != nil {
-		t.Fatalf("messages: %v", err)
-	}
+	attachToMessage(t, db, convID, sender, mediaID)
 
 	getRes := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID),
 		testutil.Token(t, ausgetreten, "standard", nil))
@@ -398,11 +390,7 @@ func TestServe_MitteilungsempfaengerOK(t *testing.T) {
 
 	mediaID := uploadMedia(t, srv, db, sender)
 
-	res, err := db.Exec(`INSERT INTO broadcasts (sender_id, body, media_id) VALUES (?, '', ?)`, sender, mediaID)
-	if err != nil {
-		t.Fatalf("broadcasts: %v", err)
-	}
-	broadcastID, _ := res.LastInsertId()
+	broadcastID := attachToBroadcast(t, db, sender, mediaID)
 	if _, err := db.Exec(
 		`INSERT INTO broadcast_reads (broadcast_id, user_id) VALUES (?, ?)`, broadcastID, empfaenger); err != nil {
 		t.Fatalf("broadcast_reads: %v", err)
@@ -421,5 +409,133 @@ func TestServe_MitteilungsempfaengerOK(t *testing.T) {
 	defer denyRes.Body.Close()
 	if denyRes.StatusCode != http.StatusNotFound {
 		t.Fatalf("Nicht-Empfänger: erwartet 404, bekommen %d", denyRes.StatusCode)
+	}
+}
+
+// attachToMessage legt eine Nachricht an, die mediaIDs als Album trägt
+// (messages.media_id = Position 0, message_media je Position — wie
+// chat.SendMessage seit Migration 071 schreibt).
+func attachToMessage(t *testing.T, db *sql.DB, convID int64, sender int, mediaIDs ...int) {
+	t.Helper()
+	res, err := db.Exec(
+		`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
+		convID, sender, mediaIDs[0])
+	if err != nil {
+		t.Fatalf("messages: %v", err)
+	}
+	msgID, _ := res.LastInsertId()
+	for pos, id := range mediaIDs {
+		if _, err := db.Exec(`INSERT INTO message_media (message_id, media_id, position) VALUES (?, ?, ?)`,
+			msgID, id, pos); err != nil {
+			t.Fatalf("message_media: %v", err)
+		}
+	}
+}
+
+// attachToBroadcast legt eine Mitteilung mit mediaIDs als Album an.
+func attachToBroadcast(t *testing.T, db *sql.DB, sender int, mediaIDs ...int) int64 {
+	t.Helper()
+	res, err := db.Exec(`INSERT INTO broadcasts (sender_id, body, media_id) VALUES (?, '', ?)`, sender, mediaIDs[0])
+	if err != nil {
+		t.Fatalf("broadcasts: %v", err)
+	}
+	bcID, _ := res.LastInsertId()
+	for pos, id := range mediaIDs {
+		if _, err := db.Exec(`INSERT INTO broadcast_media (broadcast_id, media_id, position) VALUES (?, ?, ?)`,
+			bcID, id, pos); err != nil {
+			t.Fatalf("broadcast_media: %v", err)
+		}
+	}
+	return bcID
+}
+
+// newGroupConv legt eine Gruppe mit den angegebenen Mitgliedern an;
+// leftUsers haben die Gruppe bereits verlassen (left_at gesetzt).
+func newGroupConv(t *testing.T, db *sql.DB, creator int, members, leftUsers []int) int64 {
+	t.Helper()
+	res, err := db.Exec(`INSERT INTO conversations (type, name, created_by) VALUES ('group', 'Gruppe', ?)`, creator)
+	if err != nil {
+		t.Fatalf("conversations: %v", err)
+	}
+	convID, _ := res.LastInsertId()
+	for _, uid := range members {
+		db.Exec(`INSERT INTO conversation_members (conversation_id, user_id) VALUES (?, ?)`, convID, uid)
+	}
+	for _, uid := range leftUsers {
+		db.Exec(`INSERT INTO conversation_members (conversation_id, user_id, left_at) VALUES (?, ?, CURRENT_TIMESTAMP)`, convID, uid)
+	}
+	return convID
+}
+
+func getStatus(t *testing.T, srv *httptest.Server, mediaID, userID int) int {
+	t.Helper()
+	res := testutil.Get(t, srv, "/api/media/"+strconv.Itoa(mediaID), testutil.Token(t, userID, "standard", nil))
+	defer res.Body.Close()
+	return res.StatusCode
+}
+
+// Ein Albumbild jenseits von Position 0 ist für Konversationsmitglieder
+// sichtbar — canSee darf nicht an messages.media_id hängen.
+func TestServe_DrittesAlbumbildFuerKonversationsmitglied(t *testing.T) {
+	db := testutil.NewDB(t)
+	sender := testutil.CreateUser(t, db, "standard")
+	empfaenger := testutil.CreateUser(t, db, "standard")
+	srv := newMediaServer(t, db)
+	ids := []int{uploadMedia(t, srv, db, sender), uploadMedia(t, srv, db, sender), uploadMedia(t, srv, db, sender)}
+	convID := newGroupConv(t, db, sender, []int{sender, empfaenger}, nil)
+	attachToMessage(t, db, convID, sender, ids...)
+
+	if got := getStatus(t, srv, ids[2], empfaenger); got != http.StatusOK {
+		t.Fatalf("drittes Albumbild: erwartet 200, bekommen %d", got)
+	}
+}
+
+func TestServe_AlbumbildFuerFremdeN404(t *testing.T) {
+	db := testutil.NewDB(t)
+	sender := testutil.CreateUser(t, db, "standard")
+	empfaenger := testutil.CreateUser(t, db, "standard")
+	fremder := testutil.CreateUser(t, db, "standard")
+	srv := newMediaServer(t, db)
+	ids := []int{uploadMedia(t, srv, db, sender), uploadMedia(t, srv, db, sender)}
+	convID := newGroupConv(t, db, sender, []int{sender, empfaenger}, nil)
+	attachToMessage(t, db, convID, sender, ids...)
+	bcIDs := []int{uploadMedia(t, srv, db, sender), uploadMedia(t, srv, db, sender)}
+	bcID := attachToBroadcast(t, db, sender, bcIDs...)
+	db.Exec(`INSERT INTO broadcast_reads (broadcast_id, user_id) VALUES (?, ?)`, bcID, empfaenger)
+
+	for _, id := range []int{ids[1], bcIDs[1]} {
+		if got := getStatus(t, srv, id, fremder); got != http.StatusNotFound {
+			t.Errorf("Fremder auf Albumbild %d: erwartet 404, bekommen %d", id, got)
+		}
+	}
+}
+
+func TestServe_AlbumbildFuerMitteilungsempfaenger(t *testing.T) {
+	db := testutil.NewDB(t)
+	sender := testutil.CreateUser(t, db, "standard")
+	empfaenger := testutil.CreateUser(t, db, "standard")
+	srv := newMediaServer(t, db)
+	ids := []int{uploadMedia(t, srv, db, sender), uploadMedia(t, srv, db, sender), uploadMedia(t, srv, db, sender)}
+	bcID := attachToBroadcast(t, db, sender, ids...)
+	db.Exec(`INSERT INTO broadcast_reads (broadcast_id, user_id) VALUES (?, ?)`, bcID, empfaenger)
+
+	for _, id := range ids {
+		if got := getStatus(t, srv, id, empfaenger); got != http.StatusOK {
+			t.Errorf("Empfänger auf Albumbild %d: erwartet 200, bekommen %d", id, got)
+		}
+	}
+}
+
+func TestServe_AusgetretenesMitgliedSiehtAlbumbild(t *testing.T) {
+	db := testutil.NewDB(t)
+	sender := testutil.CreateUser(t, db, "standard")
+	ausgetreten := testutil.CreateUser(t, db, "standard")
+	srv := newMediaServer(t, db)
+	ids := []int{uploadMedia(t, srv, db, sender), uploadMedia(t, srv, db, sender)}
+	convID := newGroupConv(t, db, sender, []int{sender}, []int{ausgetreten})
+	attachToMessage(t, db, convID, sender, ids...)
+
+	if got := getStatus(t, srv, ids[1], ausgetreten); got != http.StatusOK {
+		t.Fatalf("ausgetretenes Mitglied: erwartet 200, bekommen %d", got)
 	}
 }
