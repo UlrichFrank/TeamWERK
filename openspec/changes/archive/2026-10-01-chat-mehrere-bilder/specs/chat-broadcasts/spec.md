@@ -1,8 +1,5 @@
-# chat-broadcasts Specification
+## MODIFIED Requirements
 
-## Purpose
-Einweg-Mitteilungen an Zielgruppen (alle, Team, Rolle). Sender kann Broadcasts bearbeiten und löschen.
-## Requirements
 ### Requirement: Empfangene Broadcasts abrufen
 
 Das System SHALL die sichtbaren Broadcasts eines Users zurückgeben. Zu jedem Broadcast werden geliefert: `id`, `senderName`, `body`, `media` (Liste der Bilder in Album-Reihenfolge, leer ohne Bild; je Eintrag `id`, `url = "/media/<id>"`, `width`/`height` nur bei bekannter Dimension, sonst weggelassen), `mediaId`/`mediaUrl`/`mediaWidth`/`mediaHeight` (Angaben zum **ersten** Bild, Kompatibilität für ältere Clients; null bzw. weggelassen ohne Bild), `sentAt`, `isRead`, `isSent`, `editedAt`.
@@ -31,89 +28,6 @@ Das System SHALL die sichtbaren Broadcasts eines Users zurückgeben. Zu jedem Br
 
 - **WHEN** ein Broadcast ohne Bild abgerufen wird
 - **THEN** ist `media` eine leere Liste, `mediaId` und `mediaUrl` sind null; `mediaWidth`/`mediaHeight` fehlen
-
-### Requirement: Broadcast als gelesen markieren
-
-Das System SHALL es Empfängern erlauben einen Broadcast als gelesen zu markieren. Dies beeinflusst den Ungelesen-Badge im Nav.
-
-#### Scenario: Broadcast öffnen markiert als gelesen
-
-- **WHEN** ein User einen Broadcast öffnet und `POST /api/chat/broadcasts/{id}/read` aufruft
-- **THEN** wird `broadcast_reads.read_at` für diesen User gesetzt
-- **THEN** erscheint der Broadcast als gelesen in der Liste
-
-### Requirement: Kein Rückkanal bei Broadcasts
-
-Das System SHALL keinerlei Reply-Funktionalität für Broadcasts bereitstellen. Der Endpoint zur Konversationserstellung (`POST /api/chat/conversations`) darf nicht über einen Broadcast-Kontext erreichbar sein. Im Frontend wird kein Reply-Eingabefeld angezeigt.
-
-#### Scenario: Kein Reply-Endpoint für Broadcasts
-
-- **WHEN** ein User versucht auf einen Broadcast zu antworten
-- **THEN** existiert kein API-Endpoint für diese Aktion (HTTP 404 oder nicht vorhanden)
-
-### Requirement: Bestands-Mitteilungen bleiben zustellbar
-
-Das System SHALL Mitteilungen, die vor der Umstellung des Zielgruppen-Vokabulars gesendet
-wurden, für ihre damaligen Empfänger unverändert auslieferbar halten. Die Zustellung SHALL
-ausschließlich an `broadcast_reads` hängen; die gespeicherten Ziele einer Mitteilung SHALL
-nach dem Senden nirgends mehr für die Zustellung ausgewertet werden.
-
-Die bisherige Spalte `broadcasts.target_type` SHALL durch die Zeilentabelle
-`broadcast_targets` abgelöst werden; jede Bestandszeile SHALL als genau ein Ziel mit
-ihrem bisherigen Wert und ohne `teamId` übernommen werden. Der Wert `legacy` SHALL
-persistierbar und lesbar, aber über `POST /api/chat/broadcasts` **nicht** setzbar sein.
-
-#### Scenario: Alte Mitteilung bleibt sichtbar
-
-- **WHEN** ein User `GET /api/chat/broadcasts` aufruft und für ihn eine `broadcast_reads`-Zeile zu einer vor der Migration gesendeten Mitteilung existiert
-- **THEN** enthält die Antwort diese Mitteilung unverändert (Body, Sender, Zeitpunkt, Lesestatus)
-
-#### Scenario: Bestandsziel überlebt die Migration
-
-- **WHEN** vor der Migration eine Mitteilung mit `target_type = 'users'` existierte
-- **THEN** existiert danach für sie genau eine `broadcast_targets`-Zeile mit `kind = 'users'` und ohne `team_id`
-
-#### Scenario: legacy ist nicht schreibbar
-
-- **WHEN** ein berechtigter User `POST /api/chat/broadcasts` mit einem Ziel-`kind` gleich `"legacy"` aufruft
-- **THEN** antwortet der Server mit HTTP 400
-
-### Requirement: Erlaubte Ziele abrufen
-
-Das System SHALL unter `GET /api/chat/broadcast-targets` die Ziele zurückgeben, die der
-aufrufende User in einer Mitteilung verwenden darf — dieselbe Menge, gegen die
-`POST /api/chat/broadcasts` prüft. Der Composer SHALL diese Liste anzeigen, statt die
-Ziele aus Rolle oder Vereinsfunktion abzuleiten.
-
-Die Antwort SHALL je Ziel `kind`, `teamId` (null bei vereinsweiten Zielen und bei
-`alle_trainer`), ein anzeigefertiges `label` und `count` (Anzahl distinkter Empfänger)
-tragen. `count` SHALL den Absender mitzählen, wenn er zur Gruppe gehört — die Zahl
-beschreibt die Gruppe, nicht den Fan-out.
-
-Ziele mit `count = 0` SHALL enthalten sein und nicht ausgefiltert werden: eine leere
-Gruppe ist eine legitime Auswahl, und das Verschweigen wäre genau der stille Fall, den
-der `recipients`-Zähler sichtbar machen soll.
-
-User ohne Senderecht SHALL HTTP 403 erhalten.
-
-#### Scenario: Vorstand sieht vereinsweite Ziele und alle Teams
-
-- **WHEN** ein Vorstand `GET /api/chat/broadcast-targets` aufruft
-- **THEN** antwortet das System mit HTTP 200
-- **AND** die Liste enthält die vier vereinsweiten Ziele (`users`, `members`, `spieler`, `eltern`)
-- **AND** je Team mit Kader in der aktiven Saison die Ziele `team_spieler`, `team_eltern`, `team_trainer`
-
-#### Scenario: Trainer sieht nur die Gruppen seiner Kader
-
-- **WHEN** ein User mit Vereinsfunktion `trainer` (ohne `vorstand`, `sportliche_leitung`, `admin`), der Kader-Trainer von Team A ist, `GET /api/chat/broadcast-targets` aufruft
-- **THEN** enthält die Liste `team_spieler`, `team_eltern` und `team_trainer` für Team A sowie `alle_trainer`
-- **AND** sie enthält kein vereinsweites Ziel (`users`, `members`, `spieler`, `eltern`)
-- **AND** sie enthält kein Ziel eines Teams, dessen Kader-Trainer er nicht ist
-
-#### Scenario: User ohne Senderecht
-
-- **WHEN** ein User ohne `admin`, `vorstand`, `sportliche_leitung` und ohne Kader-Trainer-Eintrag der aktiven Saison `GET /api/chat/broadcast-targets` aufruft
-- **THEN** antwortet das System mit HTTP 403
 
 ### Requirement: Mitteilung an vereinsweite Ziele und Team-Gruppen senden
 
@@ -305,4 +219,3 @@ Die gewählten Ziele SHALL als je eine Zeile in `broadcast_targets` gespeichert 
 
 - **WHEN** ein User ohne `admin`/`vorstand`/`sportliche_leitung` und ohne Kader-Trainer-Eintrag der aktiven Saison einen Broadcast sendet
 - **THEN** antwortet der Server mit HTTP 403
-

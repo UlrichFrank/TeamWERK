@@ -3,6 +3,7 @@ package chat
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/teamstuttgart/teamwerk/internal/auth"
 	"github.com/teamstuttgart/teamwerk/internal/background"
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
+	"github.com/teamstuttgart/teamwerk/internal/httpx"
 	"github.com/teamstuttgart/teamwerk/internal/hub"
 	"github.com/teamstuttgart/teamwerk/internal/push"
 )
@@ -649,6 +651,7 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		MediaURL          *string           `json:"mediaUrl"`
 		MediaWidth        *int              `json:"mediaWidth,omitempty"`
 		MediaHeight       *int              `json:"mediaHeight,omitempty"`
+		Media             []mediaItem       `json:"media"`
 		Reactions         []messageReaction `json:"reactions"`
 		Poll              *pollView         `json:"poll"`
 		// Read-Receipts (Absender-Sicht): readCount = Leser außer Sender,
@@ -667,7 +670,7 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		defer rows.Close()
 		list := []Message{}
 		for rows.Next() {
-			var msg Message
+			msg := Message{Media: []mediaItem{}}
 			var body string
 			var replyToID, mediaID, mediaWidth, mediaHeight sql.NullInt64
 			var replyToBody, replyToSenderName, editedAt, deletedAt sql.NullString
@@ -859,6 +862,28 @@ func (h *Handler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Albumbilder (chat-mehrere-bilder) per Batch nachladen — ein JOIN im
+	// messageSelect vervielfachte die Zeilen und bräche das LIMIT. Gelöschte
+	// Nachrichten bekommen keine Bilder, genau wie keinen Body.
+	if len(msgs) > 0 {
+		albumIDs := make([]int, 0, len(msgs))
+		for _, m := range msgs {
+			if m.DeletedAt == nil {
+				albumIDs = append(albumIDs, m.ID)
+			}
+		}
+		albums, aerr := loadMessageMedia(r.Context(), h.db, albumIDs)
+		if aerr != nil {
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, aerr)
+			return
+		}
+		for i := range msgs {
+			if items, ok := albums[msgs[i].ID]; ok {
+				msgs[i].Media = items
+			}
+		}
+	}
+
 	// Attach polls (Batch-Anhang nach Reaktions-Muster, design.md §4). Nur für
 	// nicht gelöschte Nachrichten — eine gelöschte Umfrage liefert kein poll.
 	if len(msgs) > 0 {
@@ -922,17 +947,40 @@ func (h *Handler) GetMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Gelöschte Nachricht → kein Body.
+	// Gelöschte Nachricht → kein Body und keine Bilder.
+	media := []mediaItem{}
 	if deletedAt.Valid {
 		body = ""
+	} else {
+		albums, aerr := loadMessageMedia(r.Context(), h.db, []int{msgID})
+		if aerr != nil {
+			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, aerr)
+			return
+		}
+		if items, ok := albums[msgID]; ok {
+			media = items
+		}
 	}
 
+	resp := map[string]any{
+		"id":       msgID,
+		"body":     body,
+		"deleted":  deletedAt.Valid,
+		"media":    media,
+		"mediaId":  nil,
+		"mediaUrl": nil,
+	}
+	// Altfelder = erstes Albumbild, wie in der Liste.
+	if len(media) > 0 {
+		resp["mediaId"] = media[0].ID
+		resp["mediaUrl"] = media[0].URL
+		if media[0].Width != nil {
+			resp["mediaWidth"] = *media[0].Width
+			resp["mediaHeight"] = *media[0].Height
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"id":      msgID,
-		"body":    body,
-		"deleted": deletedAt.Valid,
-	})
+	json.NewEncoder(w).Encode(resp)
 }
 
 // POST /api/chat/conversations/{id}/messages
@@ -952,18 +1000,13 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Body      string `json:"body"`
 		ReplyToID *int   `json:"replyToId"`
-		MediaID   *int   `json:"mediaId"`
+		albumFields
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	body.Body = strings.TrimSpace(body.Body)
-	// Mindestens nicht-leerer Text ODER ein Bild.
-	if body.Body == "" && body.MediaID == nil {
-		http.Error(w, "body or mediaId required", http.StatusBadRequest)
-		return
-	}
 
 	var replyToID sql.NullInt64
 	if body.ReplyToID != nil {
@@ -978,26 +1021,47 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		replyToID = sql.NullInt64{Int64: int64(*body.ReplyToID), Valid: true}
 	}
 
-	var mediaID sql.NullInt64
-	if body.MediaID != nil {
-		var count int
-		h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM media WHERE id = ?`, *body.MediaID).Scan(&count)
-		if count == 0 {
-			http.Error(w, "invalid mediaId", http.StatusBadRequest)
-			return
-		}
-		mediaID = sql.NullInt64{Int64: int64(*body.MediaID), Valid: true}
+	// Nachricht und Album-Zuordnung in einer Transaktion: ein Unique-Verstoß
+	// durch zwei Requests mit derselben media-ID im Rennen endet als Rollback,
+	// nicht als halbe Nachricht.
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	defer tx.Rollback()
+
+	mediaIDs, err := resolveAlbum(r.Context(), tx, claims.UserID, body.albumFields)
+	if errors.Is(err, errInvalidMedia) {
+		httpx.WriteError(w, r, http.StatusBadRequest, codeInvalidMedia, err)
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	// Mindestens nicht-leerer Text ODER ein Bild.
+	if body.Body == "" && len(mediaIDs) == 0 {
+		http.Error(w, "body or mediaIds required", http.StatusBadRequest)
+		return
 	}
 
-	res, err := h.db.ExecContext(r.Context(),
+	res, err := tx.ExecContext(r.Context(),
 		`INSERT INTO messages (conversation_id, sender_id, body, reply_to_id, media_id) VALUES (?, ?, ?, ?, ?)`,
-		convID, claims.UserID, body.Body, replyToID, mediaID)
+		convID, claims.UserID, body.Body, replyToID, firstMedia(mediaIDs))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	msgID, _ := res.LastInsertId()
+	if err := insertAlbum(r.Context(), tx, "message_media", "message_id", msgID, mediaIDs); err != nil {
+		writeAlbumInsertError(w, r, err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
 
 	// For direct chats: restore any member who had left so they receive the SSE
 	var convType string
@@ -1011,7 +1075,7 @@ func (h *Handler) SendMessage(w http.ResponseWriter, r *http.Request) {
 
 	preview := truncate(body.Body, 80)
 	if preview == "" {
-		preview = "Bild"
+		preview = imagePreview(len(mediaIDs))
 	}
 	h.broadcastNewMessage(r, convID, claims.UserID, convType, convName, preview)
 
@@ -1380,6 +1444,9 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 		MediaURL    *string `json:"mediaUrl"`
 		MediaWidth  *int    `json:"mediaWidth,omitempty"`
 		MediaHeight *int    `json:"mediaHeight,omitempty"`
+		// Albumbilder in Positionsreihenfolge; die Media*-Felder davor tragen
+		// das erste Bild für ältere Clients.
+		Media []mediaItem `json:"media"`
 		// Lese-Aggregat nur für eigene Mitteilungen; Zeiger + omitempty, damit der
 		// Lese-Zustand Dritter bei fremden Mitteilungen gar nicht erst im JSON steht.
 		ReadCount *int `json:"readCount,omitempty"`
@@ -1420,7 +1487,7 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 
 	broadcasts := []Broadcast{}
 	for rows.Next() {
-		var b Broadcast
+		b := Broadcast{Media: []mediaItem{}}
 		var isRead, isSent int
 		var editedAt sql.NullString
 		var mediaID, mediaWidth, mediaHeight sql.NullInt64
@@ -1448,6 +1515,22 @@ func (h *Handler) ListBroadcasts(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		broadcasts = append(broadcasts, b)
+	}
+	rows.Close()
+
+	bcIDs := make([]int, len(broadcasts))
+	for i, b := range broadcasts {
+		bcIDs[i] = b.ID
+	}
+	albums, err := loadBroadcastMedia(r.Context(), h.db, bcIDs)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	for i := range broadcasts {
+		if items, ok := albums[broadcasts[i].ID]; ok {
+			broadcasts[i].Media = items
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1509,18 +1592,13 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Body    string   `json:"body"`
 		Targets []Target `json:"targets"`
-		MediaID *int     `json:"mediaId"`
+		albumFields
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 	body.Body = strings.TrimSpace(body.Body)
-	// Mindestens nicht-leerer Text ODER ein Bild.
-	if body.Body == "" && body.MediaID == nil {
-		http.Error(w, "body or mediaId required", http.StatusBadRequest)
-		return
-	}
 	if len(body.Targets) == 0 {
 		http.Error(w, "targets required", http.StatusBadRequest)
 		return
@@ -1539,26 +1617,44 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var mediaID sql.NullInt64
-	if body.MediaID != nil {
-		var count int
-		h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM media WHERE id = ?`, *body.MediaID).Scan(&count)
-		if count == 0 {
-			http.Error(w, "invalid mediaId", http.StatusBadRequest)
-			return
-		}
-		mediaID = sql.NullInt64{Int64: int64(*body.MediaID), Valid: true}
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	defer tx.Rollback()
+
+	mediaIDs, err := resolveAlbum(r.Context(), tx, claims.UserID, body.albumFields)
+	if errors.Is(err, errInvalidMedia) {
+		httpx.WriteError(w, r, http.StatusBadRequest, codeInvalidMedia, err)
+		return
+	}
+	if err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
+	// Mindestens nicht-leerer Text ODER ein Bild.
+	if body.Body == "" && len(mediaIDs) == 0 {
+		http.Error(w, "body or mediaIds required", http.StatusBadRequest)
+		return
 	}
 
-	res, err := h.db.ExecContext(r.Context(),
+	res, err := tx.ExecContext(r.Context(),
 		`INSERT INTO broadcasts (sender_id, body, media_id) VALUES (?, ?, ?)`,
-		claims.UserID, body.Body, mediaID)
+		claims.UserID, body.Body, firstMedia(mediaIDs))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	broadcastID, _ := res.LastInsertId()
+	if err := insertAlbum(r.Context(), tx, "broadcast_media", "broadcast_id", broadcastID, mediaIDs); err != nil {
+		writeAlbumInsertError(w, r, err)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
+		return
+	}
 
 	for _, t := range body.Targets {
 		if _, err := h.db.ExecContext(r.Context(),
@@ -1606,7 +1702,7 @@ func (h *Handler) SendBroadcast(w http.ResponseWriter, r *http.Request) {
 	title := h.senderName(r, claims.UserID, claims.Email)
 	preview := truncate(body.Body, 80)
 	if preview == "" {
-		preview = "Bild"
+		preview = imagePreview(len(mediaIDs))
 	}
 	for _, uid := range pushRecipients {
 		badge, err := ComputeUnreadForUser(h.db, uid)

@@ -217,17 +217,38 @@ func seedChatMedia(database *sql.DB, adminID int, userIDs []int) string {
 		fatal("e2e-seed: mkdir media_dir failed", "dir", mediaDir, "error", err)
 	}
 
-	// 1) Gruppe mit Bildern: Text + 4 Bild-Nachrichten, alle vom Admin (→ für Admin gelesen).
+	// 1) Gruppe mit Bildern: Text + 4 Bild-Nachrichten + 1 Album mit 4 Bildern, alle vom
+	//    Admin (→ für Admin gelesen).
 	imgConvID := seedTextConversation(database, "E2E Chat mit Bildern", []int{adminID, user1}, adminID, 4)
 	imgIndex := 1
 	for i := 0; i < 4; i++ {
 		mediaID := seedImage(database, mediaDir, adminID, imgIndex, true)
 		imgIndex++
-		if _, err := database.Exec(
+		res, err := database.Exec(
 			`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
-			imgConvID, adminID, mediaID); err != nil {
+			imgConvID, adminID, mediaID)
+		if err != nil {
 			fatal("e2e-seed: insert image message failed", "error", err)
 		}
+		msgID, _ := res.LastInsertId()
+		seedMessageMedia(database, int(msgID), mediaID, 0)
+	}
+	// Album mit 4 Bildern (chat-mehrere-bilder) als eine Nachricht: das Raster
+	// hat feste Geometrie, die Inhaltshöhe darf beim Decode nicht springen.
+	album := make([]int, 4)
+	for i := range album {
+		album[i] = seedImage(database, mediaDir, adminID, imgIndex, true)
+		imgIndex++
+	}
+	albumRes, err := database.Exec(
+		`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
+		imgConvID, adminID, album[0])
+	if err != nil {
+		fatal("e2e-seed: insert album message failed", "error", err)
+	}
+	albumMsgID, _ := albumRes.LastInsertId()
+	for pos, mediaID := range album {
+		seedMessageMedia(database, int(albumMsgID), mediaID, pos)
 	}
 
 	// 2) Gruppe mit Unread: 28 Nachrichten von user1 (NICHT Admin). message_reads für
@@ -353,6 +374,17 @@ var longThreadBaseTime = time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
 
 const longThreadStep = 17 * time.Minute
 
+// seedMessageMedia schreibt die Album-Zuordnung eines Bildes (message_media ist
+// seit Migration 071 die Quelle der Wahrheit für media.canSee — eine Bild-Nachricht
+// ohne diese Zeile wäre für die übrigen Konversationsmitglieder unsichtbar).
+func seedMessageMedia(database *sql.DB, msgID, mediaID, position int) {
+	if _, err := database.Exec(
+		`INSERT INTO message_media (message_id, media_id, position) VALUES (?, ?, ?)`,
+		msgID, mediaID, position); err != nil {
+		fatal("e2e-seed: insert message_media failed", "error", err)
+	}
+}
+
 // seedLongThread legt eine Gruppen-Konversation mit n Nachrichten an und setzt sent_at
 // EXPLIZIT (deterministisch, aufsteigend gespreizt), damit Scroll-/Divider-/DaySeparator-
 // Verhalten im Frontend testbar ist.
@@ -378,12 +410,13 @@ func seedLongThread(
 
 		isImage, withDims := imageAt(i)
 		var (
-			res sql.Result
-			err error
+			res     sql.Result
+			err     error
+			mediaID int
 		)
 		if isImage {
 			*imgCounter++
-			mediaID := seedImage(database, mediaDir, sender, *imgCounter, withDims)
+			mediaID = seedImage(database, mediaDir, sender, *imgCounter, withDims)
 			res, err = database.Exec(
 				`INSERT INTO messages (conversation_id, sender_id, body, media_id, sent_at) VALUES (?, ?, '', ?, ?)`,
 				convID, sender, mediaID, sentAt)
@@ -399,6 +432,9 @@ func seedLongThread(
 			fatal("e2e-seed: insert long-thread message failed", "title", title, "error", err)
 		}
 		id, _ := res.LastInsertId()
+		if isImage {
+			seedMessageMedia(database, int(id), mediaID, 0)
+		}
 		msgIDs = append(msgIDs, int(id))
 	}
 	return convID, msgIDs

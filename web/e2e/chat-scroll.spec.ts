@@ -13,6 +13,9 @@ const BOX = '[data-windowed-scroll]'
 // (jetzt gelesene) Konversation → Divider/Chip rendert nie → Retry wäre garantiert rot.
 test.describe.configure({ retries: 0 })
 
+// „E2E Chat mit Bildern": 4 Einzelbild-Nachrichten + 1 Album mit 4 Bildern (seedChatMedia).
+const BILDER_CHAT_IMAGES = 8
+
 async function openChat(page: Page) {
   await page.goto('/chat')
 }
@@ -36,7 +39,7 @@ test('gelesene Bild-Konversation öffnet am Ende (nach Bild-Decode)', async ({ p
 
   const box = page.locator(BOX)
   await expect(box).toBeVisible()
-  await waitAllImagesLoaded(page, 4)
+  await waitAllImagesLoaded(page, BILDER_CHAT_IMAGES)
 
   // Nach allen Bild-Loads am Ende (Sub-Pixel-Toleranz).
   await expect
@@ -310,8 +313,9 @@ test('Konversationswechsel zeigt keinen Fremdinhalt', async ({ page }) => {
 //
 // Deterministisch gemacht durch Anhalten der Medien-Antworten (page.route): lokal ist der
 // Blob-Fetch im Millisekunden-Bereich, ohne Anhalten gibt es keinen stabilen Moment, in dem
-// alle Platzhalter sichtbar sind. „E2E Chat mit Bildern" hat 4 Bilder, ALLE mit Server-Dims
-// (seedChatMedia → seedImage(…, true)); die langen Threads mischen absichtlich Bilder ohne
+// alle Platzhalter sichtbar sind. „E2E Chat mit Bildern" hat 4 Einzelbilder plus ein Album
+// mit 4 Bildern, ALLE mit Server-Dims (seedChatMedia → seedImage(…, true)); die Albumkacheln
+// brauchen die Dims gar nicht, ihre Größe kommt aus der festen Rastergeometrie; die langen Threads mischen absichtlich Bilder ohne
 // Dims (6-rem-Fallback) und taugen deshalb nicht für Δ≈0.
 //
 // ZWEITER BLINDER FLECK (Vorher/Nachher reicht nicht): Der <img> bemisst sich ohne explizite
@@ -339,7 +343,9 @@ test('Bild-Platzhalter mit Dims: Inhaltshöhe bleibt beim Decode stabil', async 
 
   const box = page.locator(BOX)
   await expect(box).toBeVisible()
-  await expect(page.locator(`${BOX} [aria-busy="true"]`)).toHaveCount(4)
+  await expect(page.locator(`${BOX} [aria-busy="true"]`)).toHaveCount(BILDER_CHAT_IMAGES)
+  // Das Album steht als Raster in der Blase (feste Kachelgeometrie).
+  await expect(page.locator(`${BOX} [data-testid="chat-image-grid"]`)).toHaveCount(1)
 
   const before = await box.evaluate((el: HTMLElement) => ({
     height: el.scrollHeight,
@@ -375,7 +381,7 @@ test('Bild-Platzhalter mit Dims: Inhaltshöhe bleibt beim Decode stabil', async 
 
   // Routen freigeben → Blobs kommen, <img> ersetzen die Platzhalter.
   pending.splice(0).forEach((release) => release())
-  await waitAllImagesLoaded(page, 4)
+  await waitAllImagesLoaded(page, BILDER_CHAT_IMAGES)
 
   const after = await box.evaluate((el: HTMLElement) => ({
     height: el.scrollHeight,
@@ -401,10 +407,11 @@ test('Bild-Platzhalter mit Dims: Inhaltshöhe bleibt beim Decode stabil', async 
   // Kein Platzhalter war schmaler als das Bild, das ihn ersetzt hat.
   expect(before.minPlaceholderWidth).toBeGreaterThanOrEqual(after.minImgWidth - 1)
 
-  // Einfüge-Moment: alle 4 <img> beobachtet, jeder hatte sofort seine Zielhöhe (nicht 0),
+  // Einfüge-Moment: alle <img> beobachtet (Einzelbilder UND Albumkacheln), jeder hatte
+  // sofort seine Zielhöhe (nicht 0),
   // und der Scroll-Inhalt ist zwischendurch nie unter die Ausgangshöhe gefallen.
   // Ohne explizite <img>-Breite: h=0 für jeden Eintrag, scrollHeight um 4 × Bildhöhe kleiner.
-  expect(after.inserted).toHaveLength(4)
+  expect(after.inserted).toHaveLength(BILDER_CHAT_IMAGES)
   for (const ins of after.inserted) {
     expect(ins.h).toBeGreaterThanOrEqual(after.minImgHeight - 1)
     expect(before.height - ins.scrollHeight).toBeLessThanOrEqual(4)
