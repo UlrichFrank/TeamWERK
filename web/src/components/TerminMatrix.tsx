@@ -2,10 +2,9 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Calendar, Circle, Dumbbell, HelpCircle, Home, Minus, Plane, ThumbsDown, ThumbsUp, UserCheck, UserX } from 'lucide-react'
 import { getEventColors } from '../lib/eventColors'
-import { LINEUP_LABEL, LINEUP_SHAPE, LINEUP_SURFACE, type LineupState } from '../lib/lineup'
+import { LINEUP_LABEL, LINEUP_MATRIX_SURFACE, LINEUP_SHAPE, type LineupState } from '../lib/lineup'
 import {
   cellTitle,
-  iconToneOnLineup,
   formatColumnDate,
   formatParticipation,
   isCellRespondable,
@@ -31,25 +30,24 @@ const TYPE_LABEL = {
 
 /**
  * Symbol + Beschriftung einer Zelle. Anwesenheit (Trainer-Sicht) geht vor der
- * Rückmeldung. Die Symbolfarbe richtet sich nach der Aufstellungsfläche dahinter.
+ * Rückmeldung. Die Aufstellung ist nur Rahmen, das Symbol behält seine Farbe.
  */
 function cellView(cell: MatrixCell): { icon: ReactNode; label: string } {
   const cls = 'w-4 h-4 mx-auto'
-  const tone = (base: string) => iconToneOnLineup(base, cell.lineup)
-  if (cell.present === true) return { icon: <UserCheck className={`${cls} ${tone('text-brand-green')}`} />, label: 'anwesend' }
-  if (cell.present === false) return { icon: <UserX className={`${cls} ${tone('text-brand-danger')}`} />, label: 'gefehlt' }
-  if (cell.unavailable) return { icon: <Minus className={`${cls} ${tone('text-brand-text-subtle')}`} />, label: 'für die Serie abgemeldet' }
-  const faded = cell.is_default ? (cell.lineup === 'in' ? ' opacity-60' : ' opacity-40') : ''
+  if (cell.present === true) return { icon: <UserCheck className={`${cls} text-brand-green`} />, label: 'anwesend' }
+  if (cell.present === false) return { icon: <UserX className={`${cls} text-brand-danger`} />, label: 'gefehlt' }
+  if (cell.unavailable) return { icon: <Minus className={`${cls} text-brand-text-subtle`} />, label: 'für die Serie abgemeldet' }
+  const faded = cell.is_default ? ' opacity-40' : ''
   const suffix = cell.is_default ? ' (Voreinstellung)' : ''
   switch (cell.status) {
     case 'confirmed':
-      return { icon: <ThumbsUp className={`${cls} ${tone('text-brand-green')}${faded}`} />, label: `zugesagt${suffix}` }
+      return { icon: <ThumbsUp className={`${cls} text-brand-green${faded}`} />, label: `zugesagt${suffix}` }
     case 'declined':
-      return { icon: <ThumbsDown className={`${cls} ${tone('text-brand-danger')}${faded}`} />, label: `abgesagt${suffix}` }
+      return { icon: <ThumbsDown className={`${cls} text-brand-danger${faded}`} />, label: `abgesagt${suffix}` }
     case 'maybe':
-      return { icon: <HelpCircle className={`${cls} ${tone('text-brand-warning')}`} />, label: 'vielleicht' }
+      return { icon: <HelpCircle className={`${cls} text-brand-warning`} />, label: 'vielleicht' }
     default:
-      return { icon: <Circle className={`${cls} ${tone('text-brand-text-subtle')}`} />, label: 'keine Rückmeldung' }
+      return { icon: <Circle className={`${cls} text-brand-text-subtle`} />, label: 'keine Rückmeldung' }
   }
 }
 
@@ -58,7 +56,7 @@ function LineupBox({ lineup, children }: { lineup: LineupState | undefined; chil
   return (
     <span
       data-lineup={lineup}
-      className={`w-full min-w-[2.75rem] h-8 flex items-center justify-center ${LINEUP_SHAPE} ${lineup ? LINEUP_SURFACE[lineup] : 'border-transparent'}`}
+      className={`w-full min-w-[2.75rem] h-8 flex items-center justify-center ${LINEUP_SHAPE} ${lineup ? LINEUP_MATRIX_SURFACE[lineup] : 'border-transparent'}`}
     >
       {children}
     </span>
@@ -230,7 +228,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
         )}
         {(['in', 'out', 'open'] as const).map(state => (
           <li key={state} className="flex items-center gap-1">
-            <span className={`inline-block w-5 h-4 ${LINEUP_SHAPE} ${LINEUP_SURFACE[state]}`} /> {LINEUP_LABEL[state]}
+            <span className={`inline-block w-5 h-4 ${LINEUP_SHAPE} ${LINEUP_MATRIX_SURFACE[state]}`} /> {LINEUP_LABEL[state]}
           </li>
         ))}
         {withPresence && (

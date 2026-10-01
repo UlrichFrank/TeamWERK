@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { cellTitle, cutoffLocked, iconToneOnLineup, formatColumnDate, formatParticipation, isCellRespondable, matrixLoadWindow, nextConfirmStatus, participation, visibleColumns, type MatrixEvent, type MatrixMember } from './terminMatrix'
+import { cellTitle, cutoffLocked, formatColumnDate, formatParticipation, isCellRespondable, matrixLoadWindow, nextConfirmStatus, participation, visibleColumns, type MatrixEvent, type MatrixMember } from './terminMatrix'
 
 const ev = (id: number, event_type: MatrixEvent['event_type'], cancelled = false, date = '2026-09-13'): MatrixEvent => ({
   kind: event_type === 'training' ? 'training' : 'game',
@@ -128,14 +128,6 @@ describe('matrixLoadWindow', () => {
 })
 
 describe('Aufstellung in der Matrix', () => {
-  test('iconToneOnLineup: auf Grün weiß, auf Grau helles Grau angehoben, sonst unverändert', () => {
-    expect(iconToneOnLineup('text-brand-danger', 'in')).toBe('text-white')
-    expect(iconToneOnLineup('text-brand-text-subtle', 'out')).toBe('text-brand-text-muted')
-    expect(iconToneOnLineup('text-brand-danger', 'out')).toBe('text-brand-danger')
-    expect(iconToneOnLineup('text-brand-text-subtle', 'open')).toBe('text-brand-text-subtle')
-    expect(iconToneOnLineup('text-brand-green', undefined)).toBe('text-brand-green')
-  })
-
   test('cellTitle hängt die Aufstellung an die Rückmeldung', () => {
     expect(cellTitle('zugesagt', 'out')).toBe('zugesagt · nicht aufgestellt')
     expect(cellTitle('zugesagt', undefined)).toBe('zugesagt')

@@ -169,17 +169,6 @@ export function isCellRespondable(
   return member.can_respond && !ev.cancelled && !cell.unavailable && !cutoffLocked(ev, canOverride, now)
 }
 
-/**
- * Symbolfarbe auf der Aufstellungsfläche der Zelle (design.md §4 des Changes
- * aufstellung-status-termine): auf Grün immer weiß; auf Grau wird das helle
- * Grau (Kreis, Strich) zu brand-text-muted angehoben, sonst verschwände es.
- */
-export function iconToneOnLineup(base: string, lineup: LineupState | undefined): string {
-  if (lineup === 'in') return 'text-white'
-  if (lineup === 'out' && base === 'text-brand-text-subtle') return 'text-brand-text-muted'
-  return base
-}
-
 /** Zelltitel: „zugesagt · nicht aufgestellt" — die Farbe ist nicht der einzige Träger. */
 export function cellTitle(label: string, lineup: LineupState | undefined): string {
   return lineup ? `${label} · ${LINEUP_LABEL[lineup]}` : label
