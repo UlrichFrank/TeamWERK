@@ -22,6 +22,7 @@ export default function AuthImage({
   onClick,
   naturalWidth,
   naturalHeight,
+  fill = false,
 }: {
   url: string;
   alt?: string;
@@ -29,6 +30,10 @@ export default function AuthImage({
   onClick?: () => void;
   naturalWidth?: number;
   naturalHeight?: number;
+  // fill: die Geometrie bestimmt der umgebende Container (Album-Kachel mit
+  // fester Größe, object-cover). Dann ist weder ein Probe noch eine eigene
+  // Breite nötig — die Box hängt nie am Ladezustand.
+  fill?: boolean;
 }) {
   const [src, setSrc] = useState<string | null>(null);
   const [probedDims, setProbedDims] = useState<{ w: number; h: number } | null>(
@@ -53,8 +58,9 @@ export default function AuthImage({
         if (cancelled) return;
         const created = URL.createObjectURL(res.data as Blob);
         objectUrl = created;
-        // Server-Dims vorhanden → Blob direkt anzeigen, kein Preload nötig.
-        if (naturalWidth && naturalHeight) {
+        // Server-Dims vorhanden oder Container-Geometrie → Blob direkt
+        // anzeigen, kein Preload nötig.
+        if (fill || (naturalWidth && naturalHeight)) {
           setSrc(created);
           return;
         }
@@ -78,7 +84,7 @@ export default function AuthImage({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [url, naturalWidth, naturalHeight]);
+  }, [url, naturalWidth, naturalHeight, fill]);
 
   if (error) {
     return (
@@ -113,7 +119,9 @@ export default function AuthImage({
   // Das `max-w-full` (bzw. `max-w-xs`) aus der className deckelt Platzhalter und
   // Bild identisch auf die Blasenbreite; `min-width` taugt dafür nicht (gewinnt in
   // CSS über `max-width`, die Blase liefe über).
-  const style = dims
+  const style = fill
+    ? {}
+    : dims
     ? { aspectRatio: `${dims.w} / ${dims.h}`, width: `${dims.w}px` }
     : { minHeight: "6rem" };
 
