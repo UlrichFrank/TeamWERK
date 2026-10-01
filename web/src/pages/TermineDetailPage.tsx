@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { isAxiosError } from 'axios'
 import { AlertTriangle, Ban, Calendar, Check, Clock, Dumbbell, HelpCircle, Home, Plane, MessageCircle, X } from 'lucide-react'
 import { api } from '../lib/api'
 import ActionMenu from '../components/ActionMenu'
@@ -13,7 +14,8 @@ import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import LineupBadge from '../components/LineupBadge'
 import LineupCheckbox from '../components/LineupCheckbox'
 import type { LineupState } from '../lib/lineup'
-import { BTN_SECONDARY, BTN_DANGER, INPUT } from '../lib/buttonStyles'
+import { BTN_SECONDARY, BTN_DANGER, BTN_PRIMARY, INPUT } from '../lib/buttonStyles'
+import { errorMessage } from '../lib/errors'
 import { MODAL_TITLE, PAGE_TITLE, SECTION_TITLE } from '../lib/typography'
 
 const WEEKDAYS = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag']
@@ -194,7 +196,7 @@ interface TableSection {
 
 export default function TermineDetailPage() {
   const { type, id } = useParams<{ type: string; id: string }>()
-  const { hasCapability } = useAuth()
+  const { hasCapability, user } = useAuth()
 
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [game, setGame] = useState<GameDetail | null>(null)
@@ -207,8 +209,9 @@ export default function TermineDetailPage() {
   const [attendanceError, setAttendanceError] = useState<string | null>(null)
   const [lineupMap, setLineupMap] = useState<Record<number, boolean>>({})
   const [showReasonId, setShowReasonId] = useState<number | null>(null)
-  const [declineTarget, setDeclineTarget] = useState<{ memberId: number; name: string } | null>(null)
+  const [reasonTarget, setReasonTarget] = useState<{ memberId: number; name: string; status: 'declined' | 'maybe' } | null>(null)
   const [declineReason, setDeclineReason] = useState('')
+  const [rsvpError, setRsvpError] = useState<string | null>(null)
   const declineInputRef = useRef<HTMLInputElement>(null)
 
   const isTraining = type === 'training'
@@ -218,22 +221,48 @@ export default function TermineDetailPage() {
   const date = isTraining ? session?.date : game?.date
   const today = new Date().toISOString().slice(0, 10)
   const isPast = date ? date.slice(0, 10) <= today : false
+  // Spieler dürfen nur bis zum Termintag selbst antworten; die genaue Frist
+  // (Training 2 h vor Beginn, Spiel-Cutoff) prüft der Server und meldet sie.
+  const isOver = date ? date.slice(0, 10) < today : false
+  // Pflichtgrund gilt nur für Spieler/Eltern — Trainer übergehen ihn serverseitig.
+  const reasonRequired = !isTrainer && Boolean(isTraining ? session?.rsvp_require_reason : game?.rsvp_require_reason)
+
+  // Trainer pflegen jede Spieler-Zeile, ein Spieler nur seine eigene.
+  const canRsvpFor = (row: TableRow) =>
+    !row.is_trainer && (isTrainer || (!isOver && !row.unavailable && user != null && row.user_id === user.id))
 
   const setRsvpForMember = async (memberId: number, status: 'confirmed' | 'declined' | 'maybe', reason = '') => {
     const url = isTraining ? `/training-sessions/${id}/respond` : `/games/${id}/respond`
-    try { await api.post(url, { member_id: memberId, status, reason }); load(true) } catch { /* still */ }
+    try {
+      await api.post(url, { member_id: memberId, status, reason })
+      setRsvpError(null)
+      load(true)
+    } catch (e) {
+      // rsvp_locked trägt die konkrete Frist im Klartext.
+      const msg = isAxiosError(e) && e.response?.data?.error === 'rsvp_locked' ? e.response.data.message : undefined
+      setRsvpError(msg || errorMessage(e, 'Rückmeldung konnte nicht gespeichert werden.'))
+    }
   }
 
-  const openDecline = (memberId: number, name: string) => {
-    setDeclineTarget({ memberId, name })
+  const openReason = (memberId: number, name: string, status: 'declined' | 'maybe') => {
+    setReasonTarget({ memberId, name, status })
     setDeclineReason('')
     setTimeout(() => declineInputRef.current?.focus(), 50)
   }
 
-  const confirmDecline = async () => {
-    if (!declineTarget) return
-    await setRsvpForMember(declineTarget.memberId, 'declined', declineReason)
-    setDeclineTarget(null)
+  const openDecline = (memberId: number, name: string) => openReason(memberId, name, 'declined')
+
+  // Vielleicht braucht nur dann das Grund-Modal, wenn der Termin einen Grund verlangt.
+  const setMaybe = (memberId: number, name: string) => {
+    if (reasonRequired) openReason(memberId, name, 'maybe')
+    else setRsvpForMember(memberId, 'maybe')
+  }
+
+  const confirmReason = async () => {
+    if (!reasonTarget) return
+    if (reasonRequired && !declineReason.trim()) return
+    await setRsvpForMember(reasonTarget.memberId, reasonTarget.status, declineReason)
+    setReasonTarget(null)
   }
 
   const applyAttendances = (data: AttendanceItem[]) => {
@@ -389,24 +418,40 @@ export default function TermineDetailPage() {
   if (isTraining && !session) return <p className="text-brand-danger text-sm p-4">Termin nicht gefunden.</p>
   if (!isTraining && !game) return <p className="text-brand-danger text-sm p-4">Spiel nicht gefunden.</p>
 
-  const declineModal = declineTarget ? (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40" onClick={() => setDeclineTarget(null)}>
+  const reasonLabel = reasonTarget?.status === 'maybe' ? 'Vielleicht' : 'Absagen'
+  const declineModal = reasonTarget ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40" onClick={() => setReasonTarget(null)}>
       <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm mx-4" onClick={e => e.stopPropagation()}>
-        <h2 className={`${MODAL_TITLE} mb-1`}>Absagen für {declineTarget.name}</h2>
-        <p className="text-sm text-brand-text-muted mb-4">Grund angeben (optional)</p>
+        <h2 className={`${MODAL_TITLE} mb-1`}>{reasonLabel} für {reasonTarget.name}</h2>
+        <p className="text-sm text-brand-text-muted mb-4">{reasonRequired ? 'Grund angeben' : 'Grund angeben (optional)'}</p>
         <input
           ref={declineInputRef}
           value={declineReason}
           onChange={e => setDeclineReason(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') confirmDecline(); if (e.key === 'Escape') setDeclineTarget(null) }}
+          onKeyDown={e => { if (e.key === 'Enter') confirmReason(); if (e.key === 'Escape') setReasonTarget(null) }}
           placeholder="z.B. Krank, Urlaub…"
           className={`${INPUT} mb-4`}
         />
         <div className="flex justify-end gap-2">
-          <button onClick={() => setDeclineTarget(null)} className={BTN_SECONDARY}>Abbrechen</button>
-          <button onClick={confirmDecline} className={BTN_DANGER}>Absagen</button>
+          <button onClick={() => setReasonTarget(null)} className={BTN_SECONDARY}>Abbrechen</button>
+          <button
+            onClick={confirmReason}
+            disabled={reasonRequired && !declineReason.trim()}
+            className={reasonTarget.status === 'maybe' ? BTN_PRIMARY : BTN_DANGER}
+          >
+            {reasonLabel}
+          </button>
         </div>
       </div>
+    </div>
+  ) : null
+
+  const rsvpErrorAlert = rsvpError ? (
+    <div role="alert" className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-start justify-between gap-2">
+      <span>{rsvpError}</span>
+      <button onClick={() => setRsvpError(null)} aria-label="Schließen">
+        <X className="w-4 h-4" />
+      </button>
     </div>
   ) : null
 
@@ -493,6 +538,8 @@ export default function TermineDetailPage() {
           </div>
         )}
 
+        {rsvpErrorAlert}
+
         <ResponseTable
           rows={tableRows}
           showAttendanceCol={showAttendanceCol}
@@ -506,8 +553,10 @@ export default function TermineDetailPage() {
           seriesId={session.series_id}
           onSetUnavailable={setUnavailable}
           onClearUnavailable={clearUnavailable}
-          onSetRsvp={isTrainer ? setRsvpForMember : undefined}
-          onDeclineRsvp={isTrainer ? openDecline : undefined}
+          onSetRsvp={setRsvpForMember}
+          onDeclineRsvp={openDecline}
+          onMaybeRsvp={setMaybe}
+          canRsvpFor={canRsvpFor}
         />
       </div>
       </>
@@ -629,6 +678,8 @@ export default function TermineDetailPage() {
         </div>
       )}
 
+      {rsvpErrorAlert}
+
       <ResponseTable
         rows={tableRows}
         sections={sections}
@@ -643,8 +694,10 @@ export default function TermineDetailPage() {
         lineupMap={lineupMap}
         onToggleLineup={isTrainer ? saveLineup : undefined}
         lineupCount={isTrainer ? Object.values(lineupMap).filter(Boolean).length : lineupCount}
-        onSetRsvp={isTrainer ? setRsvpForMember : undefined}
-        onDeclineRsvp={isTrainer ? openDecline : undefined}
+        onSetRsvp={setRsvpForMember}
+        onDeclineRsvp={openDecline}
+        onMaybeRsvp={setMaybe}
+        canRsvpFor={canRsvpFor}
       />
     </div>
     </>
@@ -666,15 +719,22 @@ interface RowActions {
   seriesId?: number | null
   onSetUnavailable?: (memberId: number) => void
   onClearUnavailable?: (uid: number) => void
-  // Trainer setzt RSVP eines Spielers (Nachholung bei verspäteter Meldung).
+  // RSVP aus dem Zeilenmenü: Trainer für jeden Spieler (Nachholung bei
+  // verspäteter Meldung), ein Spieler für sich selbst. Welche Zeile ein Menü
+  // bekommt, entscheidet canRsvpFor.
   onSetRsvp?: (memberId: number, status: 'confirmed' | 'declined' | 'maybe') => void
-  // Absagen durch Trainer: öffnet Grund-Modal statt direktem API-Call.
+  // Absagen: öffnet Grund-Modal statt direktem API-Call.
   onDeclineRsvp?: (memberId: number, memberName: string) => void
+  // Vielleicht: Grund-Modal nur bei Pflichtgrund.
+  onMaybeRsvp?: (memberId: number, memberName: string) => void
+  canRsvpFor?: (row: TableRow) => boolean
+  // Mindestens eine Zeile ist per Menü beantwortbar → Aktionsspalte zeigen.
+  anyRsvpRow?: boolean
 }
 
-// Rechte Aktionsspalte: Serien-Ab-/Wieder-Anmelden oder Trainer-RSVP-Override.
+// Rechte Aktionsspalte: Serien-Ab-/Wieder-Anmelden oder RSVP aus dem Zeilenmenü.
 function hasActionsCol(a: RowActions) {
-  return (a.isTrainer && a.seriesId != null) || a.onSetRsvp != null
+  return (a.isTrainer && a.seriesId != null) || Boolean(a.anyRsvpRow)
 }
 
 function colSpan(a: RowActions) {
@@ -751,16 +811,19 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
           <td className="px-2 sm:px-4 py-3 text-right align-middle">
             {!row.is_trainer && (() => {
               const actions: { label: string; onClick: () => void; variant?: 'default' | 'danger' }[] = []
-              if (a.onSetRsvp) {
+              if (a.onSetRsvp && a.canRsvpFor?.(row)) {
                 actions.push(
                   { label: 'Zusagen', onClick: () => a.onSetRsvp!(row.member_id, 'confirmed') },
                   { label: 'Absagen', onClick: () => a.onDeclineRsvp ? a.onDeclineRsvp(row.member_id, row.member_name) : a.onSetRsvp!(row.member_id, 'declined') },
-                  { label: 'Vielleicht', onClick: () => a.onSetRsvp!(row.member_id, 'maybe') },
+                  { label: 'Vielleicht', onClick: () => a.onMaybeRsvp ? a.onMaybeRsvp(row.member_id, row.member_name) : a.onSetRsvp!(row.member_id, 'maybe') },
                 )
               }
-              if (row.unavailable && a.onClearUnavailable) {
+              // Serien-Ab-/Wieder-Anmelden ist reine Trainer-Aktion; seit auch
+              // Spieler die Aktionsspalte sehen, muss das hier explizit gegatet sein.
+              const seriesActions = a.isTrainer && a.seriesId != null
+              if (seriesActions && row.unavailable && a.onClearUnavailable) {
                 actions.push({ label: 'Wieder anmelden', onClick: () => a.onClearUnavailable!(row.unavailable!.id) })
-              } else if (!row.unavailable && a.onSetUnavailable) {
+              } else if (seriesActions && !row.unavailable && a.onSetUnavailable) {
                 actions.push({ label: 'Dauerhaft abmelden', onClick: () => a.onSetUnavailable!(row.member_id), variant: 'danger' })
               }
               return actions.length > 0 ? (
@@ -783,7 +846,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
   )
 }
 
-function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup, lineupCount, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp }: {
+function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, attendanceError, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, onDismissError, lineupMap, onToggleLineup, lineupCount, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp, onMaybeRsvp, canRsvpFor }: {
   rows: TableRow[]
   sections?: TableSection[]
   showAttendanceCol: boolean
@@ -803,9 +866,13 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
   onClearUnavailable?: (uid: number) => void
   onSetRsvp?: (memberId: number, status: 'confirmed' | 'declined' | 'maybe') => void
   onDeclineRsvp?: (memberId: number, memberName: string) => void
+  onMaybeRsvp?: (memberId: number, memberName: string) => void
+  canRsvpFor?: (row: TableRow) => boolean
 }) {
   const lineupAnySet = (lineupCount ?? 0) > 0
-  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup, lineupAnySet, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp }
+  const allRows = sections ? sections.flatMap(s => s.rows) : rows
+  const anyRsvpRow = onSetRsvp != null && canRsvpFor != null && allRows.some(canRsvpFor)
+  const a: RowActions = { showAttendanceCol, attendanceMap, isTrainer, showReasonId, setShowReasonId, onToggleAttendance, lineupMap, onToggleLineup, lineupAnySet, seriesId, onSetUnavailable, onClearUnavailable, onSetRsvp, onDeclineRsvp, onMaybeRsvp, canRsvpFor, anyRsvpRow }
 
   // Ohne explizite Sektionen: drei benannte Sektionen Trainer / Spieler / Erweiterter Kader
   // in dieser Reihenfolge; leere Sektionen werden weggelassen.
