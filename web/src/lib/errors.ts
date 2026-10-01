@@ -26,6 +26,7 @@ const CODE_MESSAGES: Record<string, string> = {
   no_member_record: 'Dieser Account ist keinem Mitglied zugeordnet',
   attendance_window: 'Anwesenheit lässt sich erst ab dem Termintag erfassen',
   rsvp_locked_absence: 'Die Rückmeldung ist durch eine Abwesenheit gesperrt',
+  reason_required: 'Bitte einen Grund angeben',
   series_unavailable: 'Für diese Terminserie abgemeldet',
   note_too_long: 'Die Notiz ist zu lang',
   kader_not_found: 'Der Kader existiert nicht (mehr)',
