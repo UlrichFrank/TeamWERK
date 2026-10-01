@@ -5,22 +5,32 @@ Einweg-Mitteilungen an Zielgruppen (alle, Team, Rolle). Sender kann Broadcasts b
 ## Requirements
 ### Requirement: Empfangene Broadcasts abrufen
 
-Das System SHALL die sichtbaren Broadcasts eines Users zurückgeben. Zu jedem Broadcast werden geliefert: `id`, `senderName`, `body`, `mediaId` (null wenn kein Bild), `mediaUrl` (null wenn kein Bild; sonst `"/media/<mediaId>"`), `mediaWidth` (nur bei Bild-Broadcasts mit bekannter Dimension; sonst weggelassen), `mediaHeight` (nur bei Bild-Broadcasts mit bekannter Dimension; sonst weggelassen), `sentAt`, `isRead`, `isSent`, `editedAt`.
+Das System SHALL die sichtbaren Broadcasts eines Users zurückgeben. Zu jedem Broadcast werden geliefert: `id`, `senderName`, `body`, `media` (Liste der Bilder in Album-Reihenfolge, leer ohne Bild; je Eintrag `id`, `url = "/media/<id>"`, `width`/`height` nur bei bekannter Dimension, sonst weggelassen), `mediaId`/`mediaUrl`/`mediaWidth`/`mediaHeight` (Angaben zum **ersten** Bild, Kompatibilität für ältere Clients; null bzw. weggelassen ohne Bild), `sentAt`, `isRead`, `isSent`, `editedAt`.
+
+#### Scenario: Broadcast mit mehreren Bildern
+
+- **WHEN** ein User `GET /api/chat/broadcasts` aufruft und ein Broadcast drei Bilder A, B, C trägt
+- **THEN** enthält `media` genau A, B, C in dieser Reihenfolge, und `mediaId`/`mediaUrl` bezeichnen A
 
 #### Scenario: Broadcast mit Bild und bekannten Dimensionen
 
-- **WHEN** ein User `GET /api/chat/broadcasts` aufruft und ein Broadcast `media_id` gesetzt hat, dessen `media`-Zeile `width=800`, `height=600` hat
-- **THEN** enthält das Broadcast-Objekt `mediaId`, `mediaUrl = "/media/<mediaId>"`, `mediaWidth=800`, `mediaHeight=600`
+- **WHEN** ein User `GET /api/chat/broadcasts` aufruft und ein Broadcast ein Bild trägt, dessen `media`-Zeile `width=800`, `height=600` hat
+- **THEN** enthält der `media`-Eintrag `width=800`, `height=600`, und das Broadcast-Objekt `mediaId`, `mediaUrl = "/media/<mediaId>"`, `mediaWidth=800`, `mediaHeight=600`
 
 #### Scenario: Broadcast mit Bild ohne bekannte Dimensionen
 
-- **WHEN** ein Broadcast mit `media_id` abgerufen wird, dessen `media`-Zeile `width IS NULL` hat
-- **THEN** enthält das Broadcast-Objekt `mediaId`, `mediaUrl`; `mediaWidth` und `mediaHeight` fehlen im JSON-Objekt
+- **WHEN** ein Broadcast mit einem Bild abgerufen wird, dessen `media`-Zeile `width IS NULL` hat
+- **THEN** fehlen `width`/`height` im `media`-Eintrag sowie `mediaWidth`/`mediaHeight` im Broadcast-Objekt; `mediaId` und `mediaUrl` sind gesetzt
+
+#### Scenario: Bestands-Broadcast mit Einzelbild
+
+- **WHEN** ein vor Einführung der Alben gesendeter Broadcast mit einem Bild abgerufen wird
+- **THEN** enthält `media` genau diesen einen Eintrag
 
 #### Scenario: Broadcast ohne Bild abrufen
 
-- **WHEN** ein Broadcast ohne `media_id` abgerufen wird
-- **THEN** sind `mediaId` und `mediaUrl` beide null; `mediaWidth`/`mediaHeight` fehlen
+- **WHEN** ein Broadcast ohne Bild abgerufen wird
+- **THEN** ist `media` eine leere Liste, `mediaId` und `mediaUrl` sind null; `mediaWidth`/`mediaHeight` fehlen
 
 ### Requirement: Broadcast als gelesen markieren
 
@@ -151,9 +161,16 @@ Elternteil ohne eigene Vereinsfunktion `spieler` gehört nicht zur Zielgruppe `s
 auch wenn sein Kind sie trägt. Damit sind `spieler` und `eltern` disjunkt auflösbar —
 abweichend von `folder_permissions`, wo `club_function`-Einträge auf Eltern durchschlagen.
 
-Der Request KANN optional `mediaId` enthalten; mindestens `body` (nicht leer) **oder**
-`mediaId` MUSS vorhanden sein. Ein angegebenes `mediaId` MUSS auf eine existierende
-`media`-Zeile verweisen.
+Der Request KANN Bilder enthalten, als `mediaIds` (Liste mit 1 bis 10 media-IDs,
+Reihenfolge = Album-Reihenfolge) oder als `mediaId` (Kurzform für genau ein Bild); beide
+Felder zugleich SHALL mit HTTP 400 abgelehnt werden. Mindestens `body` (nicht leer)
+**oder** ein Bild MUSS vorhanden sein. Jede übergebene media-ID MUSS auf eine existierende
+`media`-Zeile verweisen, die der Absender selbst hochgeladen hat und die noch keiner
+Nachricht und keiner anderen Mitteilung zugeordnet ist; dieselbe ID darf nicht doppelt
+vorkommen. Verletzt der Request eine dieser Bedingungen oder enthält er mehr als 10
+Bilder, SHALL der Server mit HTTP 400 antworten und keinen Broadcast speichern. Die
+Push-Vorschau einer Mitteilung ohne Text lautet „Bild" bei einem und „N Bilder" bei
+N > 1 Bildern; je Empfänger geht genau eine Push hinaus.
 
 Die Antwort SHALL HTTP 201 mit `{ "id": <broadcastId>, "recipients": <n> }` sein, wobei
 `n` die Anzahl der benachrichtigten Empfänger **ohne den Absender** ist. Der Absender
@@ -261,12 +278,27 @@ Die gewählten Ziele SHALL als je eine Zeile in `broadcast_targets` gespeichert 
 
 #### Scenario: Reine Bild-Mitteilung senden
 
-- **WHEN** ein Vorstand `POST /api/chat/broadcasts` mit `{ "body": "", "mediaId": <id>, "targets": [{"kind": "users"}] }` aufruft
-- **THEN** wird der Broadcast mit `media_id` und leerem Body gespeichert, HTTP 201
+- **WHEN** ein Vorstand `POST /api/chat/broadcasts` mit `{ "body": "", "mediaId": <id>, "targets": [{"kind": "users"}] }` aufruft und das Bild selbst hochgeladen hat
+- **THEN** wird der Broadcast mit diesem einen Bild und leerem Body gespeichert, HTTP 201
+
+#### Scenario: Mitteilung mit mehreren Bildern senden
+
+- **WHEN** ein Vorstand `{ "body": "Saisonabschluss", "mediaIds": [a, b, c, d], "targets": [{"kind": "users"}] }` sendet und alle Bilder selbst hochgeladen hat
+- **THEN** wird **ein** Broadcast mit vier Bildern in der Reihenfolge a, b, c, d gespeichert, HTTP 201, und je Empfänger genau eine Push gesendet
+
+#### Scenario: Mitteilung mit mehr als zehn Bildern wird abgelehnt
+
+- **WHEN** ein berechtigter User einen Broadcast mit 11 media-IDs sendet
+- **THEN** antwortet der Server mit HTTP 400 und speichert keinen Broadcast
+
+#### Scenario: Mitteilung mit fremdem Bild wird abgelehnt
+
+- **WHEN** ein berechtigter User eine media-ID sendet, die ein anderer Nutzer hochgeladen hat oder die bereits an einer Nachricht oder Mitteilung hängt
+- **THEN** antwortet der Server mit HTTP 400 und speichert keinen Broadcast
 
 #### Scenario: Leere Mitteilung ohne Bild wird abgelehnt
 
-- **WHEN** ein berechtigter User einen Broadcast mit leerem `body` und ohne `mediaId` sendet
+- **WHEN** ein berechtigter User einen Broadcast mit leerem `body` und ohne Bild sendet
 - **THEN** antwortet der Server mit HTTP 400
 
 #### Scenario: Unberechtigter User
