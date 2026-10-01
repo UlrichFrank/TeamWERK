@@ -48,7 +48,19 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { api } from "../lib/api";
 import { compressImage } from "../lib/imageCompress";
-import AuthImage from "../components/AuthImage";
+import ChatImageGrid from "../components/ChatImageGrid";
+import AlbumLightbox from "../components/AlbumLightbox";
+import PendingImageStrip from "../components/PendingImageStrip";
+import {
+  ALBUM_LIMIT_TOAST,
+  MAX_ALBUM_SIZE,
+  addPendingImages,
+  albumOf,
+  revokePending,
+  uploadSequentially,
+  type ChatMediaItem,
+  type PendingImage,
+} from "../lib/chatMedia";
 import LinkifiedText from "../components/LinkifiedText";
 import {
   conversationTimeLabel,
@@ -144,6 +156,9 @@ interface Message {
   // Bild-Load zu vermeiden.
   mediaWidth?: number;
   mediaHeight?: number;
+  // Albumbilder in Reihenfolge (chat-mehrere-bilder); die media*-Felder davor
+  // tragen das erste Bild. Fehlt bei Antworten eines älteren Servers → albumOf.
+  media?: ChatMediaItem[];
   reactions: Reaction[];
   // Read-Receipts (nur für eigene Nachrichten relevant): read = mind. ein
   // Empfänger hat gelesen; readCount/readTotal = Leser bzw. aktive Mitglieder
@@ -179,6 +194,7 @@ interface Broadcast {
   mediaUrl: string | null;
   mediaWidth?: number;
   mediaHeight?: number;
+  media?: ChatMediaItem[];
   // Nur bei eigenen Mitteilungen gesetzt (isSent); readTotal ist die beim
   // Versand eingefrorene Empfängerzahl ohne den Absender.
   readCount?: number;
@@ -428,13 +444,19 @@ export default function ChatPage() {
   const [showBroadcastEdit, setShowBroadcastEdit] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
-  // Ausgewähltes, noch nicht gesendetes Bild (Chat-Tab) inkl. lokaler Vorschau.
-  const [pendingImage, setPendingImage] = useState<{
-    file: File;
-    previewUrl: string;
+  // Ausgewählte, noch nicht gesendete Bilder (Chat-Tab) inkl. lokaler Vorschau,
+  // in Auswahlreihenfolge = Album-Reihenfolge.
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
+  // Laufender Mehrfach-Upload: Bild k von n (für die Anzeige am Senden-Button).
+  const [uploadProgress, setUploadProgress] = useState<{
+    k: number;
+    n: number;
   } | null>(null);
-  // Bild im Vollbild-Overlay (Lightbox), url ohne /api-Prefix.
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Album im Vollbild-Overlay (Lightbox), urls ohne /api-Prefix.
+  const [lightbox, setLightbox] = useState<{
+    urls: string[];
+    index: number;
+  } | null>(null);
   const [readsTarget, setReadsTarget] = useState<ReadsTarget | null>(null);
   const [showPollCreate, setShowPollCreate] = useState(false);
   const [pollVotesMsgId, setPollVotesMsgId] = useState<number | null>(null);
@@ -1297,26 +1319,43 @@ export default function ChatPage() {
     };
   }, [contextMenu, emojiPickerMsgId]);
 
-  const clearPendingImage = useCallback(() => {
-    setPendingImage((prev) => {
-      if (prev) URL.revokeObjectURL(prev.previewUrl);
-      return null;
+  const clearPendingImages = useCallback(() => {
+    setPendingImages((prev) => {
+      revokePending(prev);
+      return [];
     });
   }, []);
 
-  const setPendingFromFile = useCallback((file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    setPendingImage((prev) => {
-      if (prev) URL.revokeObjectURL(prev.previewUrl);
-      return { file, previewUrl: URL.createObjectURL(file) };
+  const showToast = useCallback((text: string) => {
+    setToast(text);
+    setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  // addPendingFiles übernimmt Bilddateien bis zur Album-Grenze; der Rest wird
+  // verworfen und sichtbar gemeldet. Object-URLs und Toast entstehen bewusst
+  // außerhalb eines State-Updaters (der darf keine Seiteneffekte haben).
+  const addPendingFiles = useCallback(
+    (files: File[]) => {
+      const { next, overflow } = addPendingImages(pendingImages, files);
+      setPendingImages(next);
+      if (overflow) showToast(ALBUM_LIMIT_TOAST);
+    },
+    [pendingImages, showToast],
+  );
+
+  const removePendingImage = useCallback((index: number) => {
+    setPendingImages((prev) => {
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((_, i) => i !== index);
     });
   }, []);
 
-  // Bei Konversationswechsel ein noch nicht gesendetes Bild verwerfen, damit es
-  // nicht versehentlich in eine andere Konversation gerät.
+  // Bei Konversationswechsel noch nicht gesendete Bilder verwerfen, damit sie
+  // nicht versehentlich in eine andere Konversation geraten.
   useEffect(() => {
-    clearPendingImage();
-  }, [activeConv?.id, clearPendingImage]);
+    clearPendingImages();
+  }, [activeConv?.id, clearPendingImages]);
 
   // uploadImage verkleinert das Bild clientseitig (≤ 1 MB) und lädt es hoch;
   // liefert die media-ID oder null bei Fehler.
@@ -1367,22 +1406,27 @@ export default function ChatPage() {
       return;
     }
 
-    if (!hasText && !pendingImage) return;
+    if (!hasText && pendingImages.length === 0) return;
     setSending(true);
     try {
-      let mediaId: number | null = null;
-      if (pendingImage) {
-        mediaId = await uploadImage(pendingImage.file);
-        if (mediaId === null) return; // Upload fehlgeschlagen → Abbruch
-      }
+      // Nacheinander hochladen; scheitert ein Upload, bricht der Versand ab und
+      // die Auswahl bleibt für einen neuen Versuch stehen (bereits hochgeladene
+      // IDs verfallen als verwaiste media-Zeilen, design.md §6).
+      const mediaIds = await uploadSequentially(
+        pendingImages,
+        uploadImage,
+        (k, n) => setUploadProgress({ k, n }),
+      );
+      setUploadProgress(null);
+      if (mediaIds === null) return;
       await api.post(`/chat/conversations/${activeConv.id}/messages`, {
         body: msgInput.trim(),
         replyToId: replyTo?.id ?? null,
-        mediaId,
+        ...(mediaIds.length > 0 ? { mediaIds } : {}),
       });
       setReplyTo(null);
       setMsgInput("");
-      clearPendingImage();
+      clearPendingImages();
       draftsRef.current.delete(activeConv.id);
       // Nach dem eigenen Senden soll die eigene Nachricht in den Blick — auch
       // wenn der Nutzer kurz vorher hochgescrollt hatte. Der 'bottom'-Anker
@@ -1394,6 +1438,7 @@ export default function ChatPage() {
       await appendNewMessages(activeConv.id);
     } catch {
     } finally {
+      setUploadProgress(null);
       setSending(false);
     }
   };
@@ -1998,8 +2043,9 @@ export default function ChatPage() {
                           onToggleReaction={toggleReaction}
                           onOpenReads={(m) => setReadsTarget({ kind: "message", id: m.id })}
                           onOpenVotes={(m) => setPollVotesMsgId(m.id)}
-                          onImageClick={() => {
-                            if (msg.mediaUrl) setLightboxUrl(msg.mediaUrl);
+                          onImageClick={(index) => {
+                            const urls = albumOf(msg).map((m) => m.url);
+                            if (urls.length > 0) setLightbox({ urls, index });
                           }}
                           highlighted={highlightMsgId === msg.id}
                         />
@@ -2040,24 +2086,13 @@ export default function ChatPage() {
               )}
 
               {/* Bild-Vorschau vor dem Senden */}
-              {pendingImage && !editingMessage && (
-                <div className="px-4 py-2 border-t border-brand-border-subtle bg-white flex items-center gap-3">
-                  <img
-                    src={pendingImage.previewUrl}
-                    alt="Vorschau"
-                    className="h-16 w-16 object-cover rounded-md border border-brand-border-subtle"
-                  />
-                  <span className="flex-1 min-w-0 text-xs text-brand-text-muted truncate">
-                    {pendingImage.file.name}
-                  </span>
-                  <button
-                    onClick={clearPendingImage}
-                    aria-label="Bild entfernen"
-                    className="text-brand-text-muted hover:text-brand-text shrink-0"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
+              {pendingImages.length > 0 && !editingMessage && (
+                <PendingImageStrip
+                  images={pendingImages}
+                  onRemove={removePendingImage}
+                  disabled={sending}
+                  className="px-4 pt-3 pb-2 border-t border-brand-border-subtle bg-white"
+                />
               )}
 
               <div className="px-4 py-3 border-t border-brand-border-subtle flex gap-2 items-end">
@@ -2065,11 +2100,13 @@ export default function ChatPage() {
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
+                  multiple
                   className="hidden"
+                  data-testid="chat-image-input"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
+                    const files = Array.from(e.target.files ?? []);
                     e.target.value = "";
-                    if (file) setPendingFromFile(file);
+                    if (files.length > 0) addPendingFiles(files);
                   }}
                 />
                 {!editingMessage && (
@@ -2097,12 +2134,12 @@ export default function ChatPage() {
                   value={msgInput}
                   onChange={(e) => setMsgInput(e.target.value)}
                   onPaste={(e) => {
-                    const img = Array.from(e.clipboardData.files).find((f) =>
+                    const imgs = Array.from(e.clipboardData.files).filter((f) =>
                       f.type.startsWith("image/"),
                     );
-                    if (img && !editingMessage) {
+                    if (imgs.length > 0 && !editingMessage) {
                       e.preventDefault();
-                      setPendingFromFile(img);
+                      addPendingFiles(imgs);
                     }
                   }}
                   onKeyDown={(e) => {
@@ -2135,12 +2172,18 @@ export default function ChatPage() {
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={(!msgInput.trim() && !pendingImage) || sending}
+                  disabled={
+                    (!msgInput.trim() && pendingImages.length === 0) || sending
+                  }
                   className="bg-brand-yellow text-brand-black rounded-md px-3 py-2 hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label={editingMessage ? "Speichern" : "Senden"}
                 >
                   {editingMessage ? (
                     <Pencil className="w-4 h-4" />
+                  ) : uploadProgress ? (
+                    <span className="text-xs font-medium whitespace-nowrap">
+                      Bild {uploadProgress.k}/{uploadProgress.n}
+                    </span>
                   ) : (
                     <Send className="w-4 h-4" />
                   )}
@@ -2206,16 +2249,17 @@ export default function ChatPage() {
               <p className="text-sm text-brand-text whitespace-pre-wrap break-words">
                 {renderWithLinks(activeBroadcast.body, false)}
               </p>
-              {activeBroadcast.mediaUrl && (
-                <AuthImage
-                  url={activeBroadcast.mediaUrl}
-                  alt="Bild der Mitteilung"
-                  className="mt-3 max-w-xs rounded-lg cursor-pointer"
-                  onClick={() => setLightboxUrl(activeBroadcast.mediaUrl)}
-                  naturalWidth={activeBroadcast.mediaWidth}
-                  naturalHeight={activeBroadcast.mediaHeight}
-                />
-              )}
+              <ChatImageGrid
+                media={albumOf(activeBroadcast)}
+                alt="Bild der Mitteilung"
+                className="mt-3 sm:max-w-xs"
+                onOpen={(index) =>
+                  setLightbox({
+                    urls: albumOf(activeBroadcast).map((m) => m.url),
+                    index,
+                  })
+                }
+              />
             </div>
           )}
 
@@ -2435,24 +2479,15 @@ export default function ChatPage() {
         />
       )}
 
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-brand-black/80 flex items-center justify-center p-4"
-          onClick={() => setLightboxUrl(null)}
-        >
-          <button
-            onClick={() => setLightboxUrl(null)}
-            aria-label="Schließen"
-            className="absolute top-4 right-4 text-white hover:text-brand-yellow transition-colors"
-          >
-            <X className="w-7 h-7" />
-          </button>
-          <AuthImage
-            url={lightboxUrl}
-            alt="Bild"
-            className="max-h-[90vh] max-w-full object-contain rounded-lg"
-          />
-        </div>
+      {lightbox && (
+        <AlbumLightbox
+          urls={lightbox.urls}
+          index={lightbox.index}
+          onIndexChange={(index) =>
+            setLightbox((prev) => (prev ? { ...prev, index } : prev))
+          }
+          onClose={() => setLightbox(null)}
+        />
       )}
 
       {showSearch && (
@@ -2511,7 +2546,7 @@ function MessageBubble({
   onOpenPicker: (e: React.MouseEvent) => void;
   onClosePicker: () => void;
   onToggleReaction: (msgId: number, emoji: string) => void;
-  onImageClick: () => void;
+  onImageClick: (index: number) => void;
   onOpenReads?: (msg: Message) => void;
   onOpenVotes?: (msg: Message) => void;
   // chat-message-search: Treffer-Nachricht nach dem Such-Sprung 2 s hervorheben.
@@ -2680,16 +2715,11 @@ function MessageBubble({
                   {renderWithLinks(body, isOwn)}
                 </span>
               )}
-              {msg.mediaUrl && (
-                <AuthImage
-                  url={msg.mediaUrl}
-                  alt="Bild"
-                  className={`${body ? "mt-2 " : ""}max-w-full rounded-lg cursor-pointer`}
-                  onClick={onImageClick}
-                  naturalWidth={msg.mediaWidth}
-                  naturalHeight={msg.mediaHeight}
-                />
-              )}
+              <ChatImageGrid
+                media={albumOf(msg)}
+                className={body ? "mt-2" : ""}
+                onOpen={onImageClick}
+              />
               {showExpand && (
                 <button
                   onClick={onExpand}
@@ -3247,16 +3277,18 @@ function BroadcastModal({
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [image, setImage] = useState<{ file: File; previewUrl: string } | null>(
-    null,
-  );
+  const [images, setImages] = useState<PendingImage[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{
+    k: number;
+    n: number;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
+  // Beim Schließen des Dialogs alle Vorschau-URLs freigeben.
+  const imagesRef = useRef<PendingImage[]>([]);
   useEffect(() => {
-    return () => {
-      if (image) URL.revokeObjectURL(image.previewUrl);
-    };
-  }, [image]);
+    imagesRef.current = images;
+  }, [images]);
+  useEffect(() => () => revokePending(imagesRef.current), []);
 
   useEffect(() => {
     api
@@ -3281,40 +3313,52 @@ function BroadcastModal({
     });
   };
 
-  const pickImage = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
-    setImage((prev) => {
-      if (prev) URL.revokeObjectURL(prev.previewUrl);
-      return { file, previewUrl: URL.createObjectURL(file) };
+  const pickImages = (files: File[]) => {
+    const { next, overflow } = addPendingImages(images, files);
+    setImages(next);
+    setError(overflow ? ALBUM_LIMIT_TOAST : "");
+  };
+
+  const removeImage = (index: number) => {
+    setImages((prev) => {
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return prev.filter((_, i) => i !== index);
     });
   };
 
+  const uploadOne = async (file: File): Promise<number | null> => {
+    const { blob, fileName } = await compressImage(file);
+    const form = new FormData();
+    form.append("image", blob, fileName);
+    const r = await api.post("/media/upload", form);
+    return r.data?.mediaId ?? null;
+  };
+
   const submit = async () => {
-    if (!body.trim() && !image) return;
+    if (!body.trim() && images.length === 0) return;
     if (picked.size === 0) return;
     setLoading(true);
     setError("");
     try {
-      let mediaId: number | null = null;
-      if (image) {
-        const { blob, fileName } = await compressImage(image.file);
-        const form = new FormData();
-        form.append("image", blob, fileName);
-        const r = await api.post("/media/upload", form);
-        mediaId = r.data?.mediaId ?? null;
-        if (mediaId === null) throw new Error("upload failed");
-      }
+      // Nacheinander hochladen (siehe uploadSequentially); bei einem Fehler
+      // bleibt die Auswahl stehen.
+      const mediaIds = await uploadSequentially(images, uploadOne, (k, n) =>
+        setUploadProgress({ k, n }),
+      );
+      if (mediaIds === null) throw new Error("upload failed");
       const r = await api.post("/chat/broadcasts", {
         body: body.trim(),
         targets: targets
           .filter((t) => picked.has(targetKey(t)))
           .map((t) => ({ kind: t.kind, teamId: t.teamId })),
-        mediaId,
+        ...(mediaIds.length > 0 ? { mediaIds } : {}),
       });
       onSent(r.data?.recipients ?? 0);
     } catch (e) {
       setError(errorMessage(e, "Fehler beim Senden"));
     } finally {
+      setUploadProgress(null);
       setLoading(false);
     }
   };
@@ -3399,38 +3443,29 @@ function BroadcastModal({
           ref={fileInputRef}
           type="file"
           accept="image/*"
+          multiple
           className="hidden"
+          data-testid="broadcast-image-input"
           onChange={(e) => {
-            const file = e.target.files?.[0];
+            const files = Array.from(e.target.files ?? []);
             e.target.value = "";
-            if (file) pickImage(file);
+            if (files.length > 0) pickImages(files);
           }}
         />
-        {image ? (
-          <div className="flex items-center gap-3 mb-3">
-            <img
-              src={image.previewUrl}
-              alt="Vorschau"
-              className="h-16 w-16 object-cover rounded-md border border-brand-border-subtle"
-            />
-            <span className="flex-1 min-w-0 text-xs text-brand-text-muted truncate">
-              {image.file.name}
-            </span>
-            <button
-              onClick={() => setImage(null)}
-              aria-label="Bild entfernen"
-              className="text-brand-text-muted hover:text-brand-text shrink-0"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
+        <PendingImageStrip
+          images={images}
+          onRemove={removeImage}
+          disabled={loading}
+          className="pt-1.5 mb-2"
+        />
+        {images.length < MAX_ALBUM_SIZE && (
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors mb-3"
+            disabled={loading}
+            className="flex items-center gap-2 text-sm text-brand-text-muted hover:text-brand-text transition-colors mb-3 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Paperclip className="w-4 h-4" />
-            Bild anhängen
+            {images.length > 0 ? "Weiteres Bild anhängen" : "Bild anhängen"}
           </button>
         )}
 
@@ -3438,10 +3473,16 @@ function BroadcastModal({
 
         <button
           onClick={submit}
-          disabled={loading || (!body.trim() && !image) || picked.size === 0}
+          disabled={
+            loading || (!body.trim() && images.length === 0) || picked.size === 0
+          }
           className={`w-full ${BTN_PRIMARY}`}
         >
-          {loading ? "Sende…" : "Mitteilung senden"}
+          {uploadProgress
+            ? `Bild ${uploadProgress.k}/${uploadProgress.n}`
+            : loading
+              ? "Sende…"
+              : "Mitteilung senden"}
         </button>
       </div>
     </div>
