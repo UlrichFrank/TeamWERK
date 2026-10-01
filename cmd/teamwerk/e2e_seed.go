@@ -217,7 +217,8 @@ func seedChatMedia(database *sql.DB, adminID int, userIDs []int) string {
 		fatal("e2e-seed: mkdir media_dir failed", "dir", mediaDir, "error", err)
 	}
 
-	// 1) Gruppe mit Bildern: Text + 4 Bild-Nachrichten, alle vom Admin (→ für Admin gelesen).
+	// 1) Gruppe mit Bildern: Text + 4 Bild-Nachrichten + 1 Album mit 4 Bildern, alle vom
+	//    Admin (→ für Admin gelesen).
 	imgConvID := seedTextConversation(database, "E2E Chat mit Bildern", []int{adminID, user1}, adminID, 4)
 	imgIndex := 1
 	for i := 0; i < 4; i++ {
@@ -231,6 +232,23 @@ func seedChatMedia(database *sql.DB, adminID int, userIDs []int) string {
 		}
 		msgID, _ := res.LastInsertId()
 		seedMessageMedia(database, int(msgID), mediaID, 0)
+	}
+	// Album mit 4 Bildern (chat-mehrere-bilder) als eine Nachricht: das Raster
+	// hat feste Geometrie, die Inhaltshöhe darf beim Decode nicht springen.
+	album := make([]int, 4)
+	for i := range album {
+		album[i] = seedImage(database, mediaDir, adminID, imgIndex, true)
+		imgIndex++
+	}
+	albumRes, err := database.Exec(
+		`INSERT INTO messages (conversation_id, sender_id, body, media_id) VALUES (?, ?, '', ?)`,
+		imgConvID, adminID, album[0])
+	if err != nil {
+		fatal("e2e-seed: insert album message failed", "error", err)
+	}
+	albumMsgID, _ := albumRes.LastInsertId()
+	for pos, mediaID := range album {
+		seedMessageMedia(database, int(albumMsgID), mediaID, pos)
 	}
 
 	// 2) Gruppe mit Unread: 28 Nachrichten von user1 (NICHT Admin). message_reads für

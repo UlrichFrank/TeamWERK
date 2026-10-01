@@ -23,7 +23,7 @@
 - [x] 4.1 Typen in `ChatPage.tsx` um `media: { id: number; url: string; width?: number; height?: number }[]` erweitern (Fallback auf die Altfelder, falls `media` fehlt). Verifikation: `pnpm -C web build` (Typecheck).
 - [x] 4.2 Komponente `web/src/components/ChatImageGrid.tsx`: 1 Bild = heutiges `AuthImage` mit Dimensionen; 2 / 3 / ≥4 Bilder als Raster mit fester Breite und `aspect-square`-Kacheln (`object-cover`), „+N" auf der vierten Kachel; Klick meldet den Index. Nur `brand-*`-Tokens. Verifikation: `ChatImageGrid.test.tsx` (Kachelzahl je Albumgröße, „+N"-Text, Klick-Index, Kacheln tragen ihre Größe ohne geladene Bilddaten).
 - [x] 4.3 Lightbox auf `{ urls, index }` umstellen: Pfeile (`ChevronLeft`/`ChevronRight` mit `aria-label`), ←/→-Tasten, Zähler „k / N"; Sprechblase und Mitteilungs-Detail rendern `ChatImageGrid`. Verifikation: Vitest „Klick auf drittes Bild öffnet Lightbox bei 3/5, Pfeil rechts → 4/5".
-- [ ] 4.4 Layout-Stabilität im echten Browser: in `web/e2e/chat-scroll.spec.ts` ein Album mit 4 Bildern in die Seed-Konversation aufnehmen (Seed aus 1.2) und den bestehenden Test „Inhaltshöhe bleibt beim Decode stabil" auch für das Album prüfen. Verifikation: `make test-e2e` grün.
+- [x] 4.4 Layout-Stabilität im echten Browser: in `web/e2e/chat-scroll.spec.ts` ein Album mit 4 Bildern in die Seed-Konversation aufnehmen (Seed aus 1.2) und den bestehenden Test „Inhaltshöhe bleibt beim Decode stabil" auch für das Album prüfen. Verifikation: `make test-e2e` grün.
 
 ## 5. Frontend: Senden
 
