@@ -29,7 +29,7 @@
 
 ## 7. Frontend: Aktualisieren-Modal
 
-- [ ] 7.1 `web/src/components/ConversationSyncModal.tsx` nach design.md §8 und dem Requirement „Aktualisieren-Modal": Erklärtext, Kacheln (Chips + Auswahl mit „x von y schon drin"), Listen „Hinzufügen"/„Entfernen" mit Checkboxen, Sperr-Hinweis, Abbrechen/OK, 409-Handling. Ausschließlich `brand-*`-Tokens, `buttonStyles`/`typography`-Konstanten, lucide-Icons. Verifikation: `ConversationSyncModal.test.tsx` mit „Abbrechen ruft apply nicht", „OK schickt nur angehakte", „Bestandsgruppe ohne Vorauswahl", „Kachel entfernen lädt Vorschau neu, Abwahl bleibt erhalten", „blocked deaktiviert OK", „409 sync_stale lädt neu und zeigt Hinweis".
+- [x] 7.1 `web/src/components/ConversationSyncModal.tsx` nach design.md §8 und dem Requirement „Aktualisieren-Modal": Erklärtext, Kacheln (Chips + Auswahl mit „x von y schon drin"), Listen „Hinzufügen"/„Entfernen" mit Checkboxen, Sperr-Hinweis, Abbrechen/OK, 409-Handling. Ausschließlich `brand-*`-Tokens, `buttonStyles`/`typography`-Konstanten, lucide-Icons. Verifikation: `ConversationSyncModal.test.tsx` mit „Abbrechen ruft apply nicht", „OK schickt nur angehakte", „Bestandsgruppe ohne Vorauswahl", „Kachel entfernen lädt Vorschau neu, Abwahl bleibt erhalten", „blocked deaktiviert OK", „409 sync_stale lädt neu und zeigt Hinweis".
 - [ ] 7.2 Knopf „Aktualisieren" (`RefreshCw`, `aria-label`) in `ConversationParticipantsModal` nur für den Ersteller, öffnet das Sync-Modal, nach Erfolg `onChanged()`. Verifikation: Vitest „Nicht-Ersteller sieht keinen Knopf" / „Ersteller öffnet Sync-Modal". `pnpm -C web test` und `pnpm -C web lint` grün (Token-, Typografie- und Button-Gate).
 
 ## 8. Dokumentation und Abschluss
