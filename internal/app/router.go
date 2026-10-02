@@ -213,6 +213,8 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 		r.Put("/api/chat/conversations/{id}/pin", h.Chat.Pin)
 		r.Delete("/api/chat/conversations/{id}/pin", h.Chat.Unpin)
 		r.Post("/api/chat/conversations/{id}/members", h.Chat.AddMember)
+		r.Post("/api/chat/conversations/{id}/sync/preview", h.Chat.SyncPreview)
+		r.Post("/api/chat/conversations/{id}/sync/apply", h.Chat.SyncApply)
 		r.Get("/api/chat/messages/{id}", h.Chat.GetMessage)
 		r.Get("/api/chat/messages/{id}/reads", h.Chat.MessageReads)
 		r.Put("/api/chat/messages/{id}", h.Chat.EditMessage)

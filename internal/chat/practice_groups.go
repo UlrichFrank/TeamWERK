@@ -34,7 +34,8 @@ func practiceGroupMemberQuery(kind string) string {
 			FROM kader_trainers kt
 			JOIN members m ON m.id = kt.member_id
 			JOIN users u ON u.id = m.user_id
-			WHERE kt.kader_id = ? AND m.user_id IS NOT NULL`
+			WHERE kt.kader_id = ? AND m.user_id IS NOT NULL
+			  AND m.status <> 'ausgetreten'`
 	case "spieler":
 		return `
 			SELECT DISTINCT m.user_id AS user_id,
@@ -42,15 +43,17 @@ func practiceGroupMemberQuery(kind string) string {
 			FROM kader_members km
 			JOIN members m ON m.id = km.member_id
 			JOIN users u ON u.id = m.user_id
-			WHERE km.kader_id = ? AND m.user_id IS NOT NULL`
+			WHERE km.kader_id = ? AND m.user_id IS NOT NULL
+			  AND m.status <> 'ausgetreten'`
 	case "eltern":
 		return `
 			SELECT DISTINCT fl.parent_user_id AS user_id,
 			       u.first_name || ' ' || u.last_name AS name
 			FROM family_links fl
 			JOIN kader_members km ON km.member_id = fl.member_id
+			JOIN members child ON child.id = fl.member_id
 			JOIN users u ON u.id = fl.parent_user_id
-			WHERE km.kader_id = ?`
+			WHERE km.kader_id = ? AND child.status <> 'ausgetreten'`
 	}
 	return ""
 }
@@ -179,10 +182,8 @@ func (h *Handler) listPracticeGroups(r *http.Request, claims *auth.Claims) []Tea
 	out := []TeamGroup{}
 	for _, g := range groups {
 		for _, kind := range []string{"trainer", "spieler", "eltern"} {
-			var count int
-			err := h.db.QueryRowContext(r.Context(),
-				`SELECT COUNT(*) FROM (`+practiceGroupMemberQuery(kind)+`) WHERE user_id != ?`,
-				g.id, claims.UserID).Scan(&count)
+			count, err := countSource(r.Context(), h.db,
+				GroupSource{GroupType: "practice", RefID: g.id, Kind: kind}, claims.UserID)
 			if err != nil || count == 0 {
 				continue
 			}
@@ -207,8 +208,7 @@ func (h *Handler) ResolvePracticeGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := chi.URLParam(r, "kind")
-	q := practiceGroupMemberQuery(kind)
-	if q == "" {
+	if practiceGroupMemberQuery(kind) == "" {
 		http.Error(w, "invalid kind", http.StatusBadRequest)
 		return
 	}
@@ -233,24 +233,11 @@ func (h *Handler) ResolvePracticeGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT user_id, name FROM (`+q+`) WHERE user_id != ? ORDER BY name`,
-		kaderID, claims.UserID)
+	members, err := resolveSource(r.Context(), h.db, GroupSource{GroupType: "practice", RefID: kaderID, Kind: kind}, claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-
-	members := []TeamGroupMember{}
-	for rows.Next() {
-		var m TeamGroupMember
-		if err := rows.Scan(&m.ID, &m.Name); err != nil {
-			continue
-		}
-		members = append(members, m)
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(members)
 }

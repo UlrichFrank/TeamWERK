@@ -2979,8 +2979,10 @@ function NewConversationModal({
   const [resolvingTag, setResolvingTag] = useState<string | null>(null);
   const [pickedTags, setPickedTags] = useState<Set<string>>(new Set());
 
-  const tagKey = (tg: { teamId: number; kind: TeamGroup["kind"] }) =>
-    `${tg.teamId}:${tg.kind}`;
+  // groupType gehört in den Schlüssel: eine Übungsgruppe trägt in teamId die
+  // kader.id, die mit einer teams.id kollidieren kann.
+  const tagKey = (tg: Pick<TeamGroup, "groupType" | "teamId" | "kind">) =>
+    `${tg.groupType}:${tg.teamId}:${tg.kind}`;
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -3062,7 +3064,20 @@ function NewConversationModal({
       const payload =
         type === "direct"
           ? { type, userId: selected[0].id }
-          : { type, name: groupName, memberIds: selected.map((u) => u.id) };
+          : {
+              type,
+              name: groupName,
+              memberIds: selected.map((u) => u.id),
+              // Die gewählten Kacheln werden Herkunft der Gruppe — Grundlage für
+              // „Aktualisieren" im Teilnehmer-Modal.
+              sources: teamGroups
+                .filter((tg) => pickedTags.has(tagKey(tg)))
+                .map((tg) => ({
+                  groupType: tg.groupType,
+                  refId: tg.teamId,
+                  kind: tg.kind,
+                })),
+            };
       const r = await api.post("/chat/conversations", payload);
       onCreated(r.data);
     } catch (e) {
@@ -3089,6 +3104,7 @@ function NewConversationModal({
               onClick={() => {
                 setType(t);
                 setSelected([]);
+                setPickedTags(new Set());
               }}
               className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${type === t ? "bg-brand-yellow text-brand-black" : "bg-brand-surface-card text-brand-text-muted hover:text-brand-text"}`}
             >

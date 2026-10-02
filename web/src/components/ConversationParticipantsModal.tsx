@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { X, Pencil, Search, UserMinus, Crown } from 'lucide-react'
+import { X, Pencil, Search, UserMinus, Crown, RefreshCw } from 'lucide-react'
 import { api } from '../lib/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useEscapeKey } from '../lib/useEscapeKey'
@@ -7,6 +7,7 @@ import { useDialogA11y } from '../lib/useDialogA11y'
 import { errorMessage } from '../lib/errors'
 import { BTN_SECONDARY, INPUT } from '../lib/buttonStyles'
 import { MODAL_TITLE } from '../lib/typography'
+import ConversationSyncModal from './ConversationSyncModal'
 
 interface ConvMember { id: number; name: string }
 interface ChatUser { id: number; name: string }
@@ -27,10 +28,12 @@ export default function ConversationParticipantsModal({
   const isOwner = user?.id === createdBy
   const titleId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
-  useEscapeKey(onClose)
-  useDialogA11y(dialogRef, true)
-
   const [editing, setEditing] = useState(false)
+  // Solange das Abgleich-Modal darüber liegt, gehören Escape und Fokus ihm —
+  // sonst schlösse ein Escape beide Modals zugleich.
+  const [syncing, setSyncing] = useState(false)
+  useEscapeKey(syncing ? null : onClose)
+  useDialogA11y(dialogRef, !syncing)
   const [name, setName] = useState(initialName ?? '')
   const [draftName, setDraftName] = useState(initialName ?? '')
   const [localMembers, setLocalMembers] = useState<ConvMember[]>(members)
@@ -118,6 +121,16 @@ export default function ConversationParticipantsModal({
             {editing ? 'Teilnehmer bearbeiten' : 'Teilnehmer'}
           </h2>
           <div className="flex items-center gap-1">
+            {isOwner && !editing && (
+              <button
+                onClick={() => setSyncing(true)}
+                className="p-1 rounded hover:bg-brand-border-subtle transition-colors"
+                aria-label="Aktualisieren"
+                title="Mit Standard-Gruppen abgleichen"
+              >
+                <RefreshCw className="w-4 h-4 text-brand-text-muted" />
+              </button>
+            )}
             {isOwner && !editing && (
               <button
                 onClick={() => setEditing(true)}
@@ -226,6 +239,13 @@ export default function ConversationParticipantsModal({
           </button>
         </div>
       </div>
+      {syncing && (
+        <ConversationSyncModal
+          convId={convId}
+          onClose={() => setSyncing(false)}
+          onApplied={onChanged}
+        />
+      )}
     </div>
   )
 }

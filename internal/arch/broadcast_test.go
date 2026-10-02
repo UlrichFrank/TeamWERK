@@ -48,6 +48,7 @@ var broadcastAllowlist = map[string]string{
 	"Chat.CreateConversation": "Chat nutzt eigenen SSE-Kanal /api/chat/events, nicht den Hub",
 	"Chat.EditBroadcast":      "Chat nutzt eigenen SSE-Kanal /api/chat/events, nicht den Hub",
 	"Chat.DeleteBroadcast":    "Chat nutzt eigenen SSE-Kanal /api/chat/events, nicht den Hub",
+	"Chat.SyncPreview":        "Abgleich-Vorschau einer Chat-Gruppe, schreibt nichts (POST nur wegen der Kachel-Liste im Body)",
 	// Push-Subscription / Benachrichtigungs-Präferenzen: pro Gerät/Nutzer, keine geteilte Live-Liste.
 	"Notif.Subscribe":                     "Push-Subscription pro Gerät, kein geteilter State",
 	"Notif.Unsubscribe":                   "Push-Subscription pro Gerät, kein geteilter State",

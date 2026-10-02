@@ -48,7 +48,8 @@ func allTrainersMemberQuery() string {
 		JOIN seasons s ON s.id = k.season_id
 		JOIN members m ON m.id = kt.member_id
 		JOIN users u ON u.id = m.user_id
-		WHERE s.is_active = 1 AND m.user_id IS NOT NULL`
+		WHERE s.is_active = 1 AND m.user_id IS NOT NULL
+		  AND m.status <> 'ausgetreten'`
 }
 
 // trainerCircleMemberQuery liefert DISTINCT (user_id, name) für den Zugriffskreis
@@ -144,6 +145,23 @@ func (h *Handler) canSeeTeamGroup(r *http.Request, claims *auth.Claims, teamID i
 // GET /api/chat/team-groups
 func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
+	results, err := h.listVisibleTeamGroups(r, claims)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
+// visibleTeamGroups liefert die Kacheln, die der Caller sieht — dieselbe Liste
+// wie GET /api/chat/team-groups (Abgleich-Vorschläge). Fehler → leere Liste.
+func (h *Handler) visibleTeamGroups(r *http.Request, claims *auth.Claims) []TeamGroup {
+	groups, _ := h.listVisibleTeamGroups(r, claims)
+	return groups
+}
+
+func (h *Handler) listVisibleTeamGroups(r *http.Request, claims *auth.Claims) ([]TeamGroup, error) {
 
 	// display_short = kanonische Team-Kurzform; die Team-Nummer wird saisonweit
 	// disambiguiert (unabhängig von der Sichtbarkeit des Callers).
@@ -170,8 +188,7 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 			ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID)
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	defer teamRows.Close()
 
@@ -225,35 +242,11 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 	// Übungsgruppen der aktiven Saison. Eigene Auflösung, weil
 	// user_accessible_teams sie nicht kennt (siehe practice_groups.go).
 	results = append(results, h.listPracticeGroups(r, claims)...)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	return results, nil
 }
 
 func (h *Handler) countTeamGroupMembers(r *http.Request, teamID int, kind string, excludeUserID int) (int, error) {
-	if kind == "alle_trainer" {
-		var count int
-		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM (`+allTrainersMemberQuery()+`) WHERE user_id != ?`,
-			excludeUserID).Scan(&count)
-		return count, err
-	}
-	q := teamGroupMemberQuery(kind)
-	if q == "" {
-		return 0, nil
-	}
-	var count int
-	var err error
-	if kind == "trainer" {
-		err = h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM (`+q+`) WHERE user_id != ?`,
-			teamID, excludeUserID).Scan(&count)
-	} else {
-		err = h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM (`+q+`) WHERE user_id != ?`,
-			teamID, teamID, excludeUserID).Scan(&count)
-	}
-	return count, err
+	return countSource(r.Context(), h.db, GroupSource{GroupType: "team", RefID: teamID, Kind: kind}, excludeUserID)
 }
 
 // teamGroupMemberQuery returns a SQL fragment that yields DISTINCT (user_id, name)
@@ -269,7 +262,8 @@ func teamGroupMemberQuery(kind string) string {
 			JOIN seasons s ON s.id = k.season_id
 			JOIN members m ON m.id = kt.member_id
 			JOIN users u ON u.id = m.user_id
-			WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id IS NOT NULL`
+			WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id IS NOT NULL
+			  AND m.status <> 'ausgetreten'`
 	case "spieler":
 		return `
 			SELECT DISTINCT user_id, name FROM (
@@ -281,6 +275,7 @@ func teamGroupMemberQuery(kind string) string {
 				JOIN members m ON m.id = km.member_id
 				JOIN users u ON u.id = m.user_id
 				WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id IS NOT NULL
+				  AND m.status <> 'ausgetreten'
 				UNION ALL
 				SELECT m.user_id AS user_id,
 				       u.first_name || ' ' || u.last_name AS name
@@ -290,6 +285,7 @@ func teamGroupMemberQuery(kind string) string {
 				JOIN members m ON m.id = kem.member_id
 				JOIN users u ON u.id = m.user_id
 				WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id IS NOT NULL
+				  AND m.status <> 'ausgetreten'
 			)`
 	case "eltern":
 		return `
@@ -300,8 +296,10 @@ func teamGroupMemberQuery(kind string) string {
 				JOIN kader_members km ON km.member_id = fl.member_id
 				JOIN kader k ON k.id = km.kader_id
 				JOIN seasons s ON s.id = k.season_id
+				JOIN members child ON child.id = fl.member_id
 				JOIN users u ON u.id = fl.parent_user_id
 				WHERE k.team_id = ? AND s.is_active = 1
+				  AND child.status <> 'ausgetreten'
 				UNION ALL
 				SELECT fl.parent_user_id AS user_id,
 				       u.first_name || ' ' || u.last_name AS name
@@ -309,8 +307,10 @@ func teamGroupMemberQuery(kind string) string {
 				JOIN kader_extended_members kem ON kem.member_id = fl.member_id
 				JOIN kader k ON k.id = kem.kader_id
 				JOIN seasons s ON s.id = k.season_id
+				JOIN members child ON child.id = fl.member_id
 				JOIN users u ON u.id = fl.parent_user_id
 				WHERE k.team_id = ? AND s.is_active = 1
+				  AND child.status <> 'ausgetreten'
 			)`
 	}
 	return ""
@@ -345,36 +345,11 @@ func (h *Handler) ResolveTeamGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := teamGroupMemberQuery(kind)
-	if q == "" {
-		http.Error(w, "invalid kind", http.StatusBadRequest)
-		return
-	}
-	var rows *sql.Rows
-	if kind == "trainer" {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT user_id, name FROM (`+q+`) WHERE user_id != ? ORDER BY name`,
-			teamID, claims.UserID)
-	} else {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT user_id, name FROM (`+q+`) WHERE user_id != ? ORDER BY name`,
-			teamID, teamID, claims.UserID)
-	}
+	members, err := resolveSource(r.Context(), h.db, GroupSource{GroupType: "team", RefID: teamID, Kind: kind}, claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-
-	members := []TeamGroupMember{}
-	for rows.Next() {
-		var m TeamGroupMember
-		if err := rows.Scan(&m.ID, &m.Name); err != nil {
-			continue
-		}
-		members = append(members, m)
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(members)
 }
@@ -393,24 +368,11 @@ func (h *Handler) resolveAllTrainers(w http.ResponseWriter, r *http.Request, cla
 		return
 	}
 
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT user_id, name FROM (`+allTrainersMemberQuery()+`) WHERE user_id != ? ORDER BY name`,
-		claims.UserID)
+	members, err := resolveSource(r.Context(), h.db, GroupSource{GroupType: "team", Kind: "alle_trainer"}, claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-
-	members := []TeamGroupMember{}
-	for rows.Next() {
-		var m TeamGroupMember
-		if err := rows.Scan(&m.ID, &m.Name); err != nil {
-			continue
-		}
-		members = append(members, m)
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(members)
 }
