@@ -89,6 +89,7 @@ export default function ConversationSyncModal({ convId, onClose, onApplied }: Pr
     }
   }, [convId])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- initialer Datenabruf beim Öffnen, kein abgeleiteter Zustand
   useEffect(() => { void loadPreview(null) }, [loadPreview])
 
   function changeSources(next: GroupSource[]) {
