@@ -48,7 +48,8 @@ func allTrainersMemberQuery() string {
 		JOIN seasons s ON s.id = k.season_id
 		JOIN members m ON m.id = kt.member_id
 		JOIN users u ON u.id = m.user_id
-		WHERE s.is_active = 1 AND m.user_id IS NOT NULL`
+		WHERE s.is_active = 1 AND m.user_id IS NOT NULL
+		  AND m.status <> 'ausgetreten'`
 }
 
 // trainerCircleMemberQuery liefert DISTINCT (user_id, name) für den Zugriffskreis
@@ -269,7 +270,8 @@ func teamGroupMemberQuery(kind string) string {
 			JOIN seasons s ON s.id = k.season_id
 			JOIN members m ON m.id = kt.member_id
 			JOIN users u ON u.id = m.user_id
-			WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id IS NOT NULL`
+			WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id IS NOT NULL
+			  AND m.status <> 'ausgetreten'`
 	case "spieler":
 		return `
 			SELECT DISTINCT user_id, name FROM (
@@ -281,6 +283,7 @@ func teamGroupMemberQuery(kind string) string {
 				JOIN members m ON m.id = km.member_id
 				JOIN users u ON u.id = m.user_id
 				WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id IS NOT NULL
+				  AND m.status <> 'ausgetreten'
 				UNION ALL
 				SELECT m.user_id AS user_id,
 				       u.first_name || ' ' || u.last_name AS name
@@ -290,6 +293,7 @@ func teamGroupMemberQuery(kind string) string {
 				JOIN members m ON m.id = kem.member_id
 				JOIN users u ON u.id = m.user_id
 				WHERE k.team_id = ? AND s.is_active = 1 AND m.user_id IS NOT NULL
+				  AND m.status <> 'ausgetreten'
 			)`
 	case "eltern":
 		return `
@@ -300,8 +304,10 @@ func teamGroupMemberQuery(kind string) string {
 				JOIN kader_members km ON km.member_id = fl.member_id
 				JOIN kader k ON k.id = km.kader_id
 				JOIN seasons s ON s.id = k.season_id
+				JOIN members child ON child.id = fl.member_id
 				JOIN users u ON u.id = fl.parent_user_id
 				WHERE k.team_id = ? AND s.is_active = 1
+				  AND child.status <> 'ausgetreten'
 				UNION ALL
 				SELECT fl.parent_user_id AS user_id,
 				       u.first_name || ' ' || u.last_name AS name
@@ -309,8 +315,10 @@ func teamGroupMemberQuery(kind string) string {
 				JOIN kader_extended_members kem ON kem.member_id = fl.member_id
 				JOIN kader k ON k.id = kem.kader_id
 				JOIN seasons s ON s.id = k.season_id
+				JOIN members child ON child.id = fl.member_id
 				JOIN users u ON u.id = fl.parent_user_id
 				WHERE k.team_id = ? AND s.is_active = 1
+				  AND child.status <> 'ausgetreten'
 			)`
 	}
 	return ""

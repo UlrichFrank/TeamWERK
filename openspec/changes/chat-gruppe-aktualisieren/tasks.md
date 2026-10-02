@@ -6,7 +6,7 @@
 
 ## 2. Gemeinsamer Kachel-Resolver + Ausgetretenen-Filter
 
-- [ ] 2.1 `internal/chat/group_sources.go`: `GroupSource`, `validSource`, `canSeeSource`, `resolveSource` (design.md §2). Alle Kachel-Queries (`teamGroupMemberQuery`, `allTrainersMemberQuery`, `practiceGroupMemberQuery`) filtern `members.status <> 'ausgetreten'`, bei `eltern` auf das Kind (§6). Verifikation: neue Tests `TestResolveSource_*` je `groupType`/`kind` sowie `TestResolveSource_AusgetretenerFehlt`, `TestResolveSource_VerletztBleibt`, `TestResolveSource_ElternNurUeberAusgetretenesKindFehlt`.
+- [x] 2.1 `internal/chat/group_sources.go`: `GroupSource`, `validSource`, `canSeeSource`, `resolveSource` (design.md §2). Alle Kachel-Queries (`teamGroupMemberQuery`, `allTrainersMemberQuery`, `practiceGroupMemberQuery`) filtern `members.status <> 'ausgetreten'`, bei `eltern` auf das Kind (§6). Verifikation: neue Tests `TestResolveSource_*` je `groupType`/`kind` sowie `TestResolveSource_AusgetretenerFehlt`, `TestResolveSource_VerletztBleibt`, `TestResolveSource_ElternNurUeberAusgetretenesKindFehlt`.
 - [ ] 2.2 `ListTeamGroups`/`countTeamGroupMembers`, `ResolveTeamGroup`, `resolveAllTrainers`, `listPracticeGroups`, `ResolvePracticeGroup` auf den Resolver umstellen, ohne die Antwortform zu ändern. Verifikation: bestehende Tests in `team_groups_test.go`, `alle_trainer_test.go`, `practice_groups_test.go` bleiben grün, neu `TestListTeamGroups_CountGleichMembers` (count == len(members) für jede Kachel inkl. ausgetretenem Mitglied).
 
 ## 3. Herkunft beim Anlegen

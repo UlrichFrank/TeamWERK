@@ -34,7 +34,8 @@ func practiceGroupMemberQuery(kind string) string {
 			FROM kader_trainers kt
 			JOIN members m ON m.id = kt.member_id
 			JOIN users u ON u.id = m.user_id
-			WHERE kt.kader_id = ? AND m.user_id IS NOT NULL`
+			WHERE kt.kader_id = ? AND m.user_id IS NOT NULL
+			  AND m.status <> 'ausgetreten'`
 	case "spieler":
 		return `
 			SELECT DISTINCT m.user_id AS user_id,
@@ -42,15 +43,17 @@ func practiceGroupMemberQuery(kind string) string {
 			FROM kader_members km
 			JOIN members m ON m.id = km.member_id
 			JOIN users u ON u.id = m.user_id
-			WHERE km.kader_id = ? AND m.user_id IS NOT NULL`
+			WHERE km.kader_id = ? AND m.user_id IS NOT NULL
+			  AND m.status <> 'ausgetreten'`
 	case "eltern":
 		return `
 			SELECT DISTINCT fl.parent_user_id AS user_id,
 			       u.first_name || ' ' || u.last_name AS name
 			FROM family_links fl
 			JOIN kader_members km ON km.member_id = fl.member_id
+			JOIN members child ON child.id = fl.member_id
 			JOIN users u ON u.id = fl.parent_user_id
-			WHERE km.kader_id = ?`
+			WHERE km.kader_id = ? AND child.status <> 'ausgetreten'`
 	}
 	return ""
 }
