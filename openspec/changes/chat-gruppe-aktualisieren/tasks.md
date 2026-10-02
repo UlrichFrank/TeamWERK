@@ -21,7 +21,7 @@
 ## 5. Anwenden-Route
 
 - [x] 5.1 `POST /api/chat/conversations/{id}/sync/apply` (`SyncApply`): gleiche Prüf-Reihenfolge, Diff in der `tx` neu rechnen, `409 sync_blocked` / `409 sync_stale`, `canContactUser` je Hinzugefügtem (403), Herkunft ersetzen, Mitglieder reaktivieren/einfügen/`left_at` setzen, Systemnachrichten wie `AddMember`/`RemoveMember`, Events gebündelt nach dem Commit (design.md §7). Verifikation: `TestSyncApply_WendetAuswahlAn` (Mitglieder, Systemnachrichten, Herkunft, `{added:1, removed:1}`), `TestSyncApply_AbgewaehlteBleibt`, `TestSyncApply_FremdeID409OhneAenderung`, `TestSyncApply_ErstellerEntfernen409`, `TestSyncApply_Gesperrt409`, `TestSyncApply_NichtErsteller403`, `TestSyncApply_ReaktiviertAusgetretenesMitglied` (`left_at` → NULL), `TestSyncApply_NurHerkunftFestlegen`, `TestSyncApply_Events` (Hub-Mitschnitt: je Empfänger höchstens ein Event je Typ, der Entfernte bekommt `chat:member-left`).
-- [ ] 5.2 Objektrechte-Matrix: Fixture-Erzeuger für beide `{id}`-Routen in `internal/permissions/object_matrix_test.go` (Gruppe von Nutzer B, Aufruf durch Mitglied A → 403). Verifikation: `go test ./internal/permissions/... ./internal/arch/...` grün (Broadcast-Gate inklusive).
+- [x] 5.2 Objektrechte-Matrix: Fixture-Erzeuger für beide `{id}`-Routen in `internal/permissions/object_matrix_test.go` (Gruppe von Nutzer B, Aufruf durch Mitglied A → 403). Verifikation: `go test ./internal/permissions/... ./internal/arch/...` grün (Broadcast-Gate inklusive).
 
 ## 6. Frontend: Anlegen schickt die Herkunft
 

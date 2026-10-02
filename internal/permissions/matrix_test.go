@@ -319,6 +319,8 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/chat/conversations/{id}/transfer-ownership", expected: exPublic},
 	{method: "DELETE", path: "/api/chat/conversations/{id}", expected: exPublic},
 	{method: "POST", path: "/api/chat/conversations/{id}/members", expected: exPublic},
+	{method: "POST", path: "/api/chat/conversations/{id}/sync/preview", expected: exPublic},
+	{method: "POST", path: "/api/chat/conversations/{id}/sync/apply", expected: exPublic},
 	{method: "PUT", path: "/api/chat/conversations/{id}/pin", expected: exPublic},
 	{method: "DELETE", path: "/api/chat/conversations/{id}/pin", expected: exPublic},
 	// Nachrichten: Sender-Check → 403 für alle (kein Fixture)

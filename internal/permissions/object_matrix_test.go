@@ -290,6 +290,10 @@ func objectFixtures() map[string]objFixture {
 			return map[string]string{"id": strconv.Itoa(w.newConversation()), "uid": strconv.Itoa(w.bUserID)}
 		},
 	})
+	// Abgleich der Herkunft: nur der Ersteller. Leerer Body = gespeicherte
+	// Herkunft, erreicht die Ersteller-Prüfung vor jeder Body-Validierung.
+	add("POST /api/chat/conversations/{id}/sync/preview", objFixture{params: convFixture})
+	add("POST /api/chat/conversations/{id}/sync/apply", objFixture{params: convFixture})
 	add("POST /api/chat/conversations/{id}/transfer-ownership", objFixture{
 		params: func(w *objWorld) map[string]string { return p("id", w.newConversation()) },
 		// Feldname ist newOwnerId (nicht userId) und muss ≠ 0 sein.
