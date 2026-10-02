@@ -25,7 +25,7 @@
 
 ## 6. Frontend: Anlegen schickt die Herkunft
 
-- [ ] 6.1 `ChatPage.tsx` „Neues Gespräch": die gewählten Kacheln (`pickedTags` → `{groupType, refId: teamId, kind}`) bei `type=group` als `sources` mitschicken. Verifikation: Vitest prüft den Payload von `POST /chat/conversations` nach Auswahl zweier Kacheln.
+- [x] 6.1 `ChatPage.tsx` „Neues Gespräch": die gewählten Kacheln (`pickedTags` → `{groupType, refId: teamId, kind}`) bei `type=group` als `sources` mitschicken. Verifikation: Vitest prüft den Payload von `POST /chat/conversations` nach Auswahl zweier Kacheln.
 
 ## 7. Frontend: Aktualisieren-Modal
 
