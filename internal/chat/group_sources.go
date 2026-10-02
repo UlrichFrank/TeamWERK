@@ -124,3 +124,91 @@ func dedupSources(in []GroupSource) []GroupSource {
 	}
 	return out
 }
+
+// sourceExists meldet, ob die Kachel in der aktiven Saison existiert:
+// Mannschaft mit Kader der aktiven Saison bzw. Übungsgruppe der aktiven Saison.
+// „Alle Trainer" existiert immer.
+func sourceExists(ctx context.Context, q queryer, s GroupSource) (bool, error) {
+	var exists bool
+	var err error
+	switch {
+	case s.GroupType == "team" && s.Kind == "alle_trainer":
+		return true, nil
+	case s.GroupType == "team":
+		err = q.QueryRowContext(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM kader k JOIN seasons se ON se.id = k.season_id
+				WHERE k.team_id = ? AND se.is_active = 1
+			)`, s.RefID).Scan(&exists)
+	default:
+		err = q.QueryRowContext(ctx, `
+			SELECT EXISTS(
+				SELECT 1 FROM kader k JOIN seasons se ON se.id = k.season_id
+				WHERE k.id = ? AND k.kind = 'practice' AND se.is_active = 1
+			)`, s.RefID).Scan(&exists)
+	}
+	return exists, err
+}
+
+// checkSources prüft Kacheln für das Anlegen einer Gruppe: Form und Existenz
+// (400), dann Sichtbarkeit für den Caller (403). Rückgabe 0 = in Ordnung.
+func (h *Handler) checkSources(r *http.Request, claims *auth.Claims, sources []GroupSource) (int, error) {
+	for _, s := range sources {
+		if !validSource(s) {
+			return http.StatusBadRequest, nil
+		}
+		ok, err := sourceExists(r.Context(), h.db, s)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			return http.StatusBadRequest, nil
+		}
+	}
+	for _, s := range sources {
+		ok, err := h.canSeeSource(r, claims, s)
+		if err != nil {
+			return 0, err
+		}
+		if !ok {
+			return http.StatusForbidden, nil
+		}
+	}
+	return 0, nil
+}
+
+// loadSources liest die gespeicherte Herkunft einer Gruppe.
+func loadSources(ctx context.Context, q queryer, convID int) ([]GroupSource, error) {
+	rows, err := q.QueryContext(ctx, `
+		SELECT group_type, ref_id, kind FROM conversation_sources
+		WHERE conversation_id = ?
+		ORDER BY group_type, ref_id, kind`, convID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []GroupSource{}
+	for rows.Next() {
+		var s GroupSource
+		if err := rows.Scan(&s.GroupType, &s.RefID, &s.Kind); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// writeSources ersetzt die Herkunft einer Gruppe vollständig.
+func writeSources(ctx context.Context, tx *sql.Tx, convID int, sources []GroupSource) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM conversation_sources WHERE conversation_id = ?`, convID); err != nil {
+		return err
+	}
+	for _, s := range sources {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO conversation_sources (conversation_id, group_type, ref_id, kind)
+			VALUES (?, ?, ?, ?)`, convID, s.GroupType, s.RefID, s.Kind); err != nil {
+			return err
+		}
+	}
+	return nil
+}

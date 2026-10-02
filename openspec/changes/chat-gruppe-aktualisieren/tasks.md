@@ -11,7 +11,7 @@
 
 ## 3. Herkunft beim Anlegen
 
-- [ ] 3.1 `CreateConversation`/`createGroup` nimmt optional `sources` an: Form prüfen (400), Sichtbarkeit (403) und Existenz in der aktiven Saison (400) prüfen, alles **vor** dem Insert. Konversation, Mitglieder und `conversation_sources` gehen in eine Transaktion. Verifikation: `TestCreateGroup_SpeichertSources` (201 + Zeilen), `TestCreateGroup_FremdeSource403` (keine Konversation entsteht), `TestCreateGroup_UngueltigerKind400`, `TestCreateGroup_OhneSourcesWieBisher`.
+- [x] 3.1 `CreateConversation`/`createGroup` nimmt optional `sources` an: Form prüfen (400), Sichtbarkeit (403) und Existenz in der aktiven Saison (400) prüfen, alles **vor** dem Insert. Konversation, Mitglieder und `conversation_sources` gehen in eine Transaktion. Verifikation: `TestCreateGroup_SpeichertSources` (201 + Zeilen), `TestCreateGroup_FremdeSource403` (keine Konversation entsteht), `TestCreateGroup_UngueltigerKind400`, `TestCreateGroup_OhneSourcesWieBisher`.
 
 ## 4. Vorschau-Route
 

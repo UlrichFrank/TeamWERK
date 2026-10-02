@@ -312,6 +312,9 @@ func (h *Handler) CreateConversation(w http.ResponseWriter, r *http.Request) {
 		UserID    int    `json:"userId"`
 		Name      string `json:"name"`
 		MemberIDs []int  `json:"memberIds"`
+		// Sources: die im Dialog gewählten Standard-Gruppen-Kacheln, gespeichert
+		// als Herkunft der Gruppe (conversation_sources). Optional.
+		Sources []GroupSource `json:"sources"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
@@ -322,7 +325,7 @@ func (h *Handler) CreateConversation(w http.ResponseWriter, r *http.Request) {
 	case "direct":
 		h.createDirect(w, r, claims, body.UserID)
 	case "group":
-		h.createGroup(w, r, claims, body.Name, body.MemberIDs)
+		h.createGroup(w, r, claims, body.Name, body.MemberIDs, body.Sources)
 	default:
 		http.Error(w, "type must be direct or group", http.StatusBadRequest)
 	}
@@ -430,9 +433,19 @@ func (h *Handler) canContactUser(r *http.Request, claims *auth.Claims, targetUse
 	return h.sharesPracticeGroup(r.Context(), claims.UserID, targetUserID)
 }
 
-func (h *Handler) createGroup(w http.ResponseWriter, r *http.Request, claims *auth.Claims, name string, memberIDs []int) {
+func (h *Handler) createGroup(w http.ResponseWriter, r *http.Request, claims *auth.Claims, name string, memberIDs []int, sources []GroupSource) {
 	if strings.TrimSpace(name) == "" {
 		http.Error(w, "name required", http.StatusBadRequest)
+		return
+	}
+
+	sources = dedupSources(sources)
+	if status, err := h.checkSources(r, claims, sources); err != nil || status != 0 {
+		if err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		} else {
+			http.Error(w, http.StatusText(status), status)
+		}
 		return
 	}
 
@@ -448,7 +461,14 @@ func (h *Handler) createGroup(w http.ResponseWriter, r *http.Request, claims *au
 		}
 	}
 
-	res, err := h.db.ExecContext(r.Context(),
+	tx, err := h.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	res, err := tx.ExecContext(r.Context(),
 		`INSERT INTO conversations (type, name, created_by) VALUES ('group', ?, ?)`,
 		name, claims.UserID)
 	if err != nil {
@@ -464,9 +484,20 @@ func (h *Handler) createGroup(w http.ResponseWriter, r *http.Request, claims *au
 			continue
 		}
 		seen[uid] = true
-		h.db.ExecContext(r.Context(),
+		if _, err := tx.ExecContext(r.Context(),
 			`INSERT OR IGNORE INTO conversation_members (conversation_id, user_id) VALUES (?, ?)`,
-			convID, uid)
+			convID, uid); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+	}
+	if err := writeSources(r.Context(), tx, int(convID), sources); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
 
 	conv, err := h.getConversation(r, int(convID), claims.UserID)
