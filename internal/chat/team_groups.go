@@ -145,6 +145,23 @@ func (h *Handler) canSeeTeamGroup(r *http.Request, claims *auth.Claims, teamID i
 // GET /api/chat/team-groups
 func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
+	results, err := h.listVisibleTeamGroups(r, claims)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}
+
+// visibleTeamGroups liefert die Kacheln, die der Caller sieht — dieselbe Liste
+// wie GET /api/chat/team-groups (Abgleich-Vorschläge). Fehler → leere Liste.
+func (h *Handler) visibleTeamGroups(r *http.Request, claims *auth.Claims) []TeamGroup {
+	groups, _ := h.listVisibleTeamGroups(r, claims)
+	return groups
+}
+
+func (h *Handler) listVisibleTeamGroups(r *http.Request, claims *auth.Claims) ([]TeamGroup, error) {
 
 	// display_short = kanonische Team-Kurzform; die Team-Nummer wird saisonweit
 	// disambiguiert (unabhängig von der Sichtbarkeit des Callers).
@@ -171,8 +188,7 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 			ORDER BY t.age_class, t.gender, k.team_number`, claims.UserID)
 	}
 	if err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return nil, err
 	}
 	defer teamRows.Close()
 
@@ -226,9 +242,7 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 	// Übungsgruppen der aktiven Saison. Eigene Auflösung, weil
 	// user_accessible_teams sie nicht kennt (siehe practice_groups.go).
 	results = append(results, h.listPracticeGroups(r, claims)...)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	return results, nil
 }
 
 func (h *Handler) countTeamGroupMembers(r *http.Request, teamID int, kind string, excludeUserID int) (int, error) {
