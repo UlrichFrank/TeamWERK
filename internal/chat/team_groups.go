@@ -232,29 +232,7 @@ func (h *Handler) ListTeamGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) countTeamGroupMembers(r *http.Request, teamID int, kind string, excludeUserID int) (int, error) {
-	if kind == "alle_trainer" {
-		var count int
-		err := h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM (`+allTrainersMemberQuery()+`) WHERE user_id != ?`,
-			excludeUserID).Scan(&count)
-		return count, err
-	}
-	q := teamGroupMemberQuery(kind)
-	if q == "" {
-		return 0, nil
-	}
-	var count int
-	var err error
-	if kind == "trainer" {
-		err = h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM (`+q+`) WHERE user_id != ?`,
-			teamID, excludeUserID).Scan(&count)
-	} else {
-		err = h.db.QueryRowContext(r.Context(),
-			`SELECT COUNT(*) FROM (`+q+`) WHERE user_id != ?`,
-			teamID, teamID, excludeUserID).Scan(&count)
-	}
-	return count, err
+	return countSource(r.Context(), h.db, GroupSource{GroupType: "team", RefID: teamID, Kind: kind}, excludeUserID)
 }
 
 // teamGroupMemberQuery returns a SQL fragment that yields DISTINCT (user_id, name)
@@ -353,36 +331,11 @@ func (h *Handler) ResolveTeamGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	q := teamGroupMemberQuery(kind)
-	if q == "" {
-		http.Error(w, "invalid kind", http.StatusBadRequest)
-		return
-	}
-	var rows *sql.Rows
-	if kind == "trainer" {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT user_id, name FROM (`+q+`) WHERE user_id != ? ORDER BY name`,
-			teamID, claims.UserID)
-	} else {
-		rows, err = h.db.QueryContext(r.Context(),
-			`SELECT user_id, name FROM (`+q+`) WHERE user_id != ? ORDER BY name`,
-			teamID, teamID, claims.UserID)
-	}
+	members, err := resolveSource(r.Context(), h.db, GroupSource{GroupType: "team", RefID: teamID, Kind: kind}, claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-
-	members := []TeamGroupMember{}
-	for rows.Next() {
-		var m TeamGroupMember
-		if err := rows.Scan(&m.ID, &m.Name); err != nil {
-			continue
-		}
-		members = append(members, m)
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(members)
 }
@@ -401,24 +354,11 @@ func (h *Handler) resolveAllTrainers(w http.ResponseWriter, r *http.Request, cla
 		return
 	}
 
-	rows, err := h.db.QueryContext(r.Context(),
-		`SELECT user_id, name FROM (`+allTrainersMemberQuery()+`) WHERE user_id != ? ORDER BY name`,
-		claims.UserID)
+	members, err := resolveSource(r.Context(), h.db, GroupSource{GroupType: "team", Kind: "alle_trainer"}, claims.UserID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
-
-	members := []TeamGroupMember{}
-	for rows.Next() {
-		var m TeamGroupMember
-		if err := rows.Scan(&m.ID, &m.Name); err != nil {
-			continue
-		}
-		members = append(members, m)
-	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(members)
 }

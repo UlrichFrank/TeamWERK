@@ -96,3 +96,28 @@ func TestResolveSource_UebungsgruppeOhneAusgetretene(t *testing.T) {
 		}
 	}
 }
+
+// TestListTeamGroups_CountGleichMembers: die Zahl auf der Kachel und die
+// aufgelöste Liste lesen dieselbe Menge — auch mit einem Ausgetretenen darin.
+func TestListTeamGroups_CountGleichMembers(t *testing.T) {
+	f, mux := setupTwoTeams(t)
+	setMemberStatusByUser(t, f, f.playerU1, "ausgetreten")
+	vorstand := testutil.CreateVorstandUser(t, f.db)
+	tok := testutil.Token(t, vorstand, "standard", []string{"vorstand"})
+	srv := testutil.NewServer(t, func(r chi.Router) { r.Mount("/", mux) })
+
+	groups := decodeJSON[[]chat.TeamGroup](t, testutil.Get(t, srv, "/api/chat/team-groups", tok))
+	if len(groups) == 0 {
+		t.Fatal("keine Kacheln")
+	}
+	for _, g := range groups {
+		if g.GroupType != "team" {
+			continue
+		}
+		res := testutil.Get(t, srv, fmt.Sprintf("/api/chat/team-groups/%d/%s/members", g.TeamID, g.Kind), tok)
+		members := decodeJSON[[]chat.TeamGroupMember](t, res)
+		if len(members) != g.Count {
+			t.Errorf("%d/%s: count=%d, members=%d", g.TeamID, g.Kind, g.Count, len(members))
+		}
+	}
+}
