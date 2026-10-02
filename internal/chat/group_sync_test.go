@@ -219,3 +219,166 @@ func TestSyncPreview_SchreibtNichts(t *testing.T) {
 		t.Errorf("Vorschau hat geschrieben: %s → %s", before, after)
 	}
 }
+
+func (sf *syncFixture) apply(t *testing.T, token string, body any) *http.Response {
+	t.Helper()
+	return testutil.Post(t, sf.server, fmt.Sprintf("/api/chat/conversations/%d/sync/apply", sf.convID), token, body)
+}
+
+func (sf *syncFixture) isActive(t *testing.T, uid int) bool {
+	t.Helper()
+	return countFxRows(t, sf.tgFixture,
+		`SELECT COUNT(*) FROM conversation_members WHERE conversation_id = ? AND user_id = ? AND left_at IS NULL`,
+		sf.convID, uid) == 1
+}
+
+func drain(ch chan string) []string {
+	var out []string
+	for {
+		select {
+		case ev := <-ch:
+			out = append(out, ev)
+		default:
+			return out
+		}
+	}
+}
+
+func TestSyncApply_WendetAuswahlAn(t *testing.T) {
+	sf := setupSync(t)
+	neu := sf.addPlayerToT1(t)
+	sf.addManually(t, sf.parentU1)
+	res := sf.apply(t, sf.owner, map[string]any{"addUserIds": []int{neu}, "removeUserIds": []int{sf.parentU1}})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d, erwartet 200", res.StatusCode)
+	}
+	got := decodeJSON[map[string]int](t, res)
+	if got["added"] != 1 || got["removed"] != 1 {
+		t.Errorf("Antwort %v, erwartet added=1 removed=1", got)
+	}
+	if !sf.isActive(t, neu) || sf.isActive(t, sf.parentU1) {
+		t.Error("Mitgliedschaften nicht wie gewählt")
+	}
+	if n := countFxRows(t, sf.tgFixture, `SELECT COUNT(*) FROM messages WHERE conversation_id = ? AND is_system = 1 AND ((sender_id = ? AND body = 'wurde hinzugefügt') OR (sender_id = ? AND body = 'wurde entfernt'))`, sf.convID, neu, sf.parentU1); n != 2 {
+		t.Errorf("%d Systemnachrichten, erwartet 2", n)
+	}
+	if n := countFxRows(t, sf.tgFixture, `SELECT COUNT(*) FROM conversation_sources WHERE conversation_id = ?`, sf.convID); n != 1 {
+		t.Errorf("Herkunft hat %d Zeilen, erwartet 1", n)
+	}
+}
+
+func TestSyncApply_AbgewaehlteBleibt(t *testing.T) {
+	sf := setupSync(t)
+	sf.addManually(t, sf.parentU1)
+	sf.addManually(t, sf.extParentU1)
+	if res := sf.apply(t, sf.owner, map[string]any{"removeUserIds": []int{sf.parentU1}}); res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	if !sf.isActive(t, sf.extParentU1) {
+		t.Error("abgewählte Person wurde entfernt")
+	}
+}
+
+func TestSyncApply_FremdeID409OhneAenderung(t *testing.T) {
+	sf := setupSync(t)
+	res := sf.apply(t, sf.owner, map[string]any{
+		"sources":    []map[string]any{{"groupType": "team", "refId": sf.team1, "kind": "eltern"}},
+		"addUserIds": []int{sf.playerU2}, // steht in keinem Diff
+	})
+	if res.StatusCode != http.StatusConflict {
+		t.Fatalf("status %d, erwartet 409", res.StatusCode)
+	}
+	if sf.isActive(t, sf.playerU2) {
+		t.Error("fremde ID wurde hinzugefügt")
+	}
+	if n := countFxRows(t, sf.tgFixture, `SELECT COUNT(*) FROM conversation_sources WHERE conversation_id = ? AND kind = 'eltern'`, sf.convID); n != 0 {
+		t.Error("Herkunft wurde trotz 409 geändert")
+	}
+}
+
+func TestSyncApply_ErstellerEntfernen409(t *testing.T) {
+	sf := setupSync(t)
+	if res := sf.apply(t, sf.owner, map[string]any{"removeUserIds": []int{sf.trainerU1}}); res.StatusCode != http.StatusConflict {
+		t.Fatalf("status %d, erwartet 409", res.StatusCode)
+	}
+	if !sf.isActive(t, sf.trainerU1) {
+		t.Error("Ersteller wurde entfernt")
+	}
+}
+
+func TestSyncApply_Gesperrt409(t *testing.T) {
+	sf := setupSync(t)
+	sf.db.Exec(`DELETE FROM kader_members WHERE kader_id = ?`, sf.kader1)
+	sf.db.Exec(`DELETE FROM kader_extended_members WHERE kader_id = ?`, sf.kader1)
+	if res := sf.apply(t, sf.owner, map[string]any{}); res.StatusCode != http.StatusConflict {
+		t.Fatalf("status %d, erwartet 409 sync_blocked", res.StatusCode)
+	}
+	if !sf.isActive(t, sf.playerU1) {
+		t.Error("Mitglied trotz Sperre entfernt")
+	}
+}
+
+func TestSyncApply_NichtErsteller403(t *testing.T) {
+	sf := setupSync(t)
+	neu := sf.addPlayerToT1(t)
+	if res := sf.apply(t, testutil.Token(t, sf.playerU1, "standard", nil), map[string]any{"addUserIds": []int{neu}}); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("status %d, erwartet 403", res.StatusCode)
+	}
+	if sf.isActive(t, neu) {
+		t.Error("Nicht-Ersteller hat hinzugefügt")
+	}
+}
+
+func TestSyncApply_ReaktiviertAusgetretenesMitglied(t *testing.T) {
+	sf := setupSync(t)
+	sf.db.Exec(`UPDATE conversation_members SET left_at = CURRENT_TIMESTAMP WHERE conversation_id = ? AND user_id = ?`, sf.convID, sf.playerU1)
+	if res := sf.apply(t, sf.owner, map[string]any{"addUserIds": []int{sf.playerU1}}); res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	if !sf.isActive(t, sf.playerU1) {
+		t.Error("left_at nicht zurückgesetzt")
+	}
+}
+
+func TestSyncApply_NurHerkunftFestlegen(t *testing.T) {
+	sf := setupSync(t)
+	sf.db.Exec(`DELETE FROM conversation_sources WHERE conversation_id = ?`, sf.convID)
+	before := countFxRows(t, sf.tgFixture, `SELECT COUNT(*) FROM conversation_members WHERE left_at IS NULL`)
+	res := sf.apply(t, sf.owner, map[string]any{
+		"sources": []map[string]any{{"groupType": "team", "refId": sf.team1, "kind": "spieler"}},
+	})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	if n := countFxRows(t, sf.tgFixture, `SELECT COUNT(*) FROM conversation_sources WHERE conversation_id = ?`, sf.convID); n != 1 {
+		t.Errorf("Herkunft hat %d Zeilen, erwartet 1", n)
+	}
+	if after := countFxRows(t, sf.tgFixture, `SELECT COUNT(*) FROM conversation_members WHERE left_at IS NULL`); after != before {
+		t.Errorf("Mitglieder geändert: %d → %d", before, after)
+	}
+}
+
+func TestSyncApply_Events(t *testing.T) {
+	sf := setupSync(t)
+	neu := sf.addPlayerToT1(t)
+	sf.addManually(t, sf.parentU1)
+	sf.addManually(t, sf.extParentU1)
+	chPlayer := sf.hub.SubscribeUser(sf.playerU1)
+	chRemoved := sf.hub.SubscribeUser(sf.parentU1)
+	defer sf.hub.UnsubscribeUser(sf.playerU1, chPlayer)
+	defer sf.hub.UnsubscribeUser(sf.parentU1, chRemoved)
+
+	res := sf.apply(t, sf.owner, map[string]any{"addUserIds": []int{neu}, "removeUserIds": []int{sf.parentU1, sf.extParentU1}})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", res.StatusCode)
+	}
+	newMsg := fmt.Sprintf("chat:new-message:%d", sf.convID)
+	left := fmt.Sprintf("chat:member-left:%d", sf.convID)
+	got := drain(chPlayer)
+	if len(got) != 2 || got[0] != newMsg || got[1] != left {
+		t.Errorf("aktives Mitglied bekam %v, erwartet je ein %q und %q", got, newMsg, left)
+	}
+	if got := drain(chRemoved); len(got) != 1 || got[0] != left {
+		t.Errorf("Entfernter bekam %v, erwartet genau ein %q", got, left)
+	}
+}
