@@ -35,4 +35,4 @@
 ## 8. Dokumentation und Abschluss
 
 - [x] 8.1 Gotcha-Absatz „Chat-Gruppen-Herkunft (`conversation_sources`)" in `docs/agent/06-gotchas.md`: ein Resolver für Kachel und Abgleich, keine Ableitung für Bestandsgruppen, Sperre bei leerer oder unsichtbarer Kachel, `<>`-Statusfilter. Verifikation: Review des Absatzes.
-- [ ] 8.2 `/verify-change` durchlaufen (Build/Test/Lint, Route→Tests, Broadcast, Tokens, Migrationsnummer, `openspec validate chat-gruppe-aktualisieren --strict`). Verifikation: alle Punkte grün.
+- [x] 8.2 `/verify-change` durchlaufen (Build/Test/Lint, Route→Tests, Broadcast, Tokens, Migrationsnummer, `openspec validate chat-gruppe-aktualisieren --strict`). Verifikation: alle Punkte grün.
