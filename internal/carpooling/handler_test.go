@@ -409,3 +409,32 @@ func TestList_MultiTeamGenericEventTeamIDs(t *testing.T) {
 		t.Errorf("teamIds %v does not contain both teamA=%d and teamB=%d", g.TeamIDs, teamA, teamB)
 	}
 }
+
+// TestList_MeetPlace: der Spielkopf trägt den Treffpunkt-Ort (spiel-treffpunkt),
+// den das Frontend in neue Angebote/Gesuche vorbefüllt.
+func TestList_MeetPlace(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	teamID := testutil.CreateTeam(t, db, "Team A")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, "2099-12-31")
+	db.Exec(`UPDATE games SET meet_offset_minutes=90, meet_place='Parkplatz Vereinsheim' WHERE id=?`, gameID)
+
+	adminID := testutil.CreateUser(t, db, "admin")
+	srv := testServerHTTP(t, carpooling.NewHandler(db, testutil.TestConfig(), hub.NewHub()))
+	res := testutil.Get(t, srv, "/api/mitfahrgelegenheiten", testutil.Token(t, adminID, "admin", nil))
+	defer res.Body.Close()
+
+	var body struct {
+		Games []struct {
+			Game struct {
+				MeetPlace string `json:"meetPlace"`
+			} `json:"game"`
+		} `json:"games"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Games) != 1 || body.Games[0].Game.MeetPlace != "Parkplatz Vereinsheim" {
+		t.Fatalf("expected meetPlace, got %+v", body.Games)
+	}
+}
