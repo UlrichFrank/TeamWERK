@@ -240,10 +240,10 @@ func (h *Handler) canMutateGame(ctx context.Context, claims *auth.Claims, gameID
 	return trains > 0, nil
 }
 
-// canEditGameNote reports whether the caller may set a game's note: admin,
-// vorstand, sportliche_leitung, or a trainer of a participating team. Mirrors
-// the canEdit logic of GetGame.
-func (h *Handler) canEditGameNote(ctx context.Context, claims *auth.Claims, gameID int) bool {
+// canEditGameInfo reports whether the caller may set a game's note or meeting
+// time (spiel-treffpunkt): admin, vorstand, sportliche_leitung, or a trainer of
+// a participating team. Mirrors the canEdit logic of GetGame.
+func (h *Handler) canEditGameInfo(ctx context.Context, claims *auth.Claims, gameID int) bool {
 	gp := &policy.Principal{UserID: claims.UserID, Role: claims.Role, ClubFunctions: claims.ClubFunctions}
 	if policy.CanViewAllGames(gp) {
 		return true
@@ -291,7 +291,7 @@ func (h *Handler) UpdateGameNote(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, err)
 		return
 	}
-	if !h.canEditGameNote(r.Context(), claims, gameID) {
+	if !h.canEditGameInfo(r.Context(), claims, gameID) {
 		httpx.WriteError(w, r, http.StatusForbidden, httpx.CodeForbidden, nil)
 		return
 	}
