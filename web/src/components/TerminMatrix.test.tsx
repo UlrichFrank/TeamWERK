@@ -34,6 +34,14 @@ function matrix(): RsvpMatrix {
           { status: null, is_default: false, lineup: 'open' },
         ],
       },
+      {
+        member_id: 12, name: 'Tim Roth', extended: false, is_self: false, can_respond: false,
+        cells: [
+          { status: 'declined', is_default: false },
+          { status: 'declined', is_default: false, lineup: 'in' },
+          { status: 'maybe', is_default: false, lineup: 'in' },
+        ],
+      },
     ],
   }
 }
@@ -52,23 +60,35 @@ function cellBox(title: string) {
 }
 
 describe('TerminMatrix — Aufstellung', () => {
-  test('aufgestellt: nur grüner Rahmen (2 px), keine Fläche, Symbol behält seine Farbe', () => {
+  test('aufgestellt + zugesagt: grüne Fläche, Symbol weiß', () => {
     renderMatrix()
     const box = cellBox('zugesagt · aufgestellt')
     expect(box.dataset.lineup).toBe('in')
-    expect(box.className).toContain('border-2')
-    expect(box.className).toContain('border-brand-green')
-    expect(box.className).not.toContain('bg-brand-green')
-    expect(box.querySelector('svg')!.getAttribute('class')).toContain('text-brand-green')
+    expect(box.className).toContain('bg-brand-green')
+    expect(box.querySelector('svg')!.getAttribute('class')).toContain('text-white')
   })
 
-  test('nicht aufgestellt: gestrichelt mit Diagonale, keine graue Fläche', () => {
+  test('aufgestellt ohne Zusage: nur grüner Rahmen, Symbol behält seine Farbe', () => {
+    renderMatrix()
+    for (const [title, tone] of [['abgesagt · aufgestellt', 'text-brand-danger'], ['vielleicht · aufgestellt', 'text-brand-warning']]) {
+      const box = cellBox(title)
+      expect(box.dataset.lineup).toBe('in')
+      expect(box.className).toContain('border-brand-green')
+      expect(box.className).not.toContain('bg-brand-green')
+      expect(box.querySelector('svg')!.getAttribute('class')).toContain(tone)
+    }
+  })
+
+  test('nicht aufgestellt: gestrichelt mit gestrichelter Diagonale hinter dem Symbol, keine graue Fläche', () => {
     renderMatrix()
     const box = cellBox('keine Rückmeldung · nicht aufgestellt')
-    expect(box.className).toContain('border-2')
+    expect(box.className).toContain('border-[1.5px]')
     expect(box.className).toContain('border-dashed')
-    expect(box.className).toContain('linear-gradient(to_bottom_right')
     expect(box.className).not.toContain('bg-brand-border')
+    const diagonal = box.querySelector('[data-lineup-diagonal]')!
+    expect(diagonal.querySelector('line')!.getAttribute('stroke-dasharray')).toBeTruthy()
+    // Diagonale steht im DOM vor dem Symbol → liegt dahinter
+    expect(box.firstElementChild).toBe(diagonal)
   })
 
   test('offen: nur gestrichelter Rahmen, ohne Diagonale', () => {
@@ -76,7 +96,7 @@ describe('TerminMatrix — Aufstellung', () => {
     const box = cellBox('zugesagt · Aufstellung offen')
     expect(box.className).toContain('border-dashed')
     expect(box.className).toContain('bg-transparent')
-    expect(box.className).not.toContain('linear-gradient')
+    expect(box.querySelector('[data-lineup-diagonal]')).toBeNull()
   })
 
   test('Trainingszelle ohne Aufstellungsfläche', () => {

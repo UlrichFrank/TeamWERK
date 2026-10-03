@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Calendar, Circle, Dumbbell, HelpCircle, Home, Minus, Plane, ThumbsDown, ThumbsUp, UserCheck, UserX } from 'lucide-react'
 import { getEventColors } from '../lib/eventColors'
-import { LINEUP_LABEL, LINEUP_MATRIX_SURFACE, LINEUP_SHAPE, type LineupState } from '../lib/lineup'
+import { LINEUP_LABEL, LINEUP_MATRIX_IN_FRAME, LINEUP_MATRIX_SURFACE, LINEUP_SHAPE, type LineupState } from '../lib/lineup'
 import {
   cellTitle,
   formatColumnDate,
@@ -30,35 +30,63 @@ const TYPE_LABEL = {
 
 /**
  * Symbol + Beschriftung einer Zelle. Anwesenheit (Trainer-Sicht) geht vor der
- * Rückmeldung. Die Aufstellung ist nur Rahmen, das Symbol behält seine Farbe.
+ * Rückmeldung. Auf der grünen Fläche (aufgestellt + zugesagt) ist das Symbol weiß,
+ * sonst behält es seine Farbe.
  */
 function cellView(cell: MatrixCell): { icon: ReactNode; label: string } {
   const cls = 'w-4 h-4 mx-auto'
-  if (cell.present === true) return { icon: <UserCheck className={`${cls} text-brand-green`} />, label: 'anwesend' }
-  if (cell.present === false) return { icon: <UserX className={`${cls} text-brand-danger`} />, label: 'gefehlt' }
-  if (cell.unavailable) return { icon: <Minus className={`${cls} text-brand-text-subtle`} />, label: 'für die Serie abgemeldet' }
-  const faded = cell.is_default ? ' opacity-40' : ''
+  const filled = isLineupFilled(cell)
+  const tone = (base: string) => (filled ? 'text-white' : base)
+  if (cell.present === true) return { icon: <UserCheck className={`${cls} ${tone('text-brand-green')}`} />, label: 'anwesend' }
+  if (cell.present === false) return { icon: <UserX className={`${cls} ${tone('text-brand-danger')}`} />, label: 'gefehlt' }
+  if (cell.unavailable) return { icon: <Minus className={`${cls} ${tone('text-brand-text-subtle')}`} />, label: 'für die Serie abgemeldet' }
+  const faded = cell.is_default ? (filled ? ' opacity-60' : ' opacity-40') : ''
   const suffix = cell.is_default ? ' (Voreinstellung)' : ''
   switch (cell.status) {
     case 'confirmed':
-      return { icon: <ThumbsUp className={`${cls} text-brand-green${faded}`} />, label: `zugesagt${suffix}` }
+      return { icon: <ThumbsUp className={`${cls} ${tone('text-brand-green')}${faded}`} />, label: `zugesagt${suffix}` }
     case 'declined':
-      return { icon: <ThumbsDown className={`${cls} text-brand-danger${faded}`} />, label: `abgesagt${suffix}` }
+      return { icon: <ThumbsDown className={`${cls} ${tone('text-brand-danger')}${faded}`} />, label: `abgesagt${suffix}` }
     case 'maybe':
-      return { icon: <HelpCircle className={`${cls} text-brand-warning`} />, label: 'vielleicht' }
+      return { icon: <HelpCircle className={`${cls} ${tone('text-brand-warning')}`} />, label: 'vielleicht' }
     default:
-      return { icon: <Circle className={`${cls} text-brand-text-subtle`} />, label: 'keine Rückmeldung' }
+      return { icon: <Circle className={`${cls} ${tone('text-brand-text-subtle')}`} />, label: 'keine Rückmeldung' }
   }
 }
 
+/** Volle grüne Fläche nur bei aufgestellt UND zugesagt; sonst bei „aufgestellt" nur der grüne Rahmen. */
+function isLineupFilled(cell: MatrixCell): boolean {
+  return cell.lineup === 'in' && cell.status === 'confirmed'
+}
+
+/**
+ * Gestrichelte Diagonale (links unten nach rechts oben) für „nicht aufgestellt",
+ * hinter dem Symbol. Strichstärke und Strichlänge in px, unabhängig von der Boxgröße.
+ */
+function LineupDiagonal() {
+  return (
+    <svg
+      data-lineup-diagonal
+      aria-hidden="true"
+      className="absolute inset-0 w-full h-full text-brand-text-subtle pointer-events-none"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+    >
+      <line x1="0" y1="100" x2="100" y2="0" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
 /** Box gleicher Geometrie in jeder Zelle; ohne Aufstellung unsichtbar. */
-function LineupBox({ lineup, children }: { lineup: LineupState | undefined; children: ReactNode }) {
+function LineupBox({ lineup, filled, children }: { lineup: LineupState | undefined; filled: boolean; children: ReactNode }) {
+  const surface = !lineup ? 'border-transparent' : lineup === 'in' && !filled ? LINEUP_MATRIX_IN_FRAME : LINEUP_MATRIX_SURFACE[lineup]
   return (
     <span
       data-lineup={lineup}
-      className={`w-full min-w-[2.75rem] h-8 flex items-center justify-center ${LINEUP_SHAPE} ${lineup ? LINEUP_MATRIX_SURFACE[lineup] : 'border-transparent'}`}
+      className={`relative w-full min-w-[2.75rem] h-8 flex items-center justify-center ${LINEUP_SHAPE} ${surface}`}
     >
-      {children}
+      {lineup === 'out' && <LineupDiagonal />}
+      <span className="relative">{children}</span>
     </span>
   )
 }
@@ -181,7 +209,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
                         ? { icon: null, label: 'Termin abgesagt' }
                         : cellView(cell)
                       const lineup = ev.cancelled ? undefined : cell.lineup
-                      const icon = <LineupBox lineup={lineup}>{view.icon}</LineupBox>
+                      const icon = <LineupBox lineup={lineup} filled={!ev.cancelled && isLineupFilled(cell)}>{view.icon}</LineupBox>
                       const label = cellTitle(view.label, lineup)
                       const tdClass = `px-1 py-1 text-center border-b border-brand-border-subtle group-hover:bg-brand-table-select ${groupBorder}`
                       if (onCellClick && isCellRespondable(m, ev, cell, canOverrideCutoff)) {
@@ -228,9 +256,14 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
         )}
         {(['in', 'out', 'open'] as const).map(state => (
           <li key={state} className="flex items-center gap-1">
-            <span className={`inline-block w-5 h-4 ${LINEUP_SHAPE} ${LINEUP_MATRIX_SURFACE[state]}`} /> {LINEUP_LABEL[state]}
+            <span className={`relative inline-block w-5 h-4 ${LINEUP_SHAPE} ${LINEUP_MATRIX_SURFACE[state]}`}>
+              {state === 'out' && <LineupDiagonal />}
+            </span> {LINEUP_LABEL[state]}{state === 'in' && ' + zugesagt'}
           </li>
         ))}
+        <li className="flex items-center gap-1">
+          <span className={`inline-block w-5 h-4 ${LINEUP_SHAPE} ${LINEUP_MATRIX_IN_FRAME}`} /> {LINEUP_LABEL.in}, nicht zugesagt
+        </li>
         {withPresence && (
           <>
             <li className="flex items-center gap-1"><UserCheck className="w-4 h-4 text-brand-green" /> anwesend</li>
