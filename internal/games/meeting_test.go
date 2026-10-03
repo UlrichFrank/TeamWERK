@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -191,5 +192,62 @@ func TestUpdateGameMeeting_Unbekannt(t *testing.T) {
 	res.Body.Close()
 	if res.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", res.StatusCode)
+	}
+}
+
+// Die Treffzeit hängt am Anwurf: eine Verlegung über PUT /api/games/{id}
+// verschiebt sie mit, ohne dass jemand sie neu setzt. Liste und Detail liefern
+// denselben abgeleiteten Wert.
+func TestMeetingFolgtVerlegtemAnwurf(t *testing.T) {
+	f := newMeetingFixture(t)
+	admin := testutil.CreateUser(t, f.db, "admin")
+	token := testutil.Token(t, admin, "admin", nil)
+
+	if res, _ := putMeeting(t, f, token, map[string]string{"meet_time": "16:30", "meet_place": "Bus"}); res.StatusCode != http.StatusOK {
+		t.Fatalf("set meeting: %d", res.StatusCode)
+	}
+	// Anwurf wie ein H4A-Import direkt verlegen (der Import schreibt nur time).
+	if _, err := f.db.Exec(`UPDATE games SET time='20:00' WHERE id=?`, f.gameID); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := testServer(t, f.db)
+	get := func(path string) []byte {
+		res := testutil.Do(t, srv, http.MethodGet, path, token, nil)
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s: %d", path, res.StatusCode)
+		}
+		b, err := io.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+
+	var wrap struct {
+		Game map[string]any `json:"game"`
+	}
+	json.Unmarshal(get(fmt.Sprintf("/api/games/%d", f.gameID)), &wrap)
+	detail := wrap.Game
+	if detail["meet_time"] != "18:30" || detail["meet_place"] != "Bus" {
+		t.Errorf("detail: meet_time=%v meet_place=%v, want 18:30 / Bus", detail["meet_time"], detail["meet_place"])
+	}
+
+	var list struct {
+		Items []map[string]any `json:"items"`
+	}
+	json.Unmarshal(get("/api/games?season_id="+fmt.Sprint(f.seasonID)), &list)
+	found := false
+	for _, it := range list.Items {
+		if int(it["id"].(float64)) == f.gameID {
+			found = true
+			if it["meet_time"] != "18:30" {
+				t.Errorf("list: meet_time=%v, want 18:30", it["meet_time"])
+			}
+		}
+	}
+	if !found {
+		t.Errorf("game not in list")
 	}
 }

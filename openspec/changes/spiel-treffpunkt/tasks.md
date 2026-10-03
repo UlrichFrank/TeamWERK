@@ -13,7 +13,7 @@
 
 ## 3. Lesepfade Backend
 
-- [ ] 3.1 `meet_time`, `meet_date`, `meet_place` in alle Spiel-Antworten aus `internal/games` aufnehmen (`ListGames`, `GetGame`, `ListMyGames`) über `timez.MeetTime`; verifizieren mit `TestMeetingFolgtVerlegtemAnwurf` (Treffzeit 13:30 bei Anwurf 15:00, nach `PUT /api/games/{id}` auf 17:00 → `15:30`)
+- [x] 3.1 `meet_time`, `meet_date`, `meet_place` in alle Spiel-Antworten aus `internal/games` aufnehmen (`ListGames`, `GetGame`, `ListMyGames`) über `timez.MeetTime`; verifizieren mit `TestMeetingFolgtVerlegtemAnwurf` (Treffzeit 13:30 bei Anwurf 15:00, nach `PUT /api/games/{id}` auf 17:00 → `15:30`)
 - [ ] 3.2 Dashboard-Terminzeilen (`internal/dashboard`) um `meetTime` ergänzen; verifizieren mit einem Test in `internal/dashboard/handler_test.go`, der das Feld für ein Spiel mit Treffzeit prüft und für eines ohne `null`
 - [ ] 3.3 Spielkopf der Mitfahrgelegenheiten (`internal/carpooling`) um `meet_place` ergänzen; verifizieren mit einem Test in `internal/carpooling`, der den Ort im Listen-Response findet
 - [ ] 3.4 iCal-Feed (`internal/calendar/handler.go`): „Treffen: HH:MM Uhr[, Ort]" als erster Absatz der DESCRIPTION, Vortag-Datum bei abweichendem `meet_date`, `DTSTART` unverändert; verifizieren mit `TestCalendar_DescriptionNenntTreffzeit`

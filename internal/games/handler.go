@@ -632,6 +632,7 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		       COUNT(DISTINCT ds.id), COALESCE(SUM(ds.slots_filled),0), COALESCE(SUM(ds.slots_total),0),
 		       ` + gameRsvpCountCols + `,
 		       g.rsvp_default_players, g.rsvp_default_extended, g.rsvp_require_reason, g.note,
+		       g.meet_offset_minutes, g.meet_place,
 		       v.id, v.name, v.street, v.city, v.postal_code, v.note
 		FROM games g
 		LEFT JOIN duty_slots ds ON ds.game_id = g.id
@@ -681,30 +682,31 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		Note       string `json:"note"`
 	}
 	type game struct {
-		ID                  int                 `json:"id"`
-		Date                string              `json:"date"`
-		Time                string              `json:"time"`
-		EndTime             *string             `json:"end_time,omitempty"`
-		EndDate             *string             `json:"end_date"`
-		Opponent            string              `json:"opponent"`
-		EventType           string              `json:"event_type"`
-		TemplateID          *int                `json:"template_id"`
-		Teams               []team              `json:"teams"`
-		TeamDisplayShortCSV string              `json:"team_display_short_csv"`
-		TeamDisplayLongCSV  string              `json:"team_display_long_csv"`
-		SlotCount           int                 `json:"slot_count"`
-		FilledCount         int                 `json:"filled_count"`
-		TotalCount          int                 `json:"total_count"`
-		ConfirmedCount      int                 `json:"confirmed_count"`
-		DeclinedCount       int                 `json:"declined_count"`
-		MaybeCount          int                 `json:"maybe_count"`
-		RsvpDefaultPlayers  string              `json:"rsvp_default_players"`
-		RsvpDefaultExtended string              `json:"rsvp_default_extended"`
-		RsvpRequireReason   int                 `json:"rsvp_require_reason"`
-		RsvpLocksAt         string              `json:"rsvp_locks_at,omitempty"`
-		Note                string              `json:"note"`
-		Venue               *venueRef           `json:"venue,omitempty"`
-		Can                 policy.GameCanFlags `json:"can"`
+		ID                  int     `json:"id"`
+		Date                string  `json:"date"`
+		Time                string  `json:"time"`
+		EndTime             *string `json:"end_time,omitempty"`
+		EndDate             *string `json:"end_date"`
+		Opponent            string  `json:"opponent"`
+		EventType           string  `json:"event_type"`
+		TemplateID          *int    `json:"template_id"`
+		Teams               []team  `json:"teams"`
+		TeamDisplayShortCSV string  `json:"team_display_short_csv"`
+		TeamDisplayLongCSV  string  `json:"team_display_long_csv"`
+		SlotCount           int     `json:"slot_count"`
+		FilledCount         int     `json:"filled_count"`
+		TotalCount          int     `json:"total_count"`
+		ConfirmedCount      int     `json:"confirmed_count"`
+		DeclinedCount       int     `json:"declined_count"`
+		MaybeCount          int     `json:"maybe_count"`
+		RsvpDefaultPlayers  string  `json:"rsvp_default_players"`
+		RsvpDefaultExtended string  `json:"rsvp_default_extended"`
+		RsvpRequireReason   int     `json:"rsvp_require_reason"`
+		RsvpLocksAt         string  `json:"rsvp_locks_at,omitempty"`
+		Note                string  `json:"note"`
+		Meeting
+		Venue *venueRef           `json:"venue,omitempty"`
+		Can   policy.GameCanFlags `json:"can"`
 	}
 
 	var games []*game
@@ -714,13 +716,17 @@ func (h *Handler) ListGames(w http.ResponseWriter, r *http.Request) {
 		var templateIDNull sql.NullInt64
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
+		var meetOffset sql.NullInt64
+		var meetPlace string
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType, &templateIDNull,
 			&g.SlotCount, &g.FilledCount, &g.TotalCount,
 			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
 			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note,
+			&meetOffset, &meetPlace,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			continue
 		}
+		g.Meeting = newMeeting(g.Date, g.Time, meetOffset, meetPlace)
 		if templateIDNull.Valid {
 			v := int(templateIDNull.Int64)
 			g.TemplateID = &v
@@ -802,26 +808,27 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 		Note       string `json:"note"`
 	}
 	var g struct {
-		ID                  int       `json:"id"`
-		Date                string    `json:"date"`
-		Time                string    `json:"time"`
-		EndTime             *string   `json:"end_time,omitempty"`
-		EndDate             *string   `json:"end_date"`
-		Opponent            string    `json:"opponent"`
-		EventType           string    `json:"event_type"`
-		IsHome              bool      `json:"is_home"`
-		SeasonID            int       `json:"season_id"`
-		TemplateID          *int      `json:"template_id"`
-		RsvpDefaultPlayers  string    `json:"rsvp_default_players"`
-		RsvpDefaultExtended string    `json:"rsvp_default_extended"`
-		RsvpRequireReason   int       `json:"rsvp_require_reason"`
-		RsvpLocksAt         string    `json:"rsvp_locks_at,omitempty"`
-		Note                string    `json:"note"`
-		ConfirmedCount      int       `json:"confirmed_count"`
-		DeclinedCount       int       `json:"declined_count"`
-		MaybeCount          int       `json:"maybe_count"`
-		Venue               *venueRef `json:"venue,omitempty"`
-		Teams               []struct {
+		ID                  int     `json:"id"`
+		Date                string  `json:"date"`
+		Time                string  `json:"time"`
+		EndTime             *string `json:"end_time,omitempty"`
+		EndDate             *string `json:"end_date"`
+		Opponent            string  `json:"opponent"`
+		EventType           string  `json:"event_type"`
+		IsHome              bool    `json:"is_home"`
+		SeasonID            int     `json:"season_id"`
+		TemplateID          *int    `json:"template_id"`
+		RsvpDefaultPlayers  string  `json:"rsvp_default_players"`
+		RsvpDefaultExtended string  `json:"rsvp_default_extended"`
+		RsvpRequireReason   int     `json:"rsvp_require_reason"`
+		RsvpLocksAt         string  `json:"rsvp_locks_at,omitempty"`
+		Note                string  `json:"note"`
+		Meeting
+		ConfirmedCount int       `json:"confirmed_count"`
+		DeclinedCount  int       `json:"declined_count"`
+		MaybeCount     int       `json:"maybe_count"`
+		Venue          *venueRef `json:"venue,omitempty"`
+		Teams          []struct {
 			ID           int    `json:"id"`
 			Name         string `json:"name"`
 			DisplayShort string `json:"display_short"`
@@ -838,19 +845,24 @@ func (h *Handler) GetGame(w http.ResponseWriter, r *http.Request) {
 	var vID sql.NullInt64
 	var vName, vStreet, vCity, vPostal, vNote sql.NullString
 	var attendanceTracked int
+	var meetOffset sql.NullInt64
+	var meetPlace string
 	err := h.db.QueryRowContext(r.Context(),
 		`SELECT g.id, g.date, g.time, g.end_time, g.end_date, g.opponent, g.event_type, g.is_home, g.season_id, g.template_id,
 		        g.rsvp_default_players, g.rsvp_default_extended, g.rsvp_require_reason, g.note,
+		        g.meet_offset_minutes, g.meet_place,
 		        `+gameRsvpCountCols+`,
 		        g.attendance_tracked,
 		        v.id, v.name, v.street, v.city, v.postal_code, v.note
 		 FROM games g LEFT JOIN venues v ON v.id = g.venue_id WHERE g.id=?`, id).
 		Scan(&g.ID, &g.Date, &g.Time, &endTimeNull, &endDateNull, &g.Opponent, &g.EventType, &g.IsHome, &g.SeasonID, &templateIDNull,
 			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note,
+			&meetOffset, &meetPlace,
 			&g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount,
 			&attendanceTracked,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote)
 	g.AttendanceTracked = attendanceTracked == 1
+	g.Meeting = newMeeting(g.Date, g.Time, meetOffset, meetPlace)
 	if templateIDNull.Valid {
 		v := int(templateIDNull.Int64)
 		g.TemplateID = &v
@@ -2459,15 +2471,16 @@ type gameListItem struct {
 	MyReason            *string `json:"my_reason,omitempty"`
 	// MyLineup: Aufstellungsstatus (in/out/open) des Aufrufers als Spieler;
 	// fehlt für reine Trainer, Nicht-Teilnehmer und generische Events.
-	MyLineup            string        `json:"my_lineup,omitempty"`
-	AmIParticipant      bool          `json:"am_i_participant"`
-	ChildrenRSVP        []childRSVP   `json:"children_rsvp,omitempty"`
-	RsvpDefaultPlayers  string        `json:"rsvp_default_players"`
-	RsvpDefaultExtended string        `json:"rsvp_default_extended"`
-	RsvpRequireReason   int           `json:"rsvp_require_reason"`
-	RsvpLocksAt         string        `json:"rsvp_locks_at,omitempty"`
-	Note                string        `json:"note"`
-	Venue               *gameVenueRef `json:"venue,omitempty"`
+	MyLineup            string      `json:"my_lineup,omitempty"`
+	AmIParticipant      bool        `json:"am_i_participant"`
+	ChildrenRSVP        []childRSVP `json:"children_rsvp,omitempty"`
+	RsvpDefaultPlayers  string      `json:"rsvp_default_players"`
+	RsvpDefaultExtended string      `json:"rsvp_default_extended"`
+	RsvpRequireReason   int         `json:"rsvp_require_reason"`
+	RsvpLocksAt         string      `json:"rsvp_locks_at,omitempty"`
+	Note                string      `json:"note"`
+	Meeting
+	Venue *gameVenueRef `json:"venue,omitempty"`
 }
 
 // memberIDForUser returns the member_id for a user, or 0 if not found.
@@ -2588,6 +2601,7 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		       (SELECT absence_id IS NOT NULL FROM game_responses WHERE game_id=g.id AND member_id=? LIMIT 1),
 		       (SELECT reason FROM game_responses WHERE game_id=g.id AND member_id=?),
 		       g.rsvp_default_players, g.rsvp_default_extended, g.rsvp_require_reason, g.note,
+		       g.meet_offset_minutes, g.meet_place,
 		       `+appdb.LineupStateSQL("g.event_type", "g.id", "?")+`,
 		       EXISTS(SELECT 1 FROM game_teams gt_r
 		              JOIN kader k_r ON k_r.team_id = gt_r.team_id AND k_r.season_id = g.season_id
@@ -2624,14 +2638,17 @@ func (h *Handler) ListMyGames(w http.ResponseWriter, r *http.Request) {
 		var teamNames, teamIDsCSV, teamShortCSV, teamLongCSV sql.NullString
 		var vID sql.NullInt64
 		var vName, vStreet, vCity, vPostal, vNote sql.NullString
+		var meetOffset sql.NullInt64
+		var meetPlace string
 		if err := rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.EventType, &isHome, &g.SeasonID,
 			&teamNames, &teamIDsCSV, &teamShortCSV, &teamLongCSV, &g.ConfirmedCount, &g.DeclinedCount, &g.MaybeCount, &myRSVP, &myRSVPLocked, &myReason,
-			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note, &myLineup, &inRegularKader, &inExtendedKader, &inTrainerKader,
+			&g.RsvpDefaultPlayers, &g.RsvpDefaultExtended, &g.RsvpRequireReason, &g.Note, &meetOffset, &meetPlace, &myLineup, &inRegularKader, &inExtendedKader, &inTrainerKader,
 			&vID, &vName, &vStreet, &vCity, &vPostal, &vNote); err != nil {
 			httpx.WriteError(w, r, http.StatusInternalServerError, httpx.CodeInternal, fmt.Errorf("ListMyGames scan: %w", err))
 			return
 		}
 		g.IsHome = isHome == 1
+		g.Meeting = newMeeting(g.Date, g.Time, meetOffset, meetPlace)
 		g.AmIParticipant = inRegularKader == 1 || inExtendedKader == 1 || inTrainerKader == 1
 		if inRegularKader == 1 || inExtendedKader == 1 {
 			g.MyLineup = myLineup.String
