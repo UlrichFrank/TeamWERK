@@ -670,7 +670,7 @@ export default function TermineDetailPage() {
       {/* Treffzeit pflegen (spiel-treffpunkt): gleicher Personenkreis wie das
           Bearbeiten des Spiels; bis einschließlich Spieltag. */}
       {g.can?.edit && !isOver && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
           <h2 className={`${SECTION_TITLE} mb-3`}>Treffzeit</h2>
           <MeetingPointEditor
             gameId={g.id}
