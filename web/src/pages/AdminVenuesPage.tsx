@@ -207,14 +207,14 @@ export default function AdminVenuesPage() {
       {loading ? (
         <p className="text-brand-text-muted text-sm">Lade...</p>
       ) : venues.length === 0 ? (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8 text-center">
           <MapPin className="w-10 h-10 text-brand-text-muted mx-auto mb-3" />
           <p className="text-brand-text-muted text-sm">Noch keine Veranstaltungsorte angelegt.</p>
         </div>
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+          <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr>
@@ -229,7 +229,7 @@ export default function AdminVenuesPage() {
                   <tr key={v.id} className="hover:bg-brand-table-select transition-colors">
                     <td className="px-4 py-3 text-sm text-brand-text">
                       <div className="flex items-center gap-2">
-                        {v.is_home_venue && <Home className="w-4 h-4 text-brand-yellow flex-shrink-0" aria-label="Heimhalle" />}
+                        {v.is_home_venue && <Home className="w-4 h-4 text-brand-yellow shrink-0" aria-label="Heimhalle" />}
                         <span className="font-medium">{v.name}</span>
                       </div>
                     </td>
@@ -257,11 +257,11 @@ export default function AdminVenuesPage() {
           {/* Mobile cards */}
           <div className="sm:hidden space-y-3">
             {venues.map(v => (
-              <div key={v.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4">
+              <div key={v.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      {v.is_home_venue && <Home className="w-4 h-4 text-brand-yellow flex-shrink-0" />}
+                      {v.is_home_venue && <Home className="w-4 h-4 text-brand-yellow shrink-0" />}
                       <span className="font-semibold text-brand-text">{v.name}</span>
                     </div>
                     <MapsLink venue={v} className="mb-1" />

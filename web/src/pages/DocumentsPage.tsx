@@ -384,7 +384,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
                 if (t === 'user') loadPickerUsers()
                 if (TEAM_TYPES.includes(t)) loadTeams()
               }}
-              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+              className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
             >
               {Object.entries(PRINCIPAL_TYPE_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>{l}</option>
@@ -395,7 +395,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
               <select
                 value={newRef}
                 onChange={e => setNewRef(e.target.value)}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
               >
                 <option value="">Rolle wählen…</option>
                 {ROLE_OPTIONS.map(r => <option key={r} value={r}>{r}</option>)}
@@ -405,7 +405,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
               <select
                 value={newRef}
                 onChange={e => setNewRef(e.target.value)}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
               >
                 <option value="">Funktion wählen…</option>
                 {CLUB_FUNCTION_OPTIONS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
@@ -415,7 +415,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
               <select
                 value={newRef}
                 onChange={e => setNewRef(e.target.value)}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
               >
                 <option value="">Person wählen…</option>
                 {pickerUsers.map(u => (
@@ -427,7 +427,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
               <select
                 value={newRef}
                 onChange={e => setNewRef(e.target.value)}
-                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                className="w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
               >
                 <option value="">Mannschaft wählen…</option>
                 {teams.map(t => (
@@ -493,7 +493,7 @@ function ActionMenu({ items }: { items: { label: string; icon: React.ReactNode; 
         ref={buttonRef}
         onClick={toggle}
         aria-label="Aktionen"
-        className="p-1 rounded hover:bg-brand-table-select transition-colors"
+        className="p-1 rounded-sm hover:bg-brand-table-select transition-colors"
       >
         <MoreVertical className="w-4 h-4 text-brand-text-muted" />
       </button>
@@ -793,7 +793,7 @@ export default function DocumentsPage() {
           ) : (
             <>
               {/* Mobile: single card with list */}
-              <div className="sm:hidden bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+              <div className="sm:hidden bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
                 {displayFolders.length === 0 && displayFiles.length === 0 ? (
                   <p className="text-sm text-brand-text-muted italic px-4 py-6 text-center">Dieser Ordner ist leer.</p>
                 ) : (
@@ -804,7 +804,7 @@ export default function DocumentsPage() {
                           onClick={() => navigateTo(folder)}
                           className="flex-1 flex items-center gap-3 px-4 py-3 text-left min-w-0"
                         >
-                          <Folder className="w-5 h-5 text-brand-text-muted flex-shrink-0" />
+                          <Folder className="w-5 h-5 text-brand-text-muted shrink-0" />
                           <p className="text-sm font-medium text-brand-text truncate">{folder.name}</p>
                         </button>
                         <div className="pr-2">
@@ -819,7 +819,7 @@ export default function DocumentsPage() {
                     ))}
                     {displayFiles.map(file => (
                       <div key={file.id} className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-brand-table-select transition-colors" onClick={() => openFile(file)}>
-                        <FileText className="w-5 h-5 text-brand-text-muted flex-shrink-0" />
+                        <FileText className="w-5 h-5 text-brand-text-muted shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-brand-text truncate">{file.name}</p>
                           <p className="text-xs text-brand-text-muted">{formatBytes(file.size)} · {formatDate(file.created_at)}</p>
@@ -839,7 +839,7 @@ export default function DocumentsPage() {
               </div>
 
               {/* Desktop: Table */}
-              <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+              <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
                 {displayFolders.length === 0 && displayFiles.length === 0 ? (
                   <p className="text-sm text-brand-text-muted italic px-4 py-6 text-center">Dieser Ordner ist leer.</p>
                 ) : (

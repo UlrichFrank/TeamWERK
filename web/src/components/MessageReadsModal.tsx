@@ -73,7 +73,7 @@ export default function MessageReadsModal({ target, onClose }: Props) {
           <button
             onClick={onClose}
             aria-label="Schließen"
-            className="p-1 rounded hover:bg-brand-border-subtle transition-colors"
+            className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors"
           >
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>

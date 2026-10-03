@@ -112,7 +112,7 @@ export default function MemberAdminTab({
   return (
     <div className="space-y-6">
       {/* Nutzer verknüpfen */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-4`}>Nutzer verknüpfen</h2>
 
         {(currentUser || linkedInvitation) && (
@@ -150,12 +150,12 @@ export default function MemberAdminTab({
       </div>
 
       {/* Willkommensmail */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-4`}>Willkommensmail</h2>
 
         {welcomeEmailSentAt ? (
           <div className="flex items-center gap-2 p-3 bg-brand-success-light border border-brand-success/30 rounded-lg text-sm">
-            <CheckCircle className="w-4 h-4 text-brand-success flex-shrink-0" />
+            <CheckCircle className="w-4 h-4 text-brand-success shrink-0" />
             <span className="text-brand-success">
               Mail wurde am {formatSentAt(welcomeEmailSentAt)} versendet.
             </span>

@@ -45,7 +45,7 @@ export default function TrainingDiaryProofView({
           type="button"
           onClick={() => setZoomed(true)}
           aria-label="Nachweis vergrößern"
-          className="block cursor-zoom-in rounded-md focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+          className="block cursor-zoom-in rounded-md focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
         >
           <AuthImage url={url} alt="Trainingsnachweis" className={thumbClassName} />
         </button>

@@ -111,7 +111,7 @@ function VereinTab() {
   }
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className={LABEL}>Vereinsname</label>
@@ -427,7 +427,7 @@ function SaisonsTab() {
       </div>
 
       {/* Desktop: Table */}
-      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         {loading ? (
           <div className="px-5 py-8 text-sm text-brand-text-muted text-center">Laden…</div>
         ) : seasons.length === 0 ? (
@@ -541,7 +541,7 @@ function AltersklassenTab() {
 
   return (
     <div>
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <table className="w-full">
           <thead>
             <tr>
@@ -661,7 +661,7 @@ function BeitraegeTab() {
           .sort((a, b) => b.valid_from.slice(0, 10).localeCompare(a.valid_from.slice(0, 10)))
         const f = forms[kat] ?? { datum: '', betrag: '' }
         return (
-          <div key={kat} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-4">
+          <div key={kat} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu px-5 py-4">
             <h3 className={`${SUBSECTION_TITLE} mb-3`}>{kategorieLabel(kat)}</h3>
             <table className="w-full text-sm mb-3">
               <thead>
@@ -776,7 +776,7 @@ function BewirtungKachel() {
   }
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu px-5 py-5 max-w-lg">
       <h2 className={`${SUBSECTION_TITLE} mb-4`}>Bewirtung</h2>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -946,7 +946,7 @@ function AusrichterKachel() {
   useEscapeKey(deleteTarget ? closeDeleteConfirm : null)
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-5 py-5">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu px-5 py-5">
       <h2 className={`${SUBSECTION_TITLE} mb-4`}>Ausrichter</h2>
       {error && (
         <div className="mb-3 p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>
@@ -964,7 +964,7 @@ function AusrichterKachel() {
           value={neu}
           onChange={e => setNeu(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') add() }}
-          className={`${INPUT} w-auto flex-1 min-w-[16rem]`}
+          className={`${INPUT} w-auto flex-1 min-w-64`}
         />
         <button type="button" onClick={add} className={BTN_SMALL}>Hinzufügen</button>
       </div>
@@ -976,7 +976,7 @@ function AusrichterKachel() {
         ) : (
           ausrichter.map(a => (
             editId === a.id ? (
-              <div key={a.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 mb-3 space-y-3">
+              <div key={a.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4 mb-3 space-y-3">
                 <input
                   type="text"
                   value={editName}
@@ -1255,7 +1255,7 @@ function StammvereineTab() {
           value={neu}
           onChange={e => setNeu(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') add() }}
-          className={`${INPUT} w-auto flex-1 min-w-[16rem]`}
+          className={`${INPUT} w-auto flex-1 min-w-64`}
         />
         <button type="button" onClick={add} className={BTN_SMALL}>Hinzufügen</button>
       </div>
@@ -1267,7 +1267,7 @@ function StammvereineTab() {
         ) : (
           vereine.map(v => (
             editId === v.id ? (
-              <div key={v.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 mb-3 space-y-3">
+              <div key={v.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4 mb-3 space-y-3">
                 <input
                   type="text"
                   value={editName}
@@ -1299,7 +1299,7 @@ function StammvereineTab() {
       </div>
 
       {/* Desktop: Table */}
-      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-brand-surface-card text-brand-text-muted text-xs uppercase text-left">

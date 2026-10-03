@@ -44,7 +44,7 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
   return (
     <div className="space-y-6">
       {/* Sichtbarkeit für Mitglieder */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-1`}>Sichtbarkeit</h2>
         <p className="text-xs text-brand-text-subtle mb-3">
           Wenn aktiviert, sehen auch Mitglieder anderer Mannschaften Namen und Rückmeldung
@@ -75,7 +75,7 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
       </div>
 
       {/* DSGVO */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-4`}>Datenschutz (DSGVO)</h2>
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -133,13 +133,13 @@ export default function MemberDatenschutzTab({ form, isNew, drafts, onFormChange
                 <div className="flex gap-2">
                   <button
                     onClick={() => onDraftAccept(dsgvoDraft.id)}
-                    className="px-2 py-1 bg-brand-success-light text-brand-success rounded hover:bg-brand-success/20 font-medium text-xs"
+                    className="px-2 py-1 bg-brand-success-light text-brand-success rounded-sm hover:bg-brand-success/20 font-medium text-xs"
                   >
                     Annehmen
                   </button>
                   <button
                     onClick={() => onDraftReject(dsgvoDraft.id)}
-                    className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:opacity-80 font-medium text-xs"
+                    className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded-sm hover:opacity-80 font-medium text-xs"
                   >
                     Ablehnen
                   </button>

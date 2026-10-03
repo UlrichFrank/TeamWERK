@@ -33,7 +33,7 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
       <AuthImage
         url="/media/42"
         alt="test"
-        className="rounded"
+        className="rounded-sm"
         naturalWidth={1200}
         naturalHeight={800}
       />,
@@ -72,7 +72,7 @@ describe('AuthImage — Aspect-Ratio-Strategie', () => {
     globalThis.Image = FakeImage as unknown as typeof Image
 
     const { container } = render(
-      <AuthImage url="/media/99" alt="test" className="rounded" />,
+      <AuthImage url="/media/99" alt="test" className="rounded-sm" />,
     )
 
     await waitFor(() => {

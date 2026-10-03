@@ -18,7 +18,7 @@ export function highlight(text: string, query: string): ReactNode[] {
   // Ungerade Indizes sind die Fundstellen (Klammer-Capture-Group von `split`).
   return parts.map((part, i) =>
     i % 2 === 1 ? (
-      <mark key={i} className="bg-brand-yellow/60 text-brand-black rounded-sm px-0.5">
+      <mark key={i} className="bg-brand-yellow/60 text-brand-black rounded-xs px-0.5">
         {part}
       </mark>
     ) : (

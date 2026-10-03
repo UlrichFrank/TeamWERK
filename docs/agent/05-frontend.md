@@ -4,11 +4,11 @@
 **API:** `import { api } from '../lib/api'` → `api.get('/members')` (Bearer + Auto-Refresh bei 401).
 **Neue Seite:** Datei in `web/src/pages/`, Route in `App.tsx` unter dem `AppShell`-Outlet, ggf. Nav-Eintrag in `AppShell.tsx` (`roles`-Array).
 
-## Styling (Tailwind v3)
+## Styling (Tailwind v4)
 
-Keine eigene CSS-Datei außer `index.css` (nur `@tailwind`). Schrift: Hanken Grotesk.
+Keine eigene CSS-Datei außer `index.css` (CSS-first-Konfiguration: `@import 'tailwindcss'`, `@theme` mit den Tokens, wenige v3-Kompatibilitätsregeln — `hover:` ohne `@media (hover: hover)`, graue Default-Rahmenfarbe, Placeholder-Farbe, `cursor: pointer` auf Buttons). Eine `tailwind.config.js` gibt es nicht mehr. Schrift: Hanken Grotesk.
 Marke: Schwarz `#181310`, Gelb `#FDE400`, Weiß `#FFFFFF`; sekundär Blau `#3E4A98`, Grün `#6EB42E`.
-**Keine raw Tailwind-Farben** — immer `brand-*`-Tokens (`tailwind.config.js`):
+**Keine raw Tailwind-Farben** — immer `brand-*`-Tokens (`@theme` in `web/src/index.css`):
 
 | Token | Wert | Ersetzt |
 |---|---|---|
@@ -28,15 +28,15 @@ Marke: Schwarz `#181310`, Gelb `#FDE400`, Weiß `#FFFFFF`; sekundär Blau `#3E4A
 **Zwei Button-Rollen, nicht austauschbar:** *Header-Control* steht in der Zeile der `<h1>` (Aktion, Filter-Chip, Suchfeld, Auswahlfeld) und ist **30 px hoch (Mobile 32 px)**; *Primary* ist die Bestätigungs-Aktion eines Formulars oder Modals und bleibt größer (`text-sm`). Header-Controls setzen ihre Höhe **fix** (`h-8 sm:h-[30px]`), nie über `py-*` — `index.css` zwingt unter 640 px nur `input`/`select`/`textarea` auf 16 px, nicht `button`, sodass dieselbe Padding-Klasse dort ein 41-px-Feld neben einem 38-px-Button ergibt.
 
 - **Button Header** (`HEADER_CTRL` + `HEADER_PRIMARY`/`HEADER_NEUTRAL`/`HEADER_DANGER`/`HEADER_GHOST`): `inline-flex items-center justify-center gap-1 border h-8 sm:h-[30px] text-xs font-medium transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed` + `rounded-md px-3` + Farbsatz. Icon-only `px-2` (`HEADER_CTRL_ICON`), Split-Button `rounded-l-md` / `rounded-r-md border-l-brand-black/20`.
-- **Header-Feld** (`HEADER_FIELD`, Input/Select in der Kopfzeile): `border border-brand-border rounded-md h-8 sm:h-[30px] px-3 bg-white text-xs text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+- **Header-Feld** (`HEADER_FIELD`, Input/Select in der Kopfzeile): `border border-brand-border rounded-md h-8 sm:h-[30px] px-3 bg-white text-xs text-brand-text placeholder:text-brand-text-subtle focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
 - **Button Primary:** `bg-brand-yellow text-brand-black rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
 - **Button Small (Tabellen):** `bg-brand-yellow text-brand-black rounded-md px-3 py-1 text-xs font-medium hover:bg-brand-black hover:text-brand-yellow transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
 - **Button Danger:** `bg-brand-danger text-white rounded-md px-4 py-2.5 sm:py-2 text-sm font-medium hover:bg-brand-danger/90 transition-colors disabled:opacity-40 disabled:cursor-not-allowed`
-- **Input:** `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
-- **Weitere Konstanten** (ebenfalls aus `buttonStyles.ts` importieren, nicht abtippen): `INPUT` (= Input oben), `LABEL` (`block text-sm font-medium text-brand-text-muted mb-1`), `BTN_SECONDARY` (Abbrechen/Zurück neben einer Formular-Aktion — gleiche Höhe wie `BTN_PRIMARY`, auch auf Mobile), `BTN_SMALL_DANGER` (destruktive Zeilen-Aktion, Maße wie `BTN_SMALL`), `BTN_PRIMARY_SPLIT_MAIN`/`BTN_PRIMARY_SPLIT_CARET` (Karten-Aktion mit Zusatzmenü in Primary-Größe; neben einer Überschrift stattdessen `HEADER_SPLIT_*`), `TAB_BAR`/`TAB`/`TAB_ACTIVE`/`TAB_INACTIVE` (Tab-Leisten: scrollen auf Mobile horizontal, brechen nie um) und `HEADER_GROUP` (Filter-/Suchgruppe in einer umbrechenden Kopfzeile — `min-w-[12rem]` statt `min-w-0`, sonst quetscht sie sich auf Mobile unter die Nachbar-Buttons).
+- **Input:** `w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`
+- **Weitere Konstanten** (ebenfalls aus `buttonStyles.ts` importieren, nicht abtippen): `INPUT` (= Input oben), `LABEL` (`block text-sm font-medium text-brand-text-muted mb-1`), `BTN_SECONDARY` (Abbrechen/Zurück neben einer Formular-Aktion — gleiche Höhe wie `BTN_PRIMARY`, auch auf Mobile), `BTN_SMALL_DANGER` (destruktive Zeilen-Aktion, Maße wie `BTN_SMALL`), `BTN_PRIMARY_SPLIT_MAIN`/`BTN_PRIMARY_SPLIT_CARET` (Karten-Aktion mit Zusatzmenü in Primary-Größe; neben einer Überschrift stattdessen `HEADER_SPLIT_*`), `TAB_BAR`/`TAB`/`TAB_ACTIVE`/`TAB_INACTIVE` (Tab-Leisten: scrollen auf Mobile horizontal, brechen nie um) und `HEADER_GROUP` (Filter-/Suchgruppe in einer umbrechenden Kopfzeile — `min-w-48` statt `min-w-0`, sonst quetscht sie sich auf Mobile unter die Nachbar-Buttons).
 - **Modal-Backdrop:** `bg-brand-black/40` (Bild-Vollansichten `bg-brand-black/80`); Modal-Kopf wie `EditModal` (Titel `MODAL_TITLE`, Schließen als `<X>` mit `aria-label`).
 - **Seitentitel:** `PAGE_TITLE` — auch auf Detailseiten. `<main>` setzt `text-brand-text` als Grundfarbe.
-- **Card:** `bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6` (Tabellen-Container: `… overflow-hidden`)
+- **Card:** `bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6` (Tabellen-Container: `… overflow-hidden`)
 - **Modal:** `bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6`
 - **Alert Info:** `p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text`
 - **Alert Fehler:** `p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger`

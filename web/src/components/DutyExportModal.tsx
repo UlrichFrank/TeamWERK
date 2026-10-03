@@ -99,11 +99,11 @@ export default function DutyExportModal({ isOpen, monthStart, monthEnd, onClose 
           )}
 
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex-1 min-w-[8rem]">
+            <div className="flex-1 min-w-32">
               <label htmlFor="duty-export-from" className="block text-xs text-brand-text-muted mb-1">Von</label>
               <input id="duty-export-from" type="date" className={INPUT} value={from} onChange={e => setFrom(e.target.value)} />
             </div>
-            <div className="flex-1 min-w-[8rem]">
+            <div className="flex-1 min-w-32">
               <label htmlFor="duty-export-to" className="block text-xs text-brand-text-muted mb-1">Bis</label>
               <input id="duty-export-to" type="date" className={INPUT} value={to} onChange={e => setTo(e.target.value)} />
             </div>

@@ -141,7 +141,7 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
   return (
     <div className="space-y-6">
       {/* Sichtbarkeit */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <div className="p-6 pb-2">
           <h2 className={`${SECTION_TITLE} mb-1`}>Sichtbarkeit</h2>
           <p className="text-xs text-brand-text-subtle mb-3">Steuere, ob du auch für Mitglieder anderer Mannschaften sichtbar bist.</p>
@@ -183,7 +183,7 @@ export default function ProfileDatenschutzTab({ ownMember, onUpdated }: Props) {
       </div>
 
       {/* DSGVO — Änderungen laufen über Change-Request */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-1`}>Datenschutz (DSGVO)</h2>
         <p className="text-xs text-brand-text-subtle mb-4">
           Diese Einwilligungen werden vom Verein dokumentiert. Änderungen musst du anfragen —

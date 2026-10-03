@@ -24,7 +24,7 @@ function EventNoteSection({ note }: { note?: string }) {
   const text = note ?? ''
   if (text.trim() === '') return null
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
       <EventNoteIndicator variant="inline" note={text} />
     </div>
   )
@@ -477,7 +477,7 @@ export default function TermineDetailPage() {
       <>
         {declineModal}
       <div className="max-w-2xl space-y-4">
-        <div className={`bg-brand-surface-card rounded-xl shadow border-t-4 p-6 ${session.status === 'cancelled' ? 'border-brand-border' : 'border-brand-yellow'}`}>
+        <div className={`bg-brand-surface-card rounded-xl shadow-sm border-t-4 p-6 ${session.status === 'cancelled' ? 'border-brand-border' : 'border-brand-yellow'}`}>
           <div className="flex items-start gap-3">
             <Dumbbell className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
             <div className="flex-1 min-w-0">
@@ -625,7 +625,7 @@ export default function TermineDetailPage() {
     <>
       {declineModal}
     <div className="max-w-2xl space-y-4">
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
         <div className="flex items-start gap-3">
           <Icon className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
           <div className="flex-1 min-w-0">
@@ -802,7 +802,7 @@ function ParticipantRow({ row, a }: { row: TableRow; a: RowActions }) {
                 checked={a.attendanceMap[row.member_id] ?? false}
                 onChange={a.isTrainer ? e => a.onToggleAttendance(row.member_id, e.target.checked) : undefined}
                 readOnly={!a.isTrainer}
-                className={`w-4 h-4 rounded border-brand-border ${a.isTrainer ? '' : 'cursor-default opacity-60'}`}
+                className={`w-4 h-4 rounded-sm border-brand-border ${a.isTrainer ? '' : 'cursor-default opacity-60'}`}
               />
             )}
           </td>
@@ -885,7 +885,7 @@ function ResponseTable({ rows, sections, showAttendanceCol, attendanceMap, atten
   const isEmpty = effectiveSections.every(s => s.rows.length === 0)
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm overflow-hidden">
       <div className="h-1 bg-brand-yellow" />
       <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between gap-3 flex-wrap">
         <h2 className={SECTION_TITLE}>Teilnahme</h2>

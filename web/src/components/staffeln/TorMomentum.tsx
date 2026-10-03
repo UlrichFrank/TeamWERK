@@ -5,7 +5,7 @@ import type { Halbzeit, Situation, Tor } from '../../lib/torverlauf'
 
 // Die Palette steht als Zahlenwert und nicht als Klasse, weil sie an
 // SVG-Attribute (fill) geht — eine Tailwind-Klasse ließe sich dafür nicht zur
-// Bauzeit erzeugen. Es sind exakt die brand-Tokens aus tailwind.config.js:
+// Bauzeit erzeugen. Es sind exakt die brand-Tokens aus dem @theme-Block in index.css:
 // brand-blue, brand-text-subtle, brand-warning.
 const FARBE: Record<Situation, string> = {
   fuehrung: '#3E4A98',

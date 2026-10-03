@@ -133,7 +133,7 @@ function RanglisteBlockCard({ block }: { block: RanglisteBlock }) {
   const scale = Math.max(block.soll, maxRowTotal)
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
       <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
         <h2 className={SECTION_TITLE}>{block.teamLabel}</h2>
         <span className="text-xs text-brand-text-muted">

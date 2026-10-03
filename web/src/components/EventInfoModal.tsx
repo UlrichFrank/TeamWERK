@@ -191,21 +191,21 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
           </div>
           <div className="flex items-center gap-1">
             {onEdit && (
-              <button onClick={onEdit} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Bearbeiten">
+              <button onClick={onEdit} className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors" aria-label="Bearbeiten">
                 <Pencil className="w-4 h-4 text-brand-text-muted" />
               </button>
             )}
             {onDienste && (
-              <button onClick={onDienste} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Dienste">
+              <button onClick={onDienste} className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors" aria-label="Dienste">
                 <ClipboardList className="w-4 h-4 text-brand-text-muted" />
               </button>
             )}
             {type === 'absence' && canEditAbsence && !editing && (
-              <button onClick={() => setEditing(true)} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Bearbeiten">
+              <button onClick={() => setEditing(true)} className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors" aria-label="Bearbeiten">
                 <Pencil className="w-4 h-4 text-brand-text-muted" />
               </button>
             )}
-            <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
+            <button onClick={onClose} className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
               <X className="w-5 h-5 text-brand-text-muted" />
             </button>
           </div>

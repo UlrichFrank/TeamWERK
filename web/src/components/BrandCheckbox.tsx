@@ -25,7 +25,7 @@ export default function BrandCheckbox({ checked, onChange, label, title, disable
         disabled={disabled}
         className="sr-only"
       />
-      <SlidersHorizontal className="w-3 h-3 flex-shrink-0" style={{ opacity: checked ? 1 : 0.5 }} />
+      <SlidersHorizontal className="w-3 h-3 shrink-0" style={{ opacity: checked ? 1 : 0.5 }} />
       {label && <span>{label}</span>}
     </label>
   )

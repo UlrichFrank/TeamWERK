@@ -66,7 +66,7 @@ describe('ChatImageGrid', () => {
     expect(grid.className).toContain('w-64')
     const tiles = screen.getAllByTestId('chat-image-tile')
     expect(tiles[0].className).toContain('col-span-2')
-    expect(tiles[0].className).toContain('aspect-[2/1]')
+    expect(tiles[0].className).toContain('aspect-2/1')
     expect(tiles[1].className).toContain('aspect-square')
     expect(tiles[2].className).toContain('aspect-square')
     // Die Bild-Box im Inneren füllt die Kachel und setzt keine eigene Größe —

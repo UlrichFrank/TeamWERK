@@ -47,7 +47,7 @@ export default function PdfRenderer({ blob }: Props) {
           const canvas = document.createElement('canvas')
           canvas.width = viewport.width
           canvas.height = viewport.height
-          canvas.className = 'mx-auto mb-4 shadow border border-brand-border-subtle bg-brand-white max-w-full h-auto'
+          canvas.className = 'mx-auto mb-4 shadow-sm border border-brand-border-subtle bg-brand-white max-w-full h-auto'
           const ctx = canvas.getContext('2d')
           if (!ctx) continue
           container.appendChild(canvas)

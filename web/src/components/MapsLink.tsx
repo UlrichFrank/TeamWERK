@@ -36,7 +36,7 @@ export default function MapsLink({ venue, className = '' }: MapsLinkProps) {
       aria-label={`Navigation zu ${venue.name}`}
       className={`inline-flex items-center gap-1 text-brand-text-muted hover:text-brand-text transition-colors ${className}`}
     >
-      <MapPin className="w-4 h-4 flex-shrink-0" />
+      <MapPin className="w-4 h-4 shrink-0" />
       <span className="text-sm">{venue.name}</span>
     </a>
   )

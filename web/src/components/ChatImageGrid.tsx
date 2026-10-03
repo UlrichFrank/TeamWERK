@@ -65,7 +65,7 @@ export default function ChatImageGrid({
             }
             data-testid="chat-image-tile"
             className={`relative overflow-hidden rounded-md bg-brand-surface-card ${
-              wide ? "col-span-2 aspect-[2/1]" : "aspect-square"
+              wide ? "col-span-2 aspect-2/1" : "aspect-square"
             }`}
           >
             <AuthImage

@@ -331,7 +331,7 @@ export default function MatchReportFormPage() {
             {report.state === 'publish_failed' && report.error_message && (
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger space-y-1">
                     <div className="font-medium">Letzter Publish-Fehler:</div>
-                    <pre className="whitespace-pre-wrap break-words font-mono text-xs">{report.error_message}</pre>
+                    <pre className="whitespace-pre-wrap wrap-break-word font-mono text-xs">{report.error_message}</pre>
                 </div>
             )}
 
@@ -340,14 +340,14 @@ export default function MatchReportFormPage() {
                     <MessageSquare className="w-5 h-5 shrink-0 text-brand-danger" />
                     <div>
                         <div className="font-medium text-brand-danger">Zurückgegeben — bitte überarbeiten und erneut zur Prüfung senden:</div>
-                        <p className="mt-1 whitespace-pre-wrap break-words">{report.review_comment}</p>
+                        <p className="mt-1 whitespace-pre-wrap wrap-break-word">{report.review_comment}</p>
                     </div>
                 </div>
             )}
             {report.review_comment && report.state === 'pending_review' && isReviewer && (
                 <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
                     <div className="font-medium">Letzte Rückgabe an den Autor:</div>
-                    <p className="mt-1 whitespace-pre-wrap break-words">{report.review_comment}</p>
+                    <p className="mt-1 whitespace-pre-wrap wrap-break-word">{report.review_comment}</p>
                 </div>
             )}
 
@@ -364,7 +364,7 @@ export default function MatchReportFormPage() {
                 </div>
             )}
 
-            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 space-y-6">
+            <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 space-y-6">
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-brand-text">Titel</label>
                     <input
@@ -772,7 +772,7 @@ function ImageTile(props: {
     return (
         <div className="border border-brand-border-subtle rounded-md p-2 bg-white space-y-2">
             {previewError ? (
-                <div className="aspect-square w-full bg-brand-surface-card rounded overflow-hidden flex flex-col items-center justify-center text-brand-danger gap-1">
+                <div className="aspect-square w-full bg-brand-surface-card rounded-sm overflow-hidden flex flex-col items-center justify-center text-brand-danger gap-1">
                     <ImageOff className="w-6 h-6" />
                     <span className="text-xs">Bild konnte nicht geladen werden</span>
                 </div>
@@ -780,16 +780,16 @@ function ImageTile(props: {
                 <img
                     src={previewUrl}
                     alt={`Bild ${props.image.position}`}
-                    className="aspect-square object-cover w-full rounded"
+                    className="aspect-square object-cover w-full rounded-sm"
                 />
             ) : (
-                <div className="aspect-square w-full bg-brand-border-subtle rounded overflow-hidden flex items-center justify-center text-xs text-brand-text-muted">
+                <div className="aspect-square w-full bg-brand-border-subtle rounded-sm overflow-hidden flex items-center justify-center text-xs text-brand-text-muted">
                     Lade…
                 </div>
             )}
             <input
                 type="text"
-                className="w-full text-xs border border-brand-border rounded px-2 py-1"
+                className="w-full text-xs border border-brand-border rounded-sm px-2 py-1"
                 placeholder="Bildunterschrift"
                 value={caption}
                 disabled={props.readOnly}

@@ -382,7 +382,7 @@ export default function AdminTrainingsPage() {
               <h2 className={MODAL_TITLE}>
                 {deleteConfirm.type === 'series' ? 'Serie löschen' : 'Einzeltermin löschen'}
               </h2>
-              <button onClick={() => closeDeleteConfirm()} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
+              <button onClick={() => closeDeleteConfirm()} className="p-1 text-brand-text-muted hover:text-brand-text rounded-sm transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -442,14 +442,14 @@ export default function AdminTrainingsPage() {
           </div>
 
           {series.length === 0 ? (
-            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+            <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8 text-center">
               <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
               <p className="text-brand-text-muted">Noch keine Trainingsserien angelegt.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {series.map(s => (
-                <div key={s.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+                <div key={s.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
                   <div className="p-4 cursor-pointer hover:bg-white/40 transition-colors" onClick={() => toggleExpand(s)}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3 min-w-0">
@@ -538,12 +538,12 @@ export default function AdminTrainingsPage() {
           </div>
 
           {standalone.length === 0 ? (
-            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+            <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8 text-center">
               <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
               <p className="text-brand-text-muted">Keine Einzeltermine vorhanden.</p>
             </div>
           ) : (
-            <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+            <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
               <ul className="divide-y divide-brand-border-subtle">
                 {standalone.map(s => (
                   <li key={s.id}
@@ -584,7 +584,7 @@ export default function AdminTrainingsPage() {
               <h2 className={MODAL_TITLE}>
                 {isNewSeries ? 'Neue Trainingsserie' : 'Serie bearbeiten'}
               </h2>
-              <button onClick={() => setSeriesModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
+              <button onClick={() => setSeriesModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded-sm transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -714,7 +714,7 @@ export default function AdminTrainingsPage() {
           <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h2 className={MODAL_TITLE}>Spieler abmelden</h2>
-              <button onClick={() => setAbmeldModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
+              <button onClick={() => setAbmeldModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded-sm transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -780,7 +780,7 @@ export default function AdminTrainingsPage() {
               <h2 className={MODAL_TITLE}>
                 {isNewSession ? 'Neuer Einzeltermin' : 'Termin bearbeiten'}
               </h2>
-              <button onClick={() => setSessionModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded transition-colors">
+              <button onClick={() => setSessionModal(null)} className="p-1 text-brand-text-muted hover:text-brand-text rounded-sm transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>

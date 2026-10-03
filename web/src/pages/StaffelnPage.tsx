@@ -56,7 +56,7 @@ const NOCH_NICHTS = 'Noch nichts beim Verband abgerufen.'
 
 const TH = 'bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left'
 const TD = 'px-4 py-3 text-sm text-brand-text'
-const CARD = 'bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden'
+const CARD = 'bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden'
 
 export default function StaffelnPage() {
   const [params, setParams] = useSearchParams()

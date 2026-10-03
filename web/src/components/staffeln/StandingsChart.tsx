@@ -6,7 +6,7 @@ import { isOwnTeam } from '../../lib/staffelHighlight'
 // Die Palette steht hier als Zahlenwert und nicht als Klasse, weil sie an
 // SVG-Attribute (stroke, fill) geht und je Mannschaft wechselt — eine
 // Tailwind-Klasse ließe sich dafür nicht zur Bauzeit erzeugen. Es sind exakt
-// die brand-Tokens aus tailwind.config.js, keine Rohfarben:
+// die brand-Tokens aus dem @theme-Block in index.css, keine Rohfarben:
 // brand-black, brand-blue, brand-green, brand-danger, brand-info,
 // brand-text-subtle.
 const COLORS = ['#181310', '#3E4A98', '#6EB42E', '#C0253A', '#3B82F6', '#9CA3AF']
@@ -59,7 +59,7 @@ export default function StandingsChart({
   const y = (rank: number) => PAD.top + (rank - 1) * STEP
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4">
       <div className="overflow-x-auto">
         <svg
           width={W}
@@ -138,7 +138,7 @@ export default function StandingsChart({
               onMouseLeave={() => setHover(null)}
               aria-current={own || undefined}
               className={`inline-flex items-center gap-1 text-xs cursor-default ${
-                own ? 'bg-brand-table-select font-semibold px-1 rounded' : 'text-brand-text-muted'
+                own ? 'bg-brand-table-select font-semibold px-1 rounded-sm' : 'text-brand-text-muted'
               }`}
             >
               <span

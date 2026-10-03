@@ -87,7 +87,7 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
         aria-label={`Details zu ${name}`}
       >
         {chipPhoto && (
-          <img src={chipPhoto} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
+          <img src={chipPhoto} alt="" className="w-4 h-4 rounded-full object-cover shrink-0" />
         )}
         {name}
       </button>
@@ -96,7 +96,7 @@ export default function PersonChip({ userId, name, photoUrl }: PersonChipProps) 
         <div
           ref={tooltipRef}
           style={{ top: pos.top - 8, left: pos.left, transform: 'translateY(-100%)' }}
-          className="fixed z-[9999] w-52 bg-white rounded-lg shadow-lg border border-brand-border-subtle p-3 text-xs"
+          className="fixed z-9999 w-52 bg-white rounded-lg shadow-lg border border-brand-border-subtle p-3 text-xs"
           onMouseEnter={cancelClose}
           onMouseLeave={scheduleClose}
         >

@@ -75,7 +75,7 @@ export default function ChangelogModal({ onClose }: Props) {
           <h2 id={titleId} className={MODAL_TITLE}>Versionshistorie</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-brand-border-subtle transition-colors"
+            className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors"
             aria-label="Schließen"
           >
             <X className="w-5 h-5 text-brand-text-muted" />
@@ -111,7 +111,7 @@ export default function ChangelogModal({ onClose }: Props) {
                     >
                       {entry.scope}
                     </span>
-                    <span className="text-brand-text break-words">{entry.message}</span>
+                    <span className="text-brand-text wrap-break-word">{entry.message}</span>
                   </li>
                 ))}
               </ul>

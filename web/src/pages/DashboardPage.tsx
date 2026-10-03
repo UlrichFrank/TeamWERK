@@ -186,7 +186,7 @@ function Accordion({
   onToggle: () => void; badge?: number; children: React.ReactNode
 }) {
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <button
         onClick={onToggle}
         className="w-full flex items-center justify-between px-5 py-4 hover:bg-brand-border-subtle transition-colors min-h-[56px]"
@@ -231,7 +231,7 @@ function DashboardRow({
     const weekday = d.toLocaleDateString('de-DE', { weekday: 'short' }).replace('.', '')
     const dayMonth = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
     return (
-      <div className="flex-shrink-0 w-10 text-center">
+      <div className="shrink-0 w-10 text-center">
         <p className="text-xs font-semibold text-brand-text-muted leading-tight">{weekday}</p>
         <p className="text-xs text-brand-text-subtle leading-tight">{dayMonth}</p>
       </div>
@@ -241,7 +241,7 @@ function DashboardRow({
   const inner = (
     <>
       {dateBlock}
-      <span className="flex-shrink-0 text-brand-text-muted">{icon}</span>
+      <span className="shrink-0 text-brand-text-muted">{icon}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
           <p className="text-sm font-medium text-brand-text truncate">{title}</p>
@@ -250,13 +250,13 @@ function DashboardRow({
         {subtitle && <p className="text-xs text-brand-text-muted truncate">{subtitle}</p>}
       </div>
       {timeLabel && (
-        <span className="flex-shrink-0 text-xs text-brand-text-subtle whitespace-nowrap">{timeLabel}</span>
+        <span className="shrink-0 text-xs text-brand-text-subtle whitespace-nowrap">{timeLabel}</span>
       )}
-      {to && <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />}
+      {to && <ArrowRight className="w-4 h-4 shrink-0 text-brand-text-subtle" />}
     </>
   )
 
-  const rowClass = 'flex items-center gap-3 py-1.5 rounded px-2 -mx-2 transition-colors'
+  const rowClass = 'flex items-center gap-3 py-1.5 rounded-sm px-2 -mx-2 transition-colors'
 
   if (!to) {
     return <div className={rowClass}>{inner}</div>
@@ -320,7 +320,7 @@ function DutyAccountRow({ entry }: { entry: DutyAccountEntry }) {
   const { name, teamId, teamLabel, geleistet, vorhersage, soll } = entry
   const total = geleistet + vorhersage
   const linkTo = `/dienste/rangliste?team=${teamId}`
-  const linkCls = 'block py-1.5 rounded px-2 -mx-2 hover:bg-brand-border-subtle transition-colors'
+  const linkCls = 'block py-1.5 rounded-sm px-2 -mx-2 hover:bg-brand-border-subtle transition-colors'
   const nameBlock = (
     <span className="text-sm font-medium text-brand-text truncate">
       {name} <span className="text-brand-text-muted font-normal">· {teamLabel}</span>
@@ -355,7 +355,7 @@ function DutyAccountRow({ entry }: { entry: DutyAccountEntry }) {
         </span>
       </div>
       <div
-        className="mt-1 h-1.5 w-full max-w-[10rem] bg-brand-border-subtle rounded-full overflow-hidden flex"
+        className="mt-1 h-1.5 w-full max-w-40 bg-brand-border-subtle rounded-full overflow-hidden flex"
         title={`Geleistet: ${formatDiensteZahl(geleistet)} · Eingetragen: ${formatDiensteZahl(vorhersage)} · Fair-Anteil: ${formatDiensteZahl(soll)}`}
       >
         <div className="h-full bg-brand-green" style={{ width: `${geleistetPct}%` }} aria-hidden="true" />
@@ -415,7 +415,7 @@ function DutyAccountAushilfeRow({ entry }: { entry: DutyAccountAushilfeEntry }) 
   return (
     <Link
       to={`/dienste/rangliste?team=${teamId}`}
-      className="flex items-center justify-between gap-2 py-1.5 rounded px-2 -mx-2 hover:bg-brand-border-subtle transition-colors"
+      className="flex items-center justify-between gap-2 py-1.5 rounded-sm px-2 -mx-2 hover:bg-brand-border-subtle transition-colors"
     >
       <span className="text-sm font-medium text-brand-text truncate">
         {name} <span className="text-brand-text-muted font-normal">· {teamLabel}</span>
@@ -493,7 +493,7 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
       <div className="pt-3 border-t border-brand-border-subtle">
         <button
           onClick={() => setHistoryOpen(o => !o)}
-          className="w-full flex items-center justify-between hover:bg-brand-border-subtle rounded px-2 py-1.5 -mx-2 transition-colors min-h-[36px]"
+          className="w-full flex items-center justify-between hover:bg-brand-border-subtle rounded-sm px-2 py-1.5 -mx-2 transition-colors min-h-[36px]"
         >
           <span className="text-sm font-medium text-brand-text">Bisherige Dienste</span>
           {historyOpen ? <ChevronDown className="w-4 h-4 text-brand-text-muted" /> : <ChevronRight className="w-4 h-4 text-brand-text-muted" />}
@@ -507,7 +507,7 @@ function MeineDiensteSection({ dienste }: { dienste: MeineDienste | null }) {
               return (
                 <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-brand-border-subtle last:border-0">
                   <span className="text-brand-text-muted">{formatDate(a.date)} — {a.dutyType}</span>
-                  <span className={`px-1.5 py-0.5 rounded ${cls}`}>{label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-sm ${cls}`}>{label}</span>
                 </div>
               )
             })}
@@ -539,13 +539,13 @@ function MeinTeamSection() {
         <li key={t.id}>
           <Link
             to={`/mein-team?team=${t.id}`}
-            className="flex items-center justify-between py-1.5 hover:bg-brand-border-subtle rounded px-2 -mx-2 transition-colors"
+            className="flex items-center justify-between py-1.5 hover:bg-brand-border-subtle rounded-sm px-2 -mx-2 transition-colors"
           >
             <span className="flex items-center gap-2 text-sm font-medium text-brand-text">
               {t.display_long || t.name}
               {t.isExtended && <AushilfeBadge />}
             </span>
-            <ArrowRight className="w-4 h-4 flex-shrink-0 text-brand-text-subtle" />
+            <ArrowRight className="w-4 h-4 shrink-0 text-brand-text-subtle" />
           </Link>
         </li>
       ))}

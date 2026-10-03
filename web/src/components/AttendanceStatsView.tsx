@@ -72,7 +72,7 @@ function PillarBlock({ title, present, excused, missed }: { title: string; prese
     { key: 'missed', n: missed, label: 'fehlt', icon: <X className="w-4 h-4 text-brand-danger" /> },
   ]
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
       <div className="flex items-baseline justify-between mb-3">
         <h3 className={SUBSECTION_TITLE}>{title}</h3>
         <span className="text-sm text-brand-text-muted">{total} {total === 1 ? 'Termin' : 'Termine'}</span>
@@ -105,13 +105,13 @@ function CategoryBadge({ category }: { category: Category }) {
     unavailable: { label: 'abgemeldet', cls: 'bg-brand-border-subtle text-brand-text-muted' },
   }
   const { label, cls } = map[category]
-  return <span className={`px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap ${cls}`}>{label}</span>
+  return <span className={`px-2 py-0.5 rounded-sm text-xs font-medium whitespace-nowrap ${cls}`}>{label}</span>
 }
 
 function EventTable({ title, events }: { title: string; events: EventDetail[] }) {
   const hasUnavailable = events.some(e => e.category === 'unavailable')
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-6 py-4 border-b border-brand-border-subtle">
         <h3 className={SUBSECTION_TITLE}>{title}</h3>
       </div>

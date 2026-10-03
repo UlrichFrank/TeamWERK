@@ -358,7 +358,7 @@ export default function DutyPage() {
             <div
               key={i}
               id={g.game_id ? `duty-game-${g.game_id}` : undefined}
-              className={`rounded-xl shadow border-t-4 overflow-hidden ${cardClass}`}
+              className={`rounded-xl shadow-sm border-t-4 overflow-hidden ${cardClass}`}
             >
               <div className="px-4 py-3 border-b border-brand-border-subtle flex items-center justify-between">
                 <div className="flex items-center gap-3">

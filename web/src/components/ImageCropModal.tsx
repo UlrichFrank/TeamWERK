@@ -290,7 +290,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
         </div>
 
         <div className="flex items-center gap-3 mb-5">
-          <ZoomIn className="w-4 h-4 text-brand-text-muted flex-shrink-0" />
+          <ZoomIn className="w-4 h-4 text-brand-text-muted shrink-0" />
           <input
             type="range" min={1} max={3} step={0.01}
             value={zoomDisplay}

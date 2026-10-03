@@ -52,7 +52,7 @@ export const HEADER_H = 'h-8 sm:h-[30px]'
  * Bei 16px (Mobile, iOS-Zoom-Schutz) braucht der Pfeil 32px, daher `pr-9`.
  * Nur für `select`: Text- und Suchfelder behalten ihr symmetrisches Padding.
  */
-export const SELECT_CHEVRON_ROOM = '[&:is(select)]:pr-9'
+export const SELECT_CHEVRON_ROOM = '[select]:pr-9'
 
 /**
  * Gemeinsame Basis aller Header-Controls — ohne Rundung und ohne horizontales
@@ -112,7 +112,7 @@ export const HEADER_GHOST =
 export const HEADER_FIELD =
   `border border-brand-border rounded-md ${HEADER_H} px-3 ${SELECT_CHEVRON_ROOM} bg-white ` +
   'text-xs text-brand-text placeholder:text-brand-text-subtle ' +
-  'focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+  'focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 /** Formular- und Modal-Aktion. */
 export const BTN_PRIMARY =
@@ -173,7 +173,7 @@ export const BTN_DANGER =
  */
 export const INPUT =
   `w-full border border-brand-border rounded-md px-3 ${SELECT_CHEVRON_ROOM} py-2 text-sm text-brand-text ` +
-  'placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 ' +
+  'placeholder:text-brand-text-subtle focus:outline-hidden focus:ring-2 ' +
   'focus:ring-brand-yellow focus:border-brand-yellow'
 
 /** Beschriftung über einem Formularfeld. */
@@ -182,14 +182,14 @@ export const LABEL = 'block text-sm font-medium text-brand-text-muted mb-1'
 /**
  * Filter-/Suchgruppe in einer umbrechenden Kopfzeile (`flex flex-wrap`).
  *
- * Bewusst `min-w-[12rem]` und nicht `min-w-0`: ein `flex-1`-Item hat Basis 0,
+ * Bewusst `min-w-48` und nicht `min-w-0`: ein `flex-1`-Item hat Basis 0,
  * und mit Mindestbreite 0 passt es beim Zeilenumbruch rechnerisch IMMER noch in
  * die erste Zeile. Auf Mobile wurde die Gruppe dadurch auf wenige Pixel
  * gequetscht, und Filter-Button und Suchfeld lagen über den Aktions-Buttons
  * rechts daneben (Kalender: Abwesenheits-Button komplett verdeckt). Mit
  * Mindestbreite bricht die Gruppe stattdessen in eine eigene Zeile um.
  */
-export const HEADER_GROUP = 'flex items-center gap-1.5 flex-1 flex-nowrap min-w-[12rem]'
+export const HEADER_GROUP = 'flex items-center gap-1.5 flex-1 flex-nowrap min-w-48'
 
 /**
  * Tab-Leiste unter der Seitenüberschrift. Scrollt auf schmalen Bildschirmen
@@ -201,7 +201,7 @@ export const TAB_BAR =
   'flex gap-1 border-b border-brand-border-subtle overflow-x-auto ' +
   // Scrollbalken ausblenden: er lag als zweite, graue Linie unter dem Unterstrich.
   // Wischen bleibt möglich, der angeschnittene letzte Tab zeigt, dass es weitergeht.
-  '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+  'scrollbar-none [&::-webkit-scrollbar]:hidden'
 
 /** Einzelner Tab; mit `TAB_ACTIVE` bzw. `TAB_INACTIVE` kombinieren. */
 export const TAB =

@@ -83,7 +83,7 @@ export default function ChatPollCard({ poll, question, messageId, isOwn, onOpenV
 
   return (
     <div className="min-w-[220px] max-w-full">
-      <p className="font-medium whitespace-pre-wrap break-words">{question}</p>
+      <p className="font-medium whitespace-pre-wrap wrap-break-word">{question}</p>
       <p className="mt-0.5 text-xs opacity-70">
         {closed
           ? 'Beendet'

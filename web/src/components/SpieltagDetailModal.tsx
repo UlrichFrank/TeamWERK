@@ -288,15 +288,15 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               </>
             ) : null}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-            <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            <button onClick={onClose} className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
               <X className="w-5 h-5 text-brand-text-muted" />
             </button>
           </div>
         </div>
 
         {!loading && !notFound && game && (
-          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-4">
+          <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-4">
             <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border-subtle">
               <h3 className={SUBSECTION_TITLE}>Dienste</h3>
               {canEdit && (
@@ -326,7 +326,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
         {/* Add slot modal */}
         {showAddSlot && createPortal(
-          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
+          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-60 p-4">
             <div
               ref={addSlotDialogRef}
               role="dialog"
@@ -417,7 +417,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
         {/* Edit slot modal */}
         {editSlot && createPortal(
-          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
+          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-60 p-4">
             <div
               ref={editSlotDialogRef}
               role="dialog"
@@ -486,7 +486,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
         {/* Delete slot confirmation */}
         {deleteSlotId !== null && createPortal(
-          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
+          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-60 p-4">
             <div
               ref={deleteSlotDialogRef}
               role="dialog"
@@ -517,7 +517,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
 
         {/* Delete game confirmation */}
         {showDeleteGame && game && createPortal(
-          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
+          <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-60 p-4">
             <div
               ref={deleteGameDialogRef}
               role="dialog"

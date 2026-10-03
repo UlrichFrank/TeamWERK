@@ -45,7 +45,7 @@ export default function EventSearchInput({ value, onChange, placeholder, compact
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={ariaLabel}
-        className={`w-full ${HEADER_H} border border-brand-border rounded-md pl-9 pr-9 py-0 text-sm [&::-webkit-search-cancel-button]:appearance-none text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`}
+        className={`w-full ${HEADER_H} border border-brand-border rounded-md pl-9 pr-9 py-0 text-sm [&::-webkit-search-cancel-button]:appearance-none text-brand-text placeholder:text-brand-text-subtle focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow`}
       />
       {value !== '' && (
         <button

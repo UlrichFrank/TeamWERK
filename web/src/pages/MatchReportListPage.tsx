@@ -86,7 +86,7 @@ export default function MatchReportListPage() {
                     Offene Aufträge ({openSlots.length})
                 </h2>
                 {openSlots.length === 0 ? (
-                    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 text-sm text-brand-text-muted">
+                    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 text-sm text-brand-text-muted">
                         Keine offenen Spielbericht-Aufträge. Übernimm einen Slot in der{' '}
                         <a href="/dienste" className="underline text-brand-text">Dienstbörse</a>.
                     </div>
@@ -95,7 +95,7 @@ export default function MatchReportListPage() {
                         {openSlots.map(slot => (
                             <li
                                 key={slot.slot_id}
-                                className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 flex items-center justify-between gap-3"
+                                className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4 flex items-center justify-between gap-3"
                             >
                                 <div>
                                     <div className="text-sm font-medium text-brand-text">
@@ -125,7 +125,7 @@ export default function MatchReportListPage() {
                 {loading ? (
                     <p className="text-sm text-brand-text-muted">Lade…</p>
                 ) : reports.length === 0 ? (
-                    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 text-sm text-brand-text-muted">
+                    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 text-sm text-brand-text-muted">
                         Noch keine Berichte angelegt.
                     </div>
                 ) : (
@@ -133,7 +133,7 @@ export default function MatchReportListPage() {
                         {reports.map(r => (
                             <li
                                 key={r.id}
-                                className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 flex items-center justify-between gap-3"
+                                className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4 flex items-center justify-between gap-3"
                             >
                                 <div className="flex items-start gap-3">
                                     <FileText className="w-5 h-5 text-brand-text-muted mt-0.5" />

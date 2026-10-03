@@ -1,6 +1,92 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/forms';
+
+/*
+  v3-Verhalten von `hover:` beibehalten. v4 kapselt hover in
+  `@media (hover: hover)`, damit greift es auf Touch-Geräten nie — der
+  Plus-Knopf im Kalender (`opacity-0 group-hover:opacity-100`) wäre dort per
+  Tippen nicht mehr erreichbar. Eine bewusste Umstellung ist ein eigener Change.
+*/
+@custom-variant hover (&:hover);
+
+@theme {
+  --color-brand-black: #181310;
+  --color-brand-white: #ffffff;
+  --color-brand-yellow: #fde400;
+  --color-brand-gray: #e5e7eb;
+  --color-brand-blue: #3e4a98;
+  --color-brand-blue-dark: #2e3a7a;
+  --color-brand-blue-light: #ecf1ff;
+  --color-brand-blue-light-hover: #dae3fb;
+  --color-brand-green: #6eb42e;
+  --color-brand-green-dark: #5a9324;
+  --color-brand-error: #ef4444;
+  --color-brand-error-light: #fee2e2;
+  --color-brand-success: #10b981;
+  --color-brand-success-light: #d1fae5;
+  --color-brand-warning: #f59e0b;
+  --color-brand-warning-light: #fef3c7;
+  --color-brand-info: #3b82f6;
+  --color-brand-info-light: #dbeafe;
+  --color-brand-surface-card: #f9fafb;
+  --color-brand-text: #111827;
+  --color-brand-text-muted: #6b7280;
+  --color-brand-text-subtle: #9ca3af;
+  --color-brand-border: #d1d5db;
+  --color-brand-border-subtle: #e5e7eb;
+  --color-brand-table-select: #e5e7eb;
+  --color-brand-danger: #c0253a;
+  --color-brand-danger-light: #fceef1;
+
+  --font-sans: 'Hanken Grotesk', sans-serif;
+
+  /*
+    Zeilenhöhen absolut wie in v3. v4 gibt sie als Verhältnis zur Schriftgröße
+    an — gleich, solange die Größe aus der Klasse kommt. Die Mobile-Regel unten
+    zwingt Felder aber auf 16px: mit Verhältnis wüchse ein `text-xs`-Select
+    von 16 auf 21px Zeilenhöhe und liefe aus seiner festen Header-Höhe
+    (`h-8`), ein `text-sm`-Input stünde 3px höher als der Button daneben.
+  */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+
+  --container-tile-sm: 80px;
+  --container-tile-md: 120px;
+}
+
+/*
+  Tailwind v4 setzt die Default-Rahmenfarbe auf `currentcolor`, v3 nahm gray-200.
+  Ohne diese Regel würden alle `border`-Elemente ohne Farbklasse schwarz statt
+  hellgrau — gleicher Wert wie vorher, aber als Marken-Token.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-brand-border-subtle, currentcolor);
+  }
+
+  /* v4-Preflight: Placeholder = halbtransparentes currentcolor, v3 nahm gray-400. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-brand-text-subtle);
+  }
+
+  /* v4-Preflight: Buttons haben `cursor: default`, v3 setzte `pointer`. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 /* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */
 @media screen and (max-width: 639px) {

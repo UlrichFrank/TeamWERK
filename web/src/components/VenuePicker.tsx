@@ -103,13 +103,13 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
         >
           {selected ? (
             <span className="flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-brand-text-muted flex-shrink-0" />
+              <MapPin className="w-3.5 h-3.5 text-brand-text-muted shrink-0" />
               <span>{selected.name}, {selected.city}</span>
             </span>
           ) : (
             <span className="text-brand-text-subtle">Ort wählen...</span>
           )}
-          <ChevronDown className="w-4 h-4 text-brand-text-muted flex-shrink-0" />
+          <ChevronDown className="w-4 h-4 text-brand-text-muted shrink-0" />
         </button>
 
         {open && (
@@ -121,7 +121,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
                 placeholder="Suchen..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-full border border-brand-border rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                className="w-full border border-brand-border rounded-md px-3 py-1.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
               />
             </div>
             <div className="max-h-48 overflow-y-auto">
@@ -145,7 +145,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
                   onClick={() => handleSelect(v.id)}
                   className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-start gap-2 ${v.id === value ? 'bg-brand-yellow/10 text-brand-text' : 'hover:bg-brand-surface-card text-brand-text'}`}
                 >
-                  <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-brand-text-muted" />
+                  <MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0 text-brand-text-muted" />
                   <span>
                     <span className="font-medium">{v.name}</span>
                     <span className="text-brand-text-muted"> · {v.city}</span>

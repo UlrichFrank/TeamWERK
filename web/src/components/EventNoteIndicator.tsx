@@ -33,7 +33,7 @@ export default function EventNoteIndicator({ variant, note, className = '' }: Ev
   return (
     <div className={`flex items-start gap-2 text-sm text-brand-danger ${className}`}>
       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-      <span className="whitespace-pre-wrap min-w-0 break-words">
+      <span className="whitespace-pre-wrap min-w-0 wrap-break-word">
         <LinkifiedText text={note} />
       </span>
     </div>

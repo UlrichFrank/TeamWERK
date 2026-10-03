@@ -262,7 +262,7 @@ export default function VideosPage() {
       </div>
 
       {storage && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 mb-4">
+        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4 mb-4">
           <div className="flex items-center justify-between text-xs text-brand-text-muted mb-1.5">
             <span>Speicherplatz</span>
             <span>
@@ -302,7 +302,7 @@ export default function VideosPage() {
       )}
 
       {items.length === 0 && !loading && !error && (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 text-sm text-brand-text-muted flex items-center gap-2">
+        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 text-sm text-brand-text-muted flex items-center gap-2">
           <Video className="w-5 h-5 text-brand-text-subtle" />
           Keine Videos vorhanden.
         </div>
@@ -328,7 +328,7 @@ export default function VideosPage() {
         </div>
       ) : (
         items.length > 0 && (
-          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+          <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr>

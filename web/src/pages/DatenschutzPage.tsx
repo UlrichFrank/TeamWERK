@@ -27,7 +27,7 @@ export default function DatenschutzPage() {
           Zurück zur Anmeldung
         </Link>
 
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 sm:p-8 space-y-8">
+        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 sm:p-8 space-y-8">
           <header>
             <h1 className={PAGE_TITLE}>Datenschutzerklärung</h1>
             <p className="text-sm text-brand-text-muted mt-2">

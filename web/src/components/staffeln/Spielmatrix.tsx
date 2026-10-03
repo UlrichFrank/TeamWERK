@@ -56,7 +56,7 @@ export default function Spielmatrix({ matrix, ownPlayers, onOpenGame }: {
   }
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-4 py-3 border-b border-brand-border-subtle">
         <h2 className={SUBSECTION_TITLE}>{matrix.team}</h2>
         <p className="text-xs text-brand-text-muted mt-1">
@@ -197,14 +197,14 @@ function SpaltenKopf({ game, onOpen }: { game: MatrixGame; onOpen: () => void })
       type="button"
       onClick={onOpen}
       title={game.hasReport ? 'Zum Spielbericht' : 'Zur Begegnung im Spielplan'}
-      className="flex flex-col items-center gap-1 normal-case min-w-[9rem] w-full rounded-md px-1 py-1 hover:bg-brand-table-select transition-colors"
+      className="flex flex-col items-center gap-1 normal-case min-w-36 w-full rounded-md px-1 py-1 hover:bg-brand-table-select transition-colors"
     >
       <span className="text-brand-text-muted">{formatDate(game.date)}</span>
       <span className="inline-flex items-center gap-1 text-brand-text font-semibold text-sm tabular-nums">
         {game.isHome ? <Home className="w-3 h-3" /> : <MapPin className="w-3 h-3" />}
         {game.homeGoals}:{game.guestGoals}
       </span>
-      <span className="text-brand-text-muted max-w-[9rem] truncate">{gegner}</span>
+      <span className="text-brand-text-muted max-w-36 truncate">{gegner}</span>
       {game.hasReport ? (
         <span className="inline-flex items-center gap-1 text-brand-text">
           <FileText className="w-3 h-3" /> Bericht

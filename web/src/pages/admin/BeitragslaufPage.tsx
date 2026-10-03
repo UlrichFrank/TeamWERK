@@ -302,7 +302,7 @@ export default function BeitragslaufPage() {
         <select
           value={saisonId ?? ''}
           onChange={e => setSaisonId(Number(e.target.value))}
-          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
         >
           {seasons.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
@@ -311,7 +311,7 @@ export default function BeitragslaufPage() {
         <select
           value={kategorieFilter}
           onChange={e => setKategorieFilter(e.target.value)}
-          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
         >
           {KATEGORIE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -320,7 +320,7 @@ export default function BeitragslaufPage() {
         <select
           value={hinweisFilter}
           onChange={e => setHinweisFilter(e.target.value)}
-          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+          className="border border-brand-border rounded-md pl-3 pr-8 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
         >
           {HINWEIS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -328,7 +328,7 @@ export default function BeitragslaufPage() {
 
       {preview && (
         <>
-          <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow transform-gpu shadow px-5 py-3 mb-4 text-sm text-brand-text flex flex-wrap gap-x-6 gap-y-1">
+          <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow transform-gpu shadow-sm px-5 py-3 mb-4 text-sm text-brand-text flex flex-wrap gap-x-6 gap-y-1">
             <span className="inline-flex items-center gap-1"><CheckSquare className="w-4 h-4 shrink-0" /> {summary.count} angehakt</span>
             <span className="inline-flex items-center gap-1 text-brand-text-muted"><AlertTriangle className="w-4 h-4 shrink-0" /> {summary.warn} Warnungen</span>
             <span className="inline-flex items-center gap-1 text-brand-text-muted"><Ban className="w-4 h-4 shrink-0" /> {summary.excl} ausgeschlossen</span>
@@ -338,7 +338,7 @@ export default function BeitragslaufPage() {
                 type="date"
                 value={faelligkeitOverride}
                 onChange={e => setFaelligkeitOverride(e.target.value)}
-                className="border border-brand-border rounded-md px-2 py-1 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                className="border border-brand-border rounded-md px-2 py-1 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 title="SEPA-Einzugsdatum (ReqdColltnDt) im XML; muss heute oder in der Zukunft liegen. Default: 01.07. der Saison."
               />
               {faelligkeitOverride !== preview.faelligkeit && (
@@ -359,7 +359,7 @@ export default function BeitragslaufPage() {
           </div>
 
           {/* Desktop-Tabelle */}
-          <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-4">
+          <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-4">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-brand-surface-card text-brand-text-muted text-xs uppercase">
@@ -419,7 +419,7 @@ export default function BeitragslaufPage() {
           {/* Mobile-Cards */}
           <div className="sm:hidden space-y-2 mb-4">
             {filteredItems.map(it => (
-              <div key={it.member_id} className={`bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu px-4 py-3 ${!it.included ? 'opacity-60' : ''}`}>
+              <div key={it.member_id} className={`bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu px-4 py-3 ${!it.included ? 'opacity-60' : ''}`}>
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-medium text-brand-text">
                     <input type="checkbox" disabled={!it.included} checked={selected.has(it.member_id)} onChange={() => toggle(it.member_id)} />

@@ -148,7 +148,7 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
             <p className="text-xs text-brand-text-muted mt-0.5">{entry.notiz}</p>
           )}
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {canRequestAsBiete && (
             <button
               onClick={() => {
@@ -182,7 +182,7 @@ function EntryCard({ entry, typ, paarungen, myBieteIds, mySucheIds, onDelete, on
             <button
               onClick={() => onDelete(entry.id)}
               aria-label="Eintrag löschen"
-              className="flex-shrink-0 p-1.5 text-brand-text-muted hover:text-brand-danger transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="shrink-0 p-1.5 text-brand-text-muted hover:text-brand-danger transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
             >
               <Trash2 className="w-4 h-4" />
             </button>
@@ -527,7 +527,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
   const Icon = data.game.eventType === 'heim' ? Home : data.game.eventType === 'auswärts' ? Plane : Calendar
 
   return (
-    <div id={`game-${data.game.id}`} className={`rounded-xl shadow border-t-4 overflow-hidden scroll-mt-24 ${colors.card.bg} ${colors.card.border}`}>
+    <div id={`game-${data.game.id}`} className={`rounded-xl shadow-sm border-t-4 overflow-hidden scroll-mt-24 ${colors.card.bg} ${colors.card.border}`}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3 min-w-0">
@@ -538,7 +538,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
             </div>
           </div>
           {!hasOwn && (
-            <div className="flex gap-2 flex-shrink-0">
+            <div className="flex gap-2 shrink-0">
               <button
                 onClick={() => onOpenForm(data.game.id, 'biete')}
                 className={`${BTN_SMALL} min-h-[44px] sm:min-h-0`}
@@ -620,7 +620,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
           <div className="space-y-1">
             {confirmedPaarungen.map(p => (
               <div key={p.id} id={`paarung-${p.id}`} className="flex items-center gap-2 text-xs text-brand-text scroll-mt-24">
-                <Check className="w-3 h-3 text-brand-success flex-shrink-0" />
+                <Check className="w-3 h-3 text-brand-success shrink-0" />
                 <span className="flex items-center gap-1 flex-wrap">
                   <PersonChip userId={p.sucheUserId} name={p.sucheName} photoUrl={p.suchePhotoUrl} />
                   {p.anzahl > 1 && ` (${p.anzahl} Personen)`}

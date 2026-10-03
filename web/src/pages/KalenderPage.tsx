@@ -1184,7 +1184,7 @@ export default function KalenderPage() {
           Balken z-20, Inhalt z-10) in einem eigenen Stacking-Context. Ohne ihn
           konkurrieren sie auf Seitenebene mit den Kopfzeilen-Dropdowns (auch
           z-20) und malen als spätere DOM-Geschwister darüber. */}
-      <div className="isolate rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="isolate rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
       <div
         ref={calendarRef}
         className="bg-brand-surface-card select-none"
@@ -1234,7 +1234,7 @@ export default function KalenderPage() {
                     <button
                       onPointerDown={e => e.stopPropagation()}
                       onClick={e => { e.stopPropagation(); openWizardWithDate(dateStr) }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded text-brand-text-subtle hover:text-brand-text hover:bg-brand-border-subtle"
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-sm text-brand-text-subtle hover:text-brand-text hover:bg-brand-border-subtle"
                       title={canEdit ? 'Event anlegen' : 'Abwesenheit eintragen'}
                     >
                       <Plus className="w-3 h-3" />
@@ -1524,7 +1524,7 @@ export default function KalenderPage() {
                                 } else {
                                   setSelectedTeamIds(selectedTeamIds.filter(id => id !== t.id))
                                 }
-                              }} className="rounded accent-brand-yellow" />
+                              }} className="rounded-sm accent-brand-yellow" />
                             <span className="text-sm text-brand-text">{shortNames.get(t.id)}</span>
                           </label>
                         ))}
@@ -1729,7 +1729,7 @@ export default function KalenderPage() {
                           return (
                             <label
                               key={c.id}
-                              className="flex items-center gap-2 px-2 py-2.5 sm:py-1.5 rounded hover:bg-brand-table-select cursor-pointer text-sm text-brand-text"
+                              className="flex items-center gap-2 px-2 py-2.5 sm:py-1.5 rounded-sm hover:bg-brand-table-select cursor-pointer text-sm text-brand-text"
                             >
                               <input
                                 type="checkbox"
@@ -1915,7 +1915,7 @@ export default function KalenderPage() {
                       {preview.map((s, i) => (
                         <label key={i} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-brand-border-subtle cursor-pointer">
                           <input type="checkbox" checked={selectedSlotIndices.has(i)} onChange={() => toggleSlot(i)}
-                            className="rounded accent-brand-yellow" />
+                            className="rounded-sm accent-brand-yellow" />
                           <span className="font-mono text-sm font-semibold w-12 text-brand-text">{s.event_time}</span>
                           <span className="text-sm flex-1 text-brand-text">{s.duty_type_name}</span>
                           {s.role_desc && <span className="text-xs text-brand-text-subtle">({s.role_desc})</span>}

@@ -6,8 +6,8 @@ Diese Spezifikation beschreibt die Capability `brand-tokens`. (Automatisch norma
 
 ## Requirements
 
-### Requirement: Semantische Farb-Tokens in tailwind.config.js
-`tailwind.config.js` SHALL die folgenden neuen Tokens unter `theme.extend.colors` definieren:
+### Requirement: Semantische Farb-Tokens im Tailwind-Theme
+Der `@theme`-Block in `web/src/index.css` SHALL die folgenden Tokens als `--color-brand-*` definieren:
 
 | Token | Hex-Wert |
 |---|---|
