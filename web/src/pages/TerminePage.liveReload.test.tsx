@@ -86,4 +86,28 @@ describe('TerminePage — Live-Update lädt still nach', () => {
     await act(async () => { resolveReload({ data: [session()] }) })
     expect(document.getElementById('termin-training-100')).toBeTruthy()
   })
+
+  // Regression: der Fokus-Sprung (`?focus=…`, z. B. aus dem Dashboard oder
+  // einer Push) hing an der Zahl sichtbarer Termine. Kam beim stillen Reload
+  // ein Termin hinzu, sprang die Seite erneut zum Fokus zurück — mitten aus
+  // der Stelle, an der der Nutzer gerade zu- oder abgesagt hatte.
+  test('Reload mit neuem Termin springt nicht erneut zum Fokus', async () => {
+    const scroll = vi.fn()
+    Element.prototype.scrollIntoView = scroll
+    render(<MemoryRouter initialEntries={['/termine?focus=training-100']}><TerminePage /></MemoryRouter>)
+    await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1))
+
+    mockGet.mockImplementation((url: string) => {
+      if (url.startsWith('/seasons/active')) return Promise.resolve({ data: SEASON })
+      if (url.startsWith('/training-sessions')) {
+        return Promise.resolve({ data: [session(), session({ id: 101, date: '2026-05-02' })] })
+      }
+      return Promise.resolve({ data: [] })
+    })
+    await act(async () => { liveHandler?.('trainings') })
+    await waitFor(() => expect(document.getElementById('termin-training-101')).toBeTruthy())
+
+    expect(scroll).toHaveBeenCalledTimes(1)
+  })
 })
+
