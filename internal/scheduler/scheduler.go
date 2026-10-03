@@ -71,6 +71,7 @@ func (s *Scheduler) Run() {
 	s.sendTrainingReminders()
 	s.sendCarpoolingReminders()
 	s.sendEventNoteReminders()
+	s.sendGameMeetingPushes()
 	s.cleanStaleVideoUploads()
 	s.cleanStaleVideoDownloadTemp()
 	s.failStaleVideoUploads()

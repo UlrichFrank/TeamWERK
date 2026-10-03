@@ -20,7 +20,7 @@
 
 ## 4. Push
 
-- [ ] 4.1 Scheduler-Job für `pending_game_meeting_push` (`internal/scheduler/game_meeting_push.go`, im minütlichen Lauf neben `sendEventNoteReminders` aufrufen): Netto-Vergleich gegen `prev_*`, Text aus aktuellem Stand, `notify.Send(…, "games", …)` an `notify.TeamAudience`, Spieltag-Prüfung gegen `timez.Berlin()`, Zeile immer löschen; verifizieren mit `TestMeetingPush_*` aus proposal.md (Datei-DB wegen Goroutinen, siehe 07-testing)
+- [x] 4.1 Scheduler-Job für `pending_game_meeting_push` (`internal/scheduler/game_meeting_push.go`, im minütlichen Lauf neben `sendEventNoteReminders` aufrufen): Netto-Vergleich gegen `prev_*`, Text aus aktuellem Stand, `notify.Send(…, "games", …)` an `notify.TeamAudience`, Spieltag-Prüfung gegen `timez.Berlin()`, Zeile immer löschen; verifizieren mit `TestMeetingPush_*` aus proposal.md (Datei-DB wegen Goroutinen, siehe 07-testing)
 - [ ] 4.2 Spielerinnerung 24 h/3 h (`internal/scheduler/scheduler.go`) um „ · Treffen HH:MM Uhr[, Ort]" erweitern; verifizieren mit `TestGameReminder_NenntTreffzeit` und einem Test ohne Treffzeit (kein Treffzeit-Teil)
 
 ## 5. Frontend
