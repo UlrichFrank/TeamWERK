@@ -35,4 +35,4 @@
 ## 6. Dokumentation und Integration
 
 - [x] 6.1 Gotcha-Absatz „Spiel-Treffzeit" in `docs/agent/06-gotchas.md`: Speicherung als Abstand, `timez.MeetTime` als einzige Umrechnung, Netto-Vergleich der Debounce-Push; verifizieren durch Lesen im Diff
-- [ ] 6.2 Integration: `/verify-change` ausführen (Build, `go test ./...`, golangci-lint, `pnpm -C web build/test/lint`, `openspec validate spiel-treffpunkt --strict`) und manuell im laufenden System prüfen: Treffzeit setzen, Anwurf im `GameEditModal` verlegen, Treffzeit in Liste/Detail/Modal/Dashboard verschoben, iCal-Feed zeigt den Absatz
+- [x] 6.2 Integration: `/verify-change` ausführen (Build, `go test ./...`, golangci-lint, `pnpm -C web build/test/lint`, `openspec validate spiel-treffpunkt --strict`) und manuell im laufenden System prüfen: Treffzeit setzen, Anwurf im `GameEditModal` verlegen, Treffzeit in Liste/Detail/Modal/Dashboard verschoben, iCal-Feed zeigt den Absatz
