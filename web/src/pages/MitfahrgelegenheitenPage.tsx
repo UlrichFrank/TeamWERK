@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { Trash2, Car, Users, X, Check, UserPlus, Home, Plane, Calendar, UserCheck } from 'lucide-react'
@@ -826,16 +826,26 @@ export default function MitfahrgelegenheitenPage() {
     return game?.game.id ?? null
   }, [focus, response.games])
 
+  // Der Fokus ist ein Sprungziel, kein Dauerzustand: gescrollt wird genau einmal
+  // je Ziel (wie DutyPage/TerminePage). focusGameId wechselt bei stillen
+  // Reloads, sobald der Eintrag in eine andere Begegnung rutscht oder kurz
+  // fehlt — ohne Sperre risse das die Ansicht zurück zum Fokus.
+  const scrolledFocusRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!focus || loading) return
-    const target = document.getElementById(`${focus.kind}-${focus.id}`)
+    if (!focus) { scrolledFocusRef.current = null; return }
+    if (loading) return
+    const key = `${focus.kind}-${focus.id}`
+    if (scrolledFocusRef.current === key) return
+    const target = document.getElementById(key)
     if (!target) return
+    scrolledFocusRef.current = key
     target.scrollIntoView({ behavior: 'smooth', block: 'center' })
     target.classList.add('ring-2', 'ring-brand-yellow', 'rounded-md')
-    const timer = setTimeout(() => {
+    // Ohne clearTimeout im Cleanup: ein erneuter Effekt-Lauf kehrt dank Sperre
+    // sofort zurück und bräche den Timer sonst ab — der Ring bliebe stehen.
+    setTimeout(() => {
       target.classList.remove('ring-2', 'ring-brand-yellow', 'rounded-md')
     }, 2200)
-    return () => clearTimeout(timer)
   }, [focus, loading, focusGameId])
 
   const TYPE_PILLS: EventTypeFilterEntry[] = [
