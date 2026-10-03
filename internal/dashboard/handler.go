@@ -13,6 +13,7 @@ import (
 	appdb "github.com/teamstuttgart/teamwerk/internal/db"
 	"github.com/teamstuttgart/teamwerk/internal/dutyfairness"
 	"github.com/teamstuttgart/teamwerk/internal/eventlog"
+	"github.com/teamstuttgart/teamwerk/internal/timez"
 )
 
 type Handler struct{ db *sql.DB }
@@ -36,6 +37,10 @@ type NextEvent struct {
 	IsHome     *bool  `json:"isHome"` // nil for training, true/false for games
 	IsExtended bool   `json:"isExtended"`
 	Note       string `json:"note"`
+	// MeetTime/MeetDate: Treffzeit eines Spiels (spiel-treffpunkt), abgeleitet
+	// aus Anwurf minus gespeichertem Abstand; nil ohne Treffzeit und bei Trainings.
+	MeetTime *string `json:"meetTime"`
+	MeetDate *string `json:"meetDate"`
 }
 
 type DiensteSlot struct {
@@ -302,7 +307,8 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			       '/termine/training/' || ts.id AS detail_url,
 			       NULL AS is_home,
 			       CASE WHEN ts.team_id IN (SELECT team_id FROM extended_teams) THEN 1 ELSE 0 END AS is_extended,
-			       ts.note AS note
+			       ts.note AS note,
+			       NULL AS meet_offset
 			FROM training_sessions ts
 			JOIN teams t ON t.id = ts.team_id
 			WHERE ts.team_id IN (%s)
@@ -330,7 +336,8 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			           WHERE gt3.game_id = g.id
 			             AND gt3.team_id IN (SELECT team_id FROM primary_teams)
 			       ) THEN 1 ELSE 0 END,
-			       g.note
+			       g.note,
+			       g.meet_offset_minutes
 			FROM games g
 			JOIN game_teams gt ON g.id = gt.game_id
 			JOIN teams t ON t.id = gt.team_id
@@ -340,7 +347,7 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 			GROUP BY g.id
 		),
 		min_date AS (SELECT MIN(date) AS d FROM upcoming)
-		SELECT event_id, event_type, date, time, title, team_name, detail_url, is_home, is_extended, note
+		SELECT event_id, event_type, date, time, title, team_name, detail_url, is_home, is_extended, note, meet_offset
 		FROM upcoming
 		WHERE date = (SELECT d FROM min_date)
 		ORDER BY time ASC`, teamSubquery, teamSubquery),
@@ -356,7 +363,11 @@ func (h *Handler) queryNextEvents(r *http.Request, userID int, seasonID int) []N
 		var e NextEvent
 		var isHome sql.NullInt64
 		var isExtended int
-		rows.Scan(&e.ID, &e.EventType, &e.Date, &e.Time, &e.Title, &e.TeamName, &e.DetailURL, &isHome, &isExtended, &e.Note)
+		var meetOffset sql.NullInt64
+		rows.Scan(&e.ID, &e.EventType, &e.Date, &e.Time, &e.Title, &e.TeamName, &e.DetailURL, &isHome, &isExtended, &e.Note, &meetOffset)
+		if d, hm, ok := timez.MeetTime(e.Date, e.Time, meetOffset); ok {
+			e.MeetTime, e.MeetDate = &hm, &d
+		}
 		if isHome.Valid {
 			v := isHome.Int64 == 1
 			e.IsHome = &v

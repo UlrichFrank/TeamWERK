@@ -896,3 +896,49 @@ func TestDashboard_DutyAccount_SpielerSelbst_GesamtsummeNullSollNull(t *testing.
 		t.Errorf("dutyAccount = %+v, want eine eigene Position mit soll 0", entries)
 	}
 }
+
+// TestDashboard_MeineTermine_Treffzeit: ein Spiel mit Treffzeit trägt meetTime
+// (Anwurf 18:00 minus 90 min), ein Training am selben Tag meetTime=null
+// (spiel-treffpunkt).
+func TestDashboard_MeineTermine_Treffzeit(t *testing.T) {
+	db := testutil.NewDB(t)
+	seasonID := testutil.CreateSeason(t, db, "2025/26")
+	db.Exec(`UPDATE seasons SET is_active=1 WHERE id=?`, seasonID)
+	teamID := testutil.CreateTeam(t, db, "Herren 1")
+	kaderID := testutil.CreateKader(t, db, teamID, seasonID)
+	userID := testutil.CreateUser(t, db, "standard")
+	memberID := testutil.CreateMember(t, db, userID)
+	db.Exec(`INSERT INTO kader_members (kader_id, member_id) VALUES (?, ?)`, kaderID, memberID)
+
+	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
+	gameID := testutil.CreateGame(t, db, seasonID, teamID, tomorrow)
+	db.Exec(`UPDATE games SET meet_offset_minutes=90 WHERE id=?`, gameID)
+	testutil.CreateTrainingSession(t, db, teamID, seasonID, tomorrow)
+
+	srv := testServer(t, dashboard.NewHandler(db))
+	res := testutil.Get(t, srv, "/api/dashboard", testutil.Token(t, userID, "standard", nil))
+	var body map[string]json.RawMessage
+	json.NewDecoder(res.Body).Decode(&body)
+	res.Body.Close()
+	var events []map[string]any
+	json.Unmarshal(body["meineTermine"], &events)
+
+	var sawGame, sawTraining bool
+	for _, e := range events {
+		switch e["eventType"] {
+		case "spiel":
+			sawGame = true
+			if e["meetTime"] != "16:30" || e["meetDate"] != tomorrow {
+				t.Errorf("spiel: meetTime=%v meetDate=%v, want 16:30 / %s", e["meetTime"], e["meetDate"], tomorrow)
+			}
+		case "training":
+			sawTraining = true
+			if e["meetTime"] != nil {
+				t.Errorf("training: meetTime=%v, want null", e["meetTime"])
+			}
+		}
+	}
+	if !sawGame || !sawTraining {
+		t.Fatalf("expected game and training, got %v", events)
+	}
+}
