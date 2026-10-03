@@ -564,6 +564,7 @@ func objectFixtures() map[string]objFixture {
 	add("DELETE /api/games/{id}/attendance-excluded", objFixture{who: personaT, params: gameFixture, noOwnerProbe: true})
 	add("PUT /api/games/{id}", objFixture{who: personaT, params: gameFixture, noOwnerProbe: true})
 	add("PUT /api/games/{id}/note", objFixture{who: personaT, params: gameFixture, body: map[string]any{"note": "x"}, noOwnerProbe: true})
+	add("PUT /api/games/{id}/meeting", objFixture{who: personaT, params: gameFixture, body: map[string]any{"meet_time": "10:00"}, noOwnerProbe: true})
 	add("DELETE /api/games/{id}", objFixture{who: personaT, params: gameFixture, noOwnerProbe: true})
 	add("POST /api/games/{id}/regenerate", objFixture{who: personaT, params: gameFixture, noOwnerProbe: true})
 
