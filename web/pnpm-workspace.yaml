@@ -24,16 +24,17 @@ packages:
 # um keinen ungeprüften Major-Bump transitiver Pakete einzuschleusen.
 overrides:
   browserslist: '>=4.28.7'          # Dependabot high: browserslist
-  fast-uri: '>=3.1.6 <4'            # Dependabot high: fast-uri
+  fast-uri: '>=3.1.8 <4'            # Dependabot high: fast-uri; pnpm audit GHSA Host-Normalisierung (3.1.8)
   undici: '>=7.29.0 <8'             # Dependabot high: undici
   baseline-browser-mapping: '>=2.11.0' # Dependabot medium: baseline-browser-mapping
   postcss-selector-parser: '>=6.1.3 <7' # Dependabot low: postcss-selector-parser
-  # `pnpm audit`: brace-expansion DoS (GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895).
+  # `pnpm audit`: brace-expansion DoS (GHSA-mh99-v99m-4gvg, GHSA-rgw5-rvv9-x895, dazu
+  # die Rekursions- und Quadratic-Time-Advisories aus 10/2026: 2.1.7 bzw. 5.0.12).
   # Zwei koexistierende Major-Linien im Baum (minimatch@5 -> brace-expansion@2.x
   # via vite-plugin-pwa/workbox-build, minimatch@10 -> brace-expansion@5.x via
   # eslint/glob) — je Elternversion gescopet, damit kein globaler Major-Bump
   # eine der beiden Linien in die falsche Richtung zieht.
-  minimatch@5>brace-expansion: '>=2.1.4 <3'
-  minimatch@10>brace-expansion: '>=5.0.9'
+  minimatch@5>brace-expansion: '>=2.1.7 <3'
+  minimatch@10>brace-expansion: '>=5.0.12'
   # `pnpm audit`: nanoid custom-generator infinite loop bei size=0 (GHSA-2v37-7h3g-55p8).
   nanoid: '>=3.3.18 <4'
