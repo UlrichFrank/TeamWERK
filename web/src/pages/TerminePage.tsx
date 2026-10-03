@@ -482,14 +482,24 @@ export default function TerminePage() {
     updateFilter({ past: !showPast })
   }
 
+  // Der Fokus ist ein Sprungziel, kein Dauerzustand: gescrollt wird genau einmal
+  // je Ziel. Ohne diese Sperre löste jeder Reload nach einer Zu-/Absage oder
+  // einem Live-Update (loading/Terminzahl ändern sich) den Sprung erneut aus.
+  const scrolledFocusRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!focus || loading) return
+    if (!focus) { scrolledFocusRef.current = null; return }
+    if (loading) return
+    const key = `${focus.kind}-${focus.id}`
+    if (scrolledFocusRef.current === key) return
     const el = document.getElementById(`termin-${focus.kind}-${focus.id}`)
     if (!el) return
+    scrolledFocusRef.current = key
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     el.classList.add('ring-2', 'ring-brand-yellow', 'transition-all')
-    const t = setTimeout(() => el.classList.remove('ring-2', 'ring-brand-yellow'), 2000)
-    return () => clearTimeout(t)
+    // Bewusst ohne clearTimeout im Cleanup: der Effekt läuft beim nächsten Reload
+    // erneut (und kehrt dank Sperre sofort zurück) — ein Cleanup bräche den Timer
+    // dann ab und der Ring bliebe stehen. Ein Entfernen am abgehängten Element ist harmlos.
+    setTimeout(() => el.classList.remove('ring-2', 'ring-brand-yellow'), 2000)
     // focus über kind/id abgedeckt; nicht das ganze focus-Objekt als Dep, soll nur bei dessen Identität scrollen
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.kind, focus?.id, loading, visibleTermine.length])

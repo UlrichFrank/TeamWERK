@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Home, Plane, Calendar, UserCheck, History } from 'lucide-react'
 import { api } from '../lib/api'
@@ -253,15 +253,26 @@ export default function DutyPage() {
   // einfacher Hinweis genügt dafür.
   const focusNotFound = !loading && focus !== null && !groups.some(groupMatchesFocus)
 
+  // Der Fokus ist ein Sprungziel, kein Dauerzustand: gescrollt wird genau einmal
+  // je Ziel. Ohne diese Sperre löste jeder Reload nach einer Zusage oder einem
+  // Live-Update (loading/Slot-Zahl ändern sich) den Sprung erneut aus und riss
+  // die Ansicht von der Stelle weg, an der der Nutzer gerade arbeitet.
+  const scrolledFocusRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!focus || loading) return
+    if (!focus) { scrolledFocusRef.current = null; return }
+    if (loading) return
+    const key = `${focus.kind}-${focus.id}`
+    if (scrolledFocusRef.current === key) return
     const elId = focus.kind === 'slot' ? `duty-slot-${focus.id}` : `duty-game-${focus.id}`
     const el = document.getElementById(elId)
     if (!el) return
+    scrolledFocusRef.current = key
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     el.classList.add('ring-2', 'ring-brand-yellow', 'transition-all')
-    const t = setTimeout(() => el.classList.remove('ring-2', 'ring-brand-yellow'), 2000)
-    return () => clearTimeout(t)
+    // Bewusst ohne clearTimeout im Cleanup: der Effekt läuft beim nächsten Reload
+    // erneut (und kehrt dank Sperre sofort zurück) — ein Cleanup bräche den Timer
+    // dann ab und der Ring bliebe stehen. Ein Entfernen am abgehängten Element ist harmlos.
+    setTimeout(() => el.classList.remove('ring-2', 'ring-brand-yellow'), 2000)
     // focus.kind/id als Primitives sind die minimale Dependency (focus selbst ist
     // ein bei jedem Render neu erzeugtes Objekt); die Slot-Gesamtzahl steht
     // stellvertretend dafür, dass neue Zeilen ins DOM kamen (z. B. nach dem
