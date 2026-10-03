@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"strings"
 	"testing"
+	"time"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 	"github.com/teamstuttgart/teamwerk/internal/notify"
@@ -148,5 +149,44 @@ func TestMeetingPhrase(t *testing.T) {
 		if got := meetingPhrase(c.date, c.start, c.off, c.place); got != c.want {
 			t.Errorf("meetingPhrase(%s %s) = %q, want %q", c.date, c.start, got, c.want)
 		}
+	}
+}
+
+// Die Spielerinnerung nennt eine gesetzte Treffzeit samt Ort; ausgelöst wird
+// weiterhin über den Anwurf (spiel-treffpunkt / push-reminders).
+func TestGameReminder_NenntTreffzeit(t *testing.T) {
+	sent := captureSend(t)
+	db := testutil.NewDB(t)
+	teamID, _ := setupTeamPlayer(t, db)
+	gameID := createGameAt(t, db, teamID, 20*time.Hour)
+	db.Exec(`UPDATE games SET meet_offset_minutes=90, meet_place='Parkplatz Vereinsheim' WHERE id=?`, gameID)
+	var date, start string
+	db.QueryRow(`SELECT date, time FROM games WHERE id=?`, gameID).Scan(&date, &start)
+	want := meetingPhrase(date, start, sql.NullInt64{Int64: 90, Valid: true}, "Parkplatz Vereinsheim")
+
+	New(db, testutil.TestConfig(), nil).sendGameReminders()
+
+	if len(*sent) != 1 {
+		t.Fatalf("expected 1 reminder, got %d", len(*sent))
+	}
+	body := (*sent)[0].body
+	if !strings.Contains(body, start+" Uhr · "+want) {
+		t.Errorf("body = %q, want it to contain %q", body, start+" Uhr · "+want)
+	}
+}
+
+func TestGameReminder_OhneTreffzeitKeinTreffzeitTeil(t *testing.T) {
+	sent := captureSend(t)
+	db := testutil.NewDB(t)
+	teamID, _ := setupTeamPlayer(t, db)
+	createGameAt(t, db, teamID, 20*time.Hour)
+
+	New(db, testutil.TestConfig(), nil).sendGameReminders()
+
+	if len(*sent) != 1 {
+		t.Fatalf("expected 1 reminder, got %d", len(*sent))
+	}
+	if strings.Contains((*sent)[0].body, "Treffen") {
+		t.Errorf("body = %q, must not mention Treffen", (*sent)[0].body)
 	}
 }

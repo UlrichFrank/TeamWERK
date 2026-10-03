@@ -758,7 +758,8 @@ func (s *Scheduler) sendGameReminders() {
 	to := now.Add(25 * time.Hour).Format("2006-01-02")
 
 	rows, err := s.db.Query(`
-		SELECT g.id, g.opponent, g.date, g.time, gt.team_id, `+appdb.TeamLongName("t")+`, g.event_type
+		SELECT g.id, g.opponent, g.date, g.time, gt.team_id, `+appdb.TeamLongName("t")+`, g.event_type,
+		       g.meet_offset_minutes, g.meet_place
 		FROM games g
 		JOIN game_teams gt ON gt.game_id = g.id
 		JOIN teams t ON t.id = gt.team_id
@@ -778,11 +779,13 @@ func (s *Scheduler) sendGameReminders() {
 		teamID    int
 		teamName  string
 		eventType string
+		meetOff   sql.NullInt64
+		meetPlace string
 	}
 	var games []gameRow
 	for rows.Next() {
 		var g gameRow
-		rows.Scan(&g.id, &g.opponent, &g.date, &g.time, &g.teamID, &g.teamName, &g.eventType)
+		rows.Scan(&g.id, &g.opponent, &g.date, &g.time, &g.teamID, &g.teamName, &g.eventType, &g.meetOff, &g.meetPlace)
 		games = append(games, g)
 	}
 
@@ -799,17 +802,22 @@ func (s *Scheduler) sendGameReminders() {
 		}
 		recipients := notify.TeamAudience(s.db, g.teamID)
 		url := fmt.Sprintf("/termine?focus=game-%d", g.id)
+		// Treffzeit (spiel-treffpunkt) zum Sendezeitpunkt; der Auslöser bleibt der Anwurf.
+		meet := ""
+		if p := meetingPhrase(g.date, g.time, g.meetOff, g.meetPlace); p != "" {
+			meet = " · " + p
+		}
 
 		if until <= 24*time.Hour {
 			if uids := s.claimUnsent(recipients, "game_reminder_24h", g.id); len(uids) > 0 {
-				body := g.teamName + ": " + g.opponent + " — morgen um " + g.time + " Uhr"
+				body := g.teamName + ": " + g.opponent + " — morgen um " + g.time + " Uhr" + meet
 				notify.Send(s.db, s.cfg, uids, "games", title, body, url)
 				sent += len(uids)
 			}
 		}
 		if until <= 3*time.Hour {
 			if uids := s.claimUnsent(recipients, "game_reminder_3h", g.id); len(uids) > 0 {
-				body := g.teamName + ": " + g.opponent + " — heute um " + g.time + " Uhr"
+				body := g.teamName + ": " + g.opponent + " — heute um " + g.time + " Uhr" + meet
 				notify.Send(s.db, s.cfg, uids, "games", title, body, url)
 				sent += len(uids)
 			}
