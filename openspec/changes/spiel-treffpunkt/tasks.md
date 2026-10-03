@@ -2,7 +2,7 @@
 
 ## 1. Datenmodell und Umrechnung
 
-- [ ] 1.1 Migration `073_game_meeting_point.up.sql`/`.down.sql` anlegen: `games.meet_offset_minutes INTEGER NULL CHECK (0..720)`, `games.meet_place TEXT NOT NULL DEFAULT '' CHECK (length<=100)`, Tabelle `pending_game_meeting_push` (design.md Entscheidung 5); verifizieren mit `go test ./internal/db/...` (Migration up/down läuft auf frischer DB)
+- [x] 1.1 Migration `073_game_meeting_point.up.sql`/`.down.sql` anlegen: `games.meet_offset_minutes INTEGER NULL CHECK (0..720)`, `games.meet_place TEXT NOT NULL DEFAULT '' CHECK (length<=100)`, Tabelle `pending_game_meeting_push` (design.md Entscheidung 5); verifizieren mit `go test ./internal/db/...` (Migration up/down läuft auf frischer DB)
 - [ ] 1.2 `timez.MeetTime(date, startHHMM, offset)` in `internal/timez` implementieren (schneidet `date[:10]`, liefert Vortag korrekt) mit Tests `TestMeetTime_GleicherTag`, `TestMeetTime_Vortag`, `TestMeetTime_KeinAbstand`; verifizieren mit `go test ./internal/timez/...`
 
 ## 2. Schreibroute
