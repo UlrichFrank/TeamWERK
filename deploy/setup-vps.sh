@@ -99,7 +99,7 @@ fi
 # SKIP_NGINX=1 überspringt diesen Block (z. B. weil der Aufrufer — etwa
 # bootstrap-new-server.sh — die vhost-Config selbst mit passender Domain +
 # Cert-Pfaden setzt). nginx-teamwerk.conf ist auf `teamwerk.team-stuttgart.org`
-# (plus Übergangs-Alias `internal.team-stuttgart.org`) und einen
+# und einen
 # Let's-Encrypt-Cert hardgekodiert, was auf einem frischen VPS nicht funktioniert.
 if [ "${SKIP_NGINX:-0}" != "1" ]; then
     cp nginx-teamwerk.conf /etc/nginx/sites-available/teamwerk.team-stuttgart.org

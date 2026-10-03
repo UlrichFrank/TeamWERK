@@ -2,8 +2,9 @@
 
 TeamWERK — interne Verwaltungsplattform für Team Stuttgart (Handball), läuft unter
 `https://teamwerk.team-stuttgart.org` auf einem VPS (Linux XS, 1 GB RAM).
-`internal.team-stuttgart.org` bleibt als Übergangs-Alias erreichbar; ein späterer
-Flip auf 301 ist möglich, aber nicht datiert.
+Der frühere Übergangs-Alias `internal.team-stuttgart.org` ist abgeschaltet (kein
+DNS-Eintrag, nicht mehr im Zertifikat) — ein SAN ohne DNS lässt die
+Let's-Encrypt-Verlängerung scheitern (Ausfall 03.10.2026).
 
 **Stack:** Go 1.26 + Chi v5 · SQLite (WAL, `modernc.org/sqlite`, kein CGo) · React 19 + Tailwind v4 · Vite · JWT-Auth.
 
