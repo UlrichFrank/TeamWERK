@@ -14,6 +14,7 @@ import { useChatEvents } from '../hooks/useChatEvents'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 import AushilfeBadge from '../components/AushilfeBadge'
 import { relativeTime } from '../lib/relativeTime'
+import { meetingIsPreviousDay } from '../lib/meeting'
 import { BTN_PRIMARY } from '../lib/buttonStyles'
 import { PAGE_TITLE } from '../lib/typography'
 
@@ -32,6 +33,9 @@ interface NextEvent {
   isHome: boolean | null
   isExtended: boolean
   note: string
+  /** Treffzeit eines Spiels (spiel-treffpunkt); null ohne Treffzeit und bei Trainings. */
+  meetTime?: string | null
+  meetDate?: string | null
 }
 
 interface DiensteSlot {
@@ -292,7 +296,7 @@ function MeineTermineSection({ events }: { events: NextEvent[] }) {
                 ? <Dumbbell className="w-4 h-4" />
                 : e.isHome ? <Home className="w-4 h-4" /> : <Plane className="w-4 h-4" />}
               title={e.title}
-              subtitle={`${e.teamName} · ${e.time}`}
+              subtitle={`${e.teamName} · ${e.time}${e.meetTime ? ` (Treffen ${e.meetTime}${meetingIsPreviousDay(e.date, e.meetDate) ? ', Vortag' : ''})` : ''}`}
               badge={(e.note.trim() || e.isExtended) ? (
                 <span className="flex items-center gap-1">
                   <EventNoteIndicator variant="icon" note={e.note} />

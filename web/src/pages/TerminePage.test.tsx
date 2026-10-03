@@ -545,3 +545,25 @@ describe('TerminePage — Zusagen zurücknehmen bei Begründungspflicht', () => 
     expect(screen.queryByPlaceholderText('Begründung…')).toBeNull()
   })
 })
+
+// spiel-treffpunkt: die Spielkarte nennt eine gesetzte Treffzeit samt Ort in
+// einer eigenen Zeile; ohne Treffzeit erscheint nichts.
+describe('TerminePage — Treffzeit auf Spielkarten', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    authState.is_parent = false
+  })
+
+  test('zeigt Treffzeit und Ort', async () => {
+    seedRoutes([], [game({ meet_time: '12:30', meet_date: '2026-05-02', meet_place: 'Parkplatz Vereinsheim' })])
+    renderPage()
+    await waitFor(() => expect(screen.getByText('Treffen 12:30 · Parkplatz Vereinsheim')).toBeTruthy())
+  })
+
+  test('ohne Treffzeit keine Zeile', async () => {
+    seedRoutes([], [game({ meet_time: null, meet_date: null, meet_place: '' })])
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/SG Weinstadt/)).toBeTruthy())
+    expect(screen.queryByText(/^Treffen /)).toBeNull()
+  })
+})
