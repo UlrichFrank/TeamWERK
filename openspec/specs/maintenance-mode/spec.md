@@ -104,7 +104,7 @@ Das System SHALL das Umschalten des Wartungsmodus über einen CLI-Subcommand `te
 
 ### Requirement: Frontend-Banner bei aktivem Modus
 
-Das Frontend SHALL bei aktivem Wartungsmodus einen persistenten, nicht-schließbaren Banner am oberen Rand der Anwendungs-Shell (oberhalb des `TransitionalHostnameBanner`) anzeigen. Der Banner-Zustand wird über einen initialen Aufruf von `GET /api/maintenance-status` beim App-Start sowie über SSE-Events `settings-changed` (via `useLiveUpdates`) synchronisiert. Bei inaktivem Modus SHALL kein Banner sichtbar sein.
+Das Frontend SHALL bei aktivem Wartungsmodus einen persistenten, nicht-schließbaren Banner am oberen Rand der Anwendungs-Shell anzeigen. Der Banner-Zustand wird über einen initialen Aufruf von `GET /api/maintenance-status` beim App-Start sowie über SSE-Events `settings-changed` (via `useLiveUpdates`) synchronisiert. Bei inaktivem Modus SHALL kein Banner sichtbar sein.
 
 #### Scenario: Banner wird gerendert, wenn Modus aktiv ist
 

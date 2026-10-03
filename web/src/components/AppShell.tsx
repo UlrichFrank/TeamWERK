@@ -3,7 +3,6 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { Menu, X, Eye, RefreshCw, ChevronDown, ChevronRight, ChevronLeft, AlertTriangle } from 'lucide-react'
 import ChangelogModal from './ChangelogModal'
-import TransitionalHostnameBanner from './TransitionalHostnameBanner'
 import MaintenanceBanner from './MaintenanceBanner'
 import { useAuth } from '../contexts/AuthContext'
 import { useMediaQuery } from '../lib/useMediaQuery'
@@ -434,7 +433,6 @@ export default function AppShell() {
   return (
     <div className="h-screen overflow-hidden flex flex-col">
       <MaintenanceBanner />
-      <TransitionalHostnameBanner />
       <div className="flex-1 min-h-0 overflow-hidden flex bg-brand-gray">
       {/* Desktop sidebar */}
       <div className="hidden sm:flex">

@@ -5,9 +5,8 @@ import { useMaintenanceStatus } from '../hooks/useMaintenanceStatus'
  * Persistenter, nicht schließbarer Wartungsmodus-Hinweis. Sichtbar, sobald der
  * Server im Wartungsmodus ist (`GET /api/maintenance-status` liefert
  * `{enabled: true}` oder SSE-Event `settings-changed` triggert einen Reload).
- * Der Banner wird oberhalb des `TransitionalHostnameBanner` gemountet, damit
- * er auf jedem Host (Primär- wie Alias-URL) und auf der Login-Seite sichtbar
- * ist.
+ * Der Banner wird ganz oben in der App-Shell gemountet und ist auch auf der
+ * Login-Seite sichtbar.
  */
 export default function MaintenanceBanner() {
   const { enabled } = useMaintenanceStatus()
