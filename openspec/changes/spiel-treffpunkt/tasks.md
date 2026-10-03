@@ -29,7 +29,7 @@
 - [x] 5.2 Anzeige-Komponente `MeetingPointLine` (lucide `Flag`, brand-Tokens, Vortag-Hinweis) mit Vitest-Test (mit/ohne Ort, Vortag, ohne Treffzeit rendert nichts); verifizieren mit `pnpm -C web test MeetingPointLine`
 - [x] 5.3 `MeetingPointEditor` (Uhrzeitfeld, Ort `maxLength=100`, Speichern, Entfernen, Hinweis „verschiebt sich mit dem Anwurf", Klassen aus `buttonStyles.ts`) mit Vitest-Test (sendet korrekten Body, zeigt übersetzten Fehler, Entfernen sendet leere Werte); verifizieren mit `pnpm -C web test MeetingPointEditor`
 - [x] 5.4 Anzeige und Editor in `EventInfoModal` (neben `EventNoteEditor`, nur bei `can_edit`) und `TermineDetailPage` (unter dem Anwurf) einbauen; Anzeige in `TerminePage`-Spielkarte und `DashboardPage`-Untertitel („(Treffen HH:MM)"); verifizieren mit je einem Vitest-Test für Detailseite (Editor nur für Berechtigte) und Terminliste (Zeile erscheint/fehlt)
-- [ ] 5.5 `MitfahrgelegenheitenPage`: `FormModal` befüllt `treffpunkt` bei neuem Eintrag mit `meet_place` vor, bestehende Einträge unverändert; verifizieren mit Vitest-Test für beide Fälle
+- [x] 5.5 `MitfahrgelegenheitenPage`: `FormModal` befüllt `treffpunkt` bei neuem Eintrag mit `meet_place` vor, bestehende Einträge unverändert; verifizieren mit Vitest-Test für beide Fälle
 - [ ] 5.6 Gates prüfen: `pnpm -C web lint` und `pnpm -C web test` (Design-Token-, Typografie-, Button-Gate grün)
 
 ## 6. Dokumentation und Integration

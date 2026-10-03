@@ -52,6 +52,8 @@ interface GameCarpoolData {
     team: string
     teamIds: number[]
     eventType: string
+    /** Treffpunkt-Ort des Spiels (spiel-treffpunkt); leer ohne Treffzeit. */
+    meetPlace?: string
   }
   biete: CarpoolEntry[]
   suche: CarpoolEntry[]
@@ -245,22 +247,26 @@ interface FormModalProps {
   initialSuche?: CarpoolEntry | null
   vehicleSeats?: number | null
   children?: ChildUser[]
+  /** Treffpunkt des Spiels; befüllt nur NEUE Einträge vor (spiel-treffpunkt). */
+  defaultTreffpunkt?: string
   onClose: () => void
   onSaved: () => void
 }
 
-function fieldsFromEntry(entry: CarpoolEntry | null | undefined, fallbackPlaetze: string) {
+// Ein bestehender Eintrag behält seinen eigenen Treffpunkt — auch einen leeren
+// oder vom Spiel abweichenden. Nur ohne Eintrag greift der Spiel-Treffpunkt.
+function fieldsFromEntry(entry: CarpoolEntry | null | undefined, fallbackPlaetze: string, defaultTreffpunkt = '') {
   return {
     plaetze: entry?.plaetze != null ? String(entry.plaetze) : fallbackPlaetze,
-    treffpunkt: entry?.treffpunkt ?? '',
+    treffpunkt: entry ? (entry.treffpunkt ?? '') : defaultTreffpunkt,
     notiz: entry?.notiz ?? '',
   }
 }
 
-function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeats, children, onClose, onSaved }: FormModalProps) {
+function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeats, children, defaultTreffpunkt, onClose, onSaved }: FormModalProps) {
   const startTyp = initialTyp ?? 'biete'
   const startEntry = startTyp === 'biete' ? initialBiete : initialSuche
-  const startFields = fieldsFromEntry(startEntry, startTyp === 'biete' ? String(vehicleSeats ?? 1) : '1')
+  const startFields = fieldsFromEntry(startEntry, startTyp === 'biete' ? String(vehicleSeats ?? 1) : '1', defaultTreffpunkt)
 
   const [typ, setTyp] = useState<'biete' | 'suche'>(startTyp)
   const [forUserId, setForUserId] = useState<number | null>(null)
@@ -273,7 +279,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
   const switchTyp = (next: 'biete' | 'suche') => {
     const entry = next === 'biete' ? initialBiete : initialSuche
     const fallback = next === 'biete' ? String(vehicleSeats ?? 1) : '1'
-    const fields = fieldsFromEntry(entry, fallback)
+    const fields = fieldsFromEntry(entry, fallback, defaultTreffpunkt)
     setTyp(next)
     setPlaetze(fields.plaetze)
     setTreffpunkt(fields.treffpunkt)
@@ -939,6 +945,7 @@ export default function MitfahrgelegenheitenPage() {
             initialSuche={ownSuche}
             vehicleSeats={response.vehicleSeats}
             children={response.children}
+            defaultTreffpunkt={gameData?.game.meetPlace ?? ''}
             onClose={() => setModal(null)}
             onSaved={load}
           />
