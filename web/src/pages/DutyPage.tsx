@@ -253,6 +253,35 @@ export default function DutyPage() {
   // einfacher Hinweis genügt dafür.
   const focusNotFound = !loading && focus !== null && !groups.some(groupMatchesFocus)
 
+  // Index der ersten nicht-vergangenen Gruppe. Die „heute"-Trennlinie steht nur
+  // davor, wenn mind. eine vergangene Gruppe darüber liegt — sonst erschiene sie
+  // redundant ganz oben (identisch zu TerminePage.tsx).
+  const todayIdx = visibleGroups.findIndex(g => !g.past)
+  const showTodayDivider = todayIdx > 0
+
+  // Nach dem Toggle „Vergangene" rücken die vergangenen Gruppen über die
+  // bisherige Liste; ohne Zutun stünde man danach mitten in der Historie bzw.
+  // ganz oben. Wie in TerminePage.tsx springen wir nach dem Reload zur
+  // „heute"-Trennlinie, ohne Trennlinie an den Listenanfang. Focus-Scroll hat
+  // Vorrang. Scrollcontainer ist das <main> in AppShell, nicht das window.
+  const scrollToTodayRef = useRef(false)
+  useEffect(() => {
+    if (loading || focus) return
+    if (!scrollToTodayRef.current) return
+    scrollToTodayRef.current = false
+    const divider = document.getElementById('today-divider')
+    if (divider) {
+      divider.scrollIntoView({ behavior: 'auto', block: 'center' })
+      return
+    }
+    document.querySelector('main')?.scrollTo({ top: 0, behavior: 'auto' })
+  }, [loading, focus])
+
+  const togglePast = () => {
+    scrollToTodayRef.current = true
+    updateFilter({ past: !showPast })
+  }
+
   // Der Fokus ist ein Sprungziel, kein Dauerzustand: gescrollt wird genau einmal
   // je Ziel. Ohne diese Sperre löste jeder Reload nach einer Zusage oder einem
   // Live-Update (loading/Slot-Zahl ändern sich) den Sprung erneut aus und riss
@@ -322,7 +351,7 @@ export default function DutyPage() {
             {!compact && <span>Meine</span>}
           </button>
           <button
-            onClick={() => updateFilter({ past: !showPast })}
+            onClick={togglePast}
             aria-label="Vergangene anzeigen"
             className={`${compact ? HEADER_CTRL_ICON : HEADER_CTRL} ${
               showPast ? HEADER_PRIMARY : HEADER_NEUTRAL
@@ -359,7 +388,8 @@ export default function DutyPage() {
       )}
 
       <div className="space-y-4">
-        {visibleGroups.map((g, i) => {
+        {(() => {
+        const cards = visibleGroups.map((g, i) => {
           const colors = getEventColors(g.event_type ?? 'generisch')
           const cardClass = g.past
             ? 'bg-brand-surface-card border-brand-border opacity-60'
@@ -406,7 +436,17 @@ export default function DutyPage() {
               />
             </div>
           )
-        })}
+        })
+        if (!showTodayDivider) return cards
+        const todayDivider = (
+          <div key="today-divider" id="today-divider" className="flex items-center gap-3 py-1" aria-hidden="true">
+            <span className="flex-1 border-t border-brand-border-subtle" />
+            <span className="text-brand-text-muted text-xs uppercase tracking-wide">heute</span>
+            <span className="flex-1 border-t border-brand-border-subtle" />
+          </div>
+        )
+        return [...cards.slice(0, todayIdx), todayDivider, ...cards.slice(todayIdx)]
+        })()}
       </div>
     </div>
   )
