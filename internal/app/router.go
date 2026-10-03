@@ -527,6 +527,7 @@ func BuildRouter(h *Handlers, spaFS fs.FS) http.Handler {
 			r.Post("/api/games", h.Games.CreateGame)
 			r.Put("/api/games/{id}", h.Games.UpdateGame)
 			r.Put("/api/games/{id}/note", h.Games.UpdateGameNote)
+			r.Put("/api/games/{id}/meeting", h.Games.UpdateGameMeeting)
 			r.Delete("/api/games/{id}", h.Games.DeleteGame)
 			r.Put("/api/trainings/{id}/note", h.Training.UpdateTrainingNote)
 			r.Post("/api/duty-slots", h.Duties.CreateSlot)

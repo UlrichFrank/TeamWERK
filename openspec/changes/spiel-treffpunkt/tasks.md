@@ -8,7 +8,7 @@
 ## 2. Schreibroute
 
 - [x] 2.1 `canEditGameNote` in `canEditGameInfo` umbenennen und in `UpdateGameNote` weiterverwenden; verifizieren mit grünen bestehenden `event-notes`-Tests in `internal/games`
-- [ ] 2.2 Handler `UpdateGameMeeting` (`PUT /api/games/{id}/meeting`) in `internal/games` implementieren: Reihenfolge ID → Body → 404 → 403 → Validierung, Umrechnung gegen den gespeicherten Anwurf, `UPDATE games` und Upsert in `pending_game_meeting_push` (alte Werte nur beim Insert) in einer Transaktion, `broadcastGame(…, "games")`, Antwort mit `meet_time`/`meet_date`/`meet_place`; Route in `internal/app/router.go` neben `/note` eintragen. Verifizieren mit den Tests aus proposal.md Test-Anforderungen (`TestUpdateGameMeeting_*`, inkl. Prüfung „Spalten unverändert" bei 400/403)
+- [x] 2.2 Handler `UpdateGameMeeting` (`PUT /api/games/{id}/meeting`) in `internal/games` implementieren: Reihenfolge ID → Body → 404 → 403 → Validierung, Umrechnung gegen den gespeicherten Anwurf, `UPDATE games` und Upsert in `pending_game_meeting_push` (alte Werte nur beim Insert) in einer Transaktion, `broadcastGame(…, "games")`, Antwort mit `meet_time`/`meet_date`/`meet_place`; Route in `internal/app/router.go` neben `/note` eintragen. Verifizieren mit den Tests aus proposal.md Test-Anforderungen (`TestUpdateGameMeeting_*`, inkl. Prüfung „Spalten unverändert" bei 400/403)
 - [ ] 2.3 Fixture für `PUT /api/games/{id}/meeting` in der Objektrechte-Matrix (`internal/permissions/object_matrix_test.go` / `object_fixtures_test.go`) ergänzen; verifizieren mit `go test ./internal/permissions/... ./internal/arch/...` (Tier-Matrix, Objektrechte, Broadcast-Gate grün)
 
 ## 3. Lesepfade Backend
