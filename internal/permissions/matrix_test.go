@@ -623,6 +623,7 @@ var matrix = []endpointCase{
 	{method: "POST", path: "/api/games", expected: exVorstandTrainer},
 	{method: "PUT", path: "/api/games/{id}", expected: exVorstandTrainer},
 	{method: "PUT", path: "/api/games/{id}/note", expected: exVorstandTrainer},
+	{method: "PUT", path: "/api/games/{id}/meeting", expected: exVorstandTrainer},
 	{method: "DELETE", path: "/api/games/{id}", expected: exVorstandTrainer},
 	{method: "PUT", path: "/api/trainings/{id}/note", expected: exVorstandTrainer},
 	{method: "POST", path: "/api/duty-slots", expected: exVorstandTrainer},

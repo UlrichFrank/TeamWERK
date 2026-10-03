@@ -411,6 +411,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		SELECT DISTINCT
 		    g.id, g.date, g.time, g.end_time, g.end_date,
 		    g.opponent, g.event_type, g.is_home, g.note,
+		    g.meet_offset_minutes, g.meet_place,
 		    COALESCE(v.name,''), COALESCE(v.street,''), COALESCE(v.postal_code,''), COALESCE(v.city,''),
 		    `+appdb.TeamLongName("t")+`, mem.is_extended, g.created_at, mem.kind,
 		    `+appdb.LineupStateSQL("g.event_type", "g.id", "mem.member_id")+` AS lineup
@@ -441,12 +442,15 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 		var endTime, endDate sql.NullString
 		var isHome, isExtended bool
 		var note string
+		var meetOffset sql.NullInt64
+		var meetPlace string
 		var vName, vStreet, vPostal, vCity, teamName string
 		var kind string
 		var lineup sql.NullString
 		var createdAt string
 		if err := rows.Scan(&id, &date, &startTime, &endTime, &endDate,
 			&opponent, &eventType, &isHome, &note,
+			&meetOffset, &meetPlace,
 			&vName, &vStreet, &vPostal, &vCity, &teamName, &isExtended, &createdAt,
 			&kind, &lineup); err != nil {
 			continue
@@ -480,7 +484,7 @@ func (h *Handler) fetchGames(r *http.Request, userID int, eventTypes []string) (
 			UID:         fmt.Sprintf("game-%d@teamwerk", id),
 			Summary:     summary,
 			Location:    venueLocation(vName, vStreet, vPostal, vCity),
-			Description: joinDescription(note, state.sentence()),
+			Description: joinDescription(meetingSentence(date, startTime, meetOffset, meetPlace), note, state.sentence()),
 			Start:       startDT,
 			End:         endDT,
 			HasEnd:      hasEnd,
@@ -770,6 +774,26 @@ func buildGameTypeFilter(s tokenSettings) []string {
 // Teile entfallen. Die Notiz steht vorn: sie ist die Aussage des Trainers zum
 // Termin, der Satz nur eine Ergänzung — umgekehrt schöbe sich generierter Text
 // vor den redaktionellen.
+// meetingSentence ist der erste DESCRIPTION-Absatz eines Spiels mit Treffzeit
+// (spiel-treffpunkt): „Treffen: 13:30 Uhr, Parkplatz". DTSTART bleibt der
+// Anwurf — wer nur zuschaut, kommt zum Spiel, nicht zum Treffen. Liegt das
+// Treffen vor dem Spieltag (nach einer Verlegung des Anwurfs), steht „(Vortag)"
+// dabei. Leer ohne Treffzeit.
+func meetingSentence(date, startTime string, offset sql.NullInt64, place string) string {
+	meetDate, meetTime, ok := timez.MeetTime(date, startTime, offset)
+	if !ok {
+		return ""
+	}
+	out := "Treffen: " + meetTime + " Uhr"
+	if len(date) >= 10 && meetDate != date[:10] {
+		out += " (Vortag)"
+	}
+	if place != "" {
+		out += ", " + place
+	}
+	return out
+}
+
 func joinDescription(parts ...string) string {
 	var kept []string
 	for _, p := range parts {

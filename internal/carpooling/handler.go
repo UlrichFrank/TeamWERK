@@ -37,6 +37,9 @@ type GameEntry struct {
 	Team      string `json:"team"`
 	TeamIDs   []int  `json:"teamIds"`
 	EventType string `json:"eventType"`
+	// MeetPlace: Treffpunkt-Ort des Spiels (spiel-treffpunkt), leer ohne
+	// Treffzeit. Befüllt im Frontend nur das Treffpunkt-Feld NEUER Einträge vor.
+	MeetPlace string `json:"meetPlace"`
 }
 
 type CarpoolEntry struct {
@@ -118,7 +121,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	selectCols := `SELECT g.id, g.date, COALESCE(g.time, '') AS time, g.opponent,
 				       GROUP_CONCAT(` + appdb.TeamLongName("t") + `, ', ') AS team_names,
 				       GROUP_CONCAT(t.id) AS team_ids,
-				       g.event_type`
+				       g.event_type, g.meet_place`
 	if restricted {
 		if teamFilter > 0 {
 			query = selectCols + `
@@ -181,7 +184,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var g GameEntry
 		var teamIDsCSV sql.NullString
-		rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.Team, &teamIDsCSV, &g.EventType)
+		rows.Scan(&g.ID, &g.Date, &g.Time, &g.Opponent, &g.Team, &teamIDsCSV, &g.EventType, &g.MeetPlace)
 		g.TeamIDs = parseTeamIDs(teamIDsCSV)
 		games = append(games, g)
 	}

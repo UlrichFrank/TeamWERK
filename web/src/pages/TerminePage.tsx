@@ -8,6 +8,7 @@ import { cutoffLocked as isCutoffLocked, formatColumnDate, matrixLoadWindow, nex
 import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
+import MeetingPointLine from '../components/MeetingPointLine'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId, trainingFilterId } from '../lib/teamFilter'
@@ -110,6 +111,9 @@ interface Game {
   rsvp_locks_at?: string
   venue?: VenueRef | null
   note?: string
+  meet_time?: string | null
+  meet_date?: string | null
+  meet_place?: string
 }
 
 interface Team {
@@ -866,6 +870,13 @@ export default function TerminePage() {
                       <span onClick={e => e.stopPropagation()}>
                         <MapsLink venue={g.venue} className="mt-0.5" />
                       </span>
+                      <MeetingPointLine
+                        gameDate={g.date}
+                        meetTime={g.meet_time}
+                        meetDate={g.meet_date}
+                        meetPlace={g.meet_place}
+                        className="mt-0.5"
+                      />
                       <EventNoteIndicator variant="inline" note={g.note ?? ''} className="mt-0.5" />
                     </div>
                   </div>
