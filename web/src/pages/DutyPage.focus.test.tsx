@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeAll, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import DutyPage from './DutyPage'
 
@@ -43,7 +43,10 @@ function boardGroup(overrides: Record<string, unknown> = {}) {
 
 const mockGet = vi.fn()
 vi.mock('../lib/api', () => ({ api: { get: (...args: unknown[]) => mockGet(...args), post: vi.fn(), delete: vi.fn() } }))
-vi.mock('../hooks/useLiveUpdates', () => ({ useLiveUpdates: vi.fn() }))
+let liveUpdate: ((event: string) => void) | null = null
+vi.mock('../hooks/useLiveUpdates', () => ({
+  useLiveUpdates: (cb: (event: string) => void) => { liveUpdate = cb },
+}))
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 1, email: 'test@example.com', role: 'standard', clubFunctions: [] },
@@ -143,5 +146,26 @@ describe('DutyPage — Fokus-Scroll (?focus=slot-<id>)', () => {
 
     await waitFor(() => expect(screen.getByText('Kasse')).toBeTruthy())
     await waitFor(() => expect(screen.getByText('Dieser Dienst ist nicht verfügbar.')).toBeTruthy())
+  })
+
+  // Regression: nach einer Zusage lädt die Börse neu (loading kippt, Slot-Zahl
+  // ändert sich) — das darf nicht erneut zum Fokus springen.
+  test('scrollt nach einem Reload nicht erneut zum Fokus', async () => {
+    seedRoutes([boardGroup()])
+    renderPage('/dienste?focus=slot-555')
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled())
+    const scroll = Element.prototype.scrollIntoView as unknown as ReturnType<typeof vi.fn>
+    scroll.mockClear()
+
+    // Antwort zurückhalten, damit `loading` sichtbar kippt — sonst bündelt act
+    // true→false zu keinem Wechsel und der Test bewiese nichts.
+    let resolveBoard: ((v: unknown) => void) | null = null
+    mockGet.mockImplementationOnce(() => new Promise((r) => { resolveBoard = r }))
+    act(() => { liveUpdate?.('duties') })
+    expect(resolveBoard).not.toBeNull()
+    await act(async () => { resolveBoard!({ data: [boardGroup()] }) })
+    await waitFor(() => expect(document.getElementById('duty-slot-555')).not.toBeNull())
+
+    expect(scroll).not.toHaveBeenCalled()
   })
 })
