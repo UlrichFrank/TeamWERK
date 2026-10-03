@@ -30,9 +30,9 @@
 - [x] 5.3 `MeetingPointEditor` (Uhrzeitfeld, Ort `maxLength=100`, Speichern, Entfernen, Hinweis „verschiebt sich mit dem Anwurf", Klassen aus `buttonStyles.ts`) mit Vitest-Test (sendet korrekten Body, zeigt übersetzten Fehler, Entfernen sendet leere Werte); verifizieren mit `pnpm -C web test MeetingPointEditor`
 - [x] 5.4 Anzeige und Editor in `EventInfoModal` (neben `EventNoteEditor`, nur bei `can_edit`) und `TermineDetailPage` (unter dem Anwurf) einbauen; Anzeige in `TerminePage`-Spielkarte und `DashboardPage`-Untertitel („(Treffen HH:MM)"); verifizieren mit je einem Vitest-Test für Detailseite (Editor nur für Berechtigte) und Terminliste (Zeile erscheint/fehlt)
 - [x] 5.5 `MitfahrgelegenheitenPage`: `FormModal` befüllt `treffpunkt` bei neuem Eintrag mit `meet_place` vor, bestehende Einträge unverändert; verifizieren mit Vitest-Test für beide Fälle
-- [ ] 5.6 Gates prüfen: `pnpm -C web lint` und `pnpm -C web test` (Design-Token-, Typografie-, Button-Gate grün)
+- [x] 5.6 Gates prüfen: `pnpm -C web lint` und `pnpm -C web test` (Design-Token-, Typografie-, Button-Gate grün)
 
 ## 6. Dokumentation und Integration
 
-- [ ] 6.1 Gotcha-Absatz „Spiel-Treffzeit" in `docs/agent/06-gotchas.md`: Speicherung als Abstand, `timez.MeetTime` als einzige Umrechnung, Netto-Vergleich der Debounce-Push; verifizieren durch Lesen im Diff
+- [x] 6.1 Gotcha-Absatz „Spiel-Treffzeit" in `docs/agent/06-gotchas.md`: Speicherung als Abstand, `timez.MeetTime` als einzige Umrechnung, Netto-Vergleich der Debounce-Push; verifizieren durch Lesen im Diff
 - [ ] 6.2 Integration: `/verify-change` ausführen (Build, `go test ./...`, golangci-lint, `pnpm -C web build/test/lint`, `openspec validate spiel-treffpunkt --strict`) und manuell im laufenden System prüfen: Treffzeit setzen, Anwurf im `GameEditModal` verlegen, Treffzeit in Liste/Detail/Modal/Dashboard verschoben, iCal-Feed zeigt den Absatz
