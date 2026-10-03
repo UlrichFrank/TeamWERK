@@ -53,7 +53,7 @@ export interface GameDayHost {
   applied?: boolean
 }
 
-const SELECT = 'w-full border border-brand-border rounded-md px-3 py-2.5 sm:py-2 text-sm text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow disabled:opacity-40'
+const SELECT = 'w-full border border-brand-border rounded-md px-3 py-2.5 sm:py-2 text-sm text-brand-text bg-white focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow disabled:opacity-40'
 
 /** "2026-09-14" → "14.09." — die Kurzform für die tagesbezogene Beschriftung. */
 export function formatDayShort(date: string): string {
@@ -161,7 +161,7 @@ export function GameDayHostPreviewDialog({ preview, targetName, busy, error, onC
   const b = preview.balance
   const destructive = (b?.assignments_lost ?? 0) > 0
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-brand-black/40" onClick={busy ? undefined : onCancel} />
       <div
         ref={dialogRef}

@@ -92,7 +92,7 @@ const typeBadge: Record<string, string> = {
   'auswärts': 'bg-brand-warning-light text-brand-text',
   generisch: 'bg-brand-border-subtle text-brand-text-muted',
 }
-const INPUT_SM = 'w-full border border-brand-border rounded px-2 py-1 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow'
+const INPUT_SM = 'w-full border border-brand-border rounded-sm px-2 py-1 text-sm text-brand-text focus:outline-hidden focus:ring-1 focus:ring-brand-yellow'
 
 function newTemplate(): TemplateFormState {
   return {
@@ -232,7 +232,7 @@ function TemplateForm({ template, onChange, dutyTypes, teams, ausrichter }: {
                   type="button"
                   role="menuitem"
                   onClick={refreshFromDutyTypes}
-                  className={`${MENU_ITEM} !items-start`}
+                  className={`${MENU_ITEM} items-start!`}
                 >
                   <RefreshCw className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
@@ -640,7 +640,7 @@ export default function AdminDutyTemplatesPage() {
         </div>
       </div>
 
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-6">
         {templates.length === 0 ? (
           <p className="text-sm text-brand-text-subtle text-center py-10 italic">
             Keine Vorlagen vorhanden — lege eine neue an.
@@ -670,7 +670,7 @@ export default function AdminDutyTemplatesPage() {
                       </button>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${typeBadge[t.template_type] ?? ''}`}>
+                      <span className={`inline-flex px-2 py-0.5 rounded-sm text-xs font-medium ${typeBadge[t.template_type] ?? ''}`}>
                         {typeLabel[t.template_type] ?? t.template_type}
                       </span>
                     </td>

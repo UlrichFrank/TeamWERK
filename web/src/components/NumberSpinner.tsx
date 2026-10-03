@@ -13,7 +13,7 @@ export default function NumberSpinner({ value, min, max, step = 1, onChange, cla
   const atMin = min !== undefined && value <= min
   const atMax = max !== undefined && value >= max
 
-  const btnBase = 'flex items-center justify-center w-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none'
+  const btnBase = 'flex items-center justify-center w-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus:outline-hidden'
   const btnColor = 'bg-brand-yellow text-brand-black hover:bg-brand-black hover:text-brand-yellow'
 
   return (
@@ -25,9 +25,9 @@ export default function NumberSpinner({ value, min, max, step = 1, onChange, cla
         max={max}
         onChange={e => onChange(parseInt(e.target.value) || 0)}
         style={{ MozAppearance: 'textfield', WebkitAppearance: 'none' } as React.CSSProperties}
-        className="w-20 border-0 pl-3 pr-9 py-2 text-sm text-brand-text bg-transparent focus:outline-none [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
+        className="w-20 border-0 pl-3 pr-9 py-2 text-sm text-brand-text bg-transparent focus:outline-hidden [&::-webkit-inner-spin-button]:hidden [&::-webkit-outer-spin-button]:hidden"
       />
-      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col w-6 rounded overflow-hidden">
+      <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex flex-col w-6 rounded-sm overflow-hidden">
         <button
           type="button"
           disabled={atMax}

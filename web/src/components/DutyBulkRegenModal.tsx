@@ -82,8 +82,8 @@ interface Props {
   onApplied: (result: BulkRegenResult) => void
 }
 
-const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
-const SELECT_SM = 'border border-brand-border rounded-md px-2 py-1 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+const INPUT = 'w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+const SELECT_SM = 'border border-brand-border rounded-md px-2 py-1 text-xs text-brand-text bg-white focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 const EVENT_TYPES: { key: EventType; label: string }[] = [
   { key: 'heim', label: 'Heimspiele' },

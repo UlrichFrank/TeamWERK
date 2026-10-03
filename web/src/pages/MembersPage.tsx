@@ -432,7 +432,7 @@ export default function MembersPage() {
                     type="checkbox"
                     checked={unlinkedUserFilter}
                     onChange={e => setUnlinkedUserFilter(e.target.checked)}
-                    className="rounded border-brand-border accent-brand-yellow"
+                    className="rounded-sm border-brand-border accent-brand-yellow"
                   />
                   Ohne App-Account
                 </label>
@@ -441,7 +441,7 @@ export default function MembersPage() {
                     type="checkbox"
                     checked={hasDraftFilter}
                     onChange={e => setHasDraftFilter(e.target.checked)}
-                    className="rounded border-brand-border accent-brand-yellow"
+                    className="rounded-sm border-brand-border accent-brand-yellow"
                   />
                   Mit Änderungsantrag
                 </label>
@@ -509,7 +509,7 @@ export default function MembersPage() {
 
       {/* Table — always visible, columns drop off as screen shrinks.
           Windowing (memberWindow) rendert nur sichtbare Zeilen; Scroll-Quelle ist die Seite. */}
-      <div ref={memberContainerRef} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div ref={memberContainerRef} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr>
@@ -771,7 +771,7 @@ export default function MembersPage() {
                     const hasOw = rowHasOverwrites(row)
                     const selectable = row.status === 'updated'
                     return (
-                      <div key={i} className={hasOw ? 'bg-brand-warning-light -mx-2 px-2 rounded' : ''}>
+                      <div key={i} className={hasOw ? 'bg-brand-warning-light -mx-2 px-2 rounded-sm' : ''}>
                         <div className="flex items-center gap-1">
                           {selectable ? (
                             <input
@@ -875,7 +875,7 @@ export default function MembersPage() {
                     const expanded = expandedRows.has(row.line)
                     const hasOw = rowHasOverwrites(row)
                     return (
-                      <div key={i} className={hasOw ? 'bg-brand-warning-light -mx-2 px-2 rounded' : ''}>
+                      <div key={i} className={hasOw ? 'bg-brand-warning-light -mx-2 px-2 rounded-sm' : ''}>
                         <button
                           onClick={() => hasDetails && toggleRow(row.line)}
                           className={`flex items-center gap-1 w-full text-left ${rowStatusColor(row.status)} ${hasDetails ? 'cursor-pointer hover:underline' : 'cursor-default'}`}
@@ -976,7 +976,7 @@ export default function MembersPage() {
 
                 {sepaError && (
                   <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />{sepaError}
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />{sepaError}
                   </div>
                 )}
               </div>
@@ -1025,9 +1025,9 @@ function SepaBulkSection({ title, tone, entries, emptyText, showReason }: {
   // Zustandsfarbe über der Rollenfarbe von OVERLINE (gedämpft): ohne `!`
   // entschiede die CSS-Reihenfolge, welche der beiden Textfarben gewinnt.
   const headerClass = tone === 'ok'
-    ? '!text-brand-green'
+    ? 'text-brand-green!'
     : tone === 'warn'
-      ? '!text-brand-danger'
+      ? 'text-brand-danger!'
       : ''
   return (
     <section>
@@ -1054,7 +1054,7 @@ function SepaBulkSection({ title, tone, entries, emptyText, showReason }: {
 function SepaBulkAmbiguousSection({ entries }: { entries: SepaBulkAmbiguous[] }) {
   return (
     <section>
-      <h3 className={`${OVERLINE} !text-brand-warning`}>
+      <h3 className={`${OVERLINE} text-brand-warning!`}>
         Mehrdeutig ({entries.length})
       </h3>
       {entries.length === 0 ? (

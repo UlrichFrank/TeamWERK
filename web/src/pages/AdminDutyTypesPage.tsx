@@ -107,7 +107,7 @@ function editStateSpanImpossible(state: EditState): boolean {
     state.end_anchor, parseOffset(state.end_offset),
   )
 }
-const INPUT_SM = 'w-full border border-brand-border rounded px-2 py-1.5 text-sm text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow'
+const INPUT_SM = 'w-full border border-brand-border rounded-sm px-2 py-1.5 text-sm text-brand-text focus:outline-hidden focus:ring-1 focus:ring-brand-yellow'
 
 function DutyTypeForm({ state, onChange, types, excludeId }: {
   state: EditState
@@ -463,7 +463,7 @@ export default function AdminDutyTypesPage() {
       )}
 
       {/* Table — responsive column hiding */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden mt-4">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden mt-4">
         {types.length === 0 ? (
           <p className="text-sm text-brand-text-muted italic px-4 py-6 text-center">Keine Diensttypen vorhanden.</p>
         ) : (
@@ -495,12 +495,12 @@ export default function AdminDutyTypesPage() {
                     ) : (
                       <>
                         {t.same_day_behavior && t.same_day_behavior !== 'normal' && (
-                          <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded">
+                          <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded-sm">
                             {t.same_day_behavior === 'skip' ? 'Über.' : 'Red.'} (Tag)
                           </span>
                         )}
                         {t.adjacent_day_behavior && t.adjacent_day_behavior !== 'normal' && (
-                          <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded">
+                          <span className="text-xs bg-brand-info/10 text-brand-text px-2 py-1 rounded-sm">
                             {t.adjacent_day_behavior === 'skip' ? 'Über.' : 'Red.'} (Adj.)
                           </span>
                         )}

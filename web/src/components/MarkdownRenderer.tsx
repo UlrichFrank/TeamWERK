@@ -25,12 +25,12 @@ const components: Components = {
   strong: ({ children }) => <strong className="font-semibold text-brand-text">{children}</strong>,
   em: ({ children }) => <em className="italic">{children}</em>,
   code: ({ children }) => (
-    <code className="font-mono text-xs bg-brand-border-subtle text-brand-text px-1 py-0.5 rounded">
+    <code className="font-mono text-xs bg-brand-border-subtle text-brand-text px-1 py-0.5 rounded-sm">
       {children}
     </code>
   ),
   pre: ({ children }) => (
-    <pre className="font-mono text-xs bg-brand-border-subtle text-brand-text p-3 rounded overflow-x-auto my-2">
+    <pre className="font-mono text-xs bg-brand-border-subtle text-brand-text p-3 rounded-sm overflow-x-auto my-2">
       {children}
     </pre>
   ),
@@ -41,7 +41,7 @@ const components: Components = {
   ),
   hr: () => <hr className="my-4 border-brand-border-subtle" />,
   img: ({ src, alt }) => (
-    <img src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} className="max-w-full h-auto rounded my-2" />
+    <img src={typeof src === 'string' ? src : undefined} alt={alt ?? ''} className="max-w-full h-auto rounded-sm my-2" />
   ),
 }
 

@@ -503,7 +503,7 @@ export default function AppShell() {
               </button>
               <button
                 onClick={reloadWithSwActivation}
-                className="bg-brand-black text-brand-yellow rounded px-2 py-0.5 text-xs font-semibold hover:bg-brand-black/80 transition-colors"
+                className="bg-brand-black text-brand-yellow rounded-sm px-2 py-0.5 text-xs font-semibold hover:bg-brand-black/80 transition-colors"
               >
                 Jetzt laden
               </button>
@@ -518,7 +518,7 @@ export default function AppShell() {
             <span className="flex-1">Admin-Vorschau: <strong>{impersonating.name}</strong></span>
             <button
               onClick={stopImpersonation}
-              className="flex items-center gap-1 bg-brand-black text-brand-yellow rounded px-2 py-0.5 text-xs font-semibold hover:bg-brand-black/80 transition-colors"
+              className="flex items-center gap-1 bg-brand-black text-brand-yellow rounded-sm px-2 py-0.5 text-xs font-semibold hover:bg-brand-black/80 transition-colors"
             >
               <X className="w-3 h-3" />
               Beenden

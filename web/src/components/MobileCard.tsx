@@ -25,15 +25,15 @@ export default function MobileCard({ title, subtitle, badge, actions, onClick, c
   }
 
   return (
-    <div className={`bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 mb-3${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
+    <div className={`bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4 mb-3${onClick ? ' cursor-pointer' : ''}`} onClick={onClick}>
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="flex-1 min-w-0">
           <div className="font-medium text-brand-text">{title}</div>
           {subtitle && <div className="text-sm text-brand-text-muted">{subtitle}</div>}
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {badge && (
-            <span className={`px-2 py-1 text-xs font-medium rounded whitespace-nowrap ${badgeStyles[badge.variant || 'yellow']}`}>
+            <span className={`px-2 py-1 text-xs font-medium rounded-sm whitespace-nowrap ${badgeStyles[badge.variant || 'yellow']}`}>
               {badge.label}
             </span>
           )}

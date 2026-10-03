@@ -9,7 +9,7 @@ export default function Toggle({ enabled, onToggle, label }: ToggleProps) {
     <button
       onClick={onToggle}
       aria-label={label}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
         enabled ? 'bg-brand-yellow' : 'bg-brand-border'
       }`}
     >

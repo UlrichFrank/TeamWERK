@@ -68,7 +68,7 @@ export default function CreatorExitChoiceModal({ convId, ownerId, members, onClo
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id={titleId} className={MODAL_TITLE}>Gruppe verlassen</h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
+          <button onClick={onClose} className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>
         </div>
@@ -100,7 +100,7 @@ export default function CreatorExitChoiceModal({ convId, ownerId, members, onClo
                 <select
                   value={newOwnerId}
                   onChange={e => setNewOwnerId(Number(e.target.value))}
-                  className="mt-2 w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className="mt-2 w-full border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 >
                   {candidates.map(m => (
                     <option key={m.id} value={m.id}>{m.name}</option>

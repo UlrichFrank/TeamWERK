@@ -15,7 +15,7 @@ interface Props {
 }
 
 const INPUT_CLASS =
-  'w-full border border-brand-border rounded-md px-3 py-2 pr-10 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+  'w-full border border-brand-border rounded-md px-3 py-2 pr-10 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 const USER_ACTION_WINDOW_MS = 100
 

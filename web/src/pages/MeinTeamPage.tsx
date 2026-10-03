@@ -1019,7 +1019,7 @@ export default function MeinTeamPage() {
             const roster = rosters[team.id]
             const rosterError = rosterErrors[team.id]
             return (
-              <div key={team.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+              <div key={team.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
                 <button
                   onClick={() => toggleTeam(team.id)}
                   aria-expanded={isOpen}

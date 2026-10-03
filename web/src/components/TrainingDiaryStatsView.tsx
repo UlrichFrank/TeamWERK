@@ -36,7 +36,7 @@ function ProofCell({ entry }: { entry: DiaryEntry }) {
   return (
     <TrainingDiaryProofView
       entry={entry}
-      thumbClassName="max-h-24 rounded border border-brand-border-subtle"
+      thumbClassName="max-h-24 rounded-sm border border-brand-border-subtle"
       fileLabel="Datei"
     />
   )
@@ -144,7 +144,7 @@ export default function TrainingDiaryStatsView({ teamId }: { teamId: number }) {
       {stats.items.length === 0 ? (
         <p className="text-sm text-brand-text-muted">Keine Kadermitglieder in dieser Saison.</p>
       ) : (
-        <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
           {stats.items.map(item => {
             const open = expanded === item.member_id
             return (

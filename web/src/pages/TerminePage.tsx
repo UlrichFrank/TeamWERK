@@ -609,7 +609,7 @@ export default function TerminePage() {
               value={matrixTeamId ?? ''}
               onChange={e => updateFilter({ matrixTeam: parseInt(e.target.value) })}
               aria-label="Mannschaft"
-              className={`${HEADER_FIELD} pr-8 min-w-0 max-w-[12rem]`}
+              className={`${HEADER_FIELD} pr-8 min-w-0 max-w-48`}
             >
               {buildTeamOptions(teams).map(o => (
                 <option key={o.id} value={o.id}>{o.label}</option>
@@ -690,7 +690,7 @@ export default function TerminePage() {
         hiddenByOtherFilters > 0 ? (
           <FilterEmptyState hiddenByOtherFilters={hiddenByOtherFilters} onResetFilters={resetFilters} />
         ) : (
-          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+          <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8 text-center">
             <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
             <p className="text-brand-text-muted">
               {query !== '' ? 'Keine Termine passen zum Filter.' : 'Keine Termine vorhanden.'}
@@ -748,13 +748,13 @@ export default function TerminePage() {
 
                     {s.status === 'active' && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
+                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                           <Check className="w-3 h-3 text-brand-green" />{s.confirmed_count}
                         </span>
-                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
+                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                           <X className="w-3 h-3 text-brand-danger" />{s.declined_count}
                         </span>
-                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
+                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                           <HelpCircle className="w-3 h-3 text-brand-text-subtle" />{s.maybe_count}
                         </span>
                       </div>
@@ -847,7 +847,7 @@ export default function TerminePage() {
                   updateFilter({ focus: { kind: 'game', id: g.id } })
                   navigate(`/termine/${g.event_type === 'generisch' ? 'ereignis' : 'spiel'}/${g.id}`)
                 }}
-                className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
+                className={`rounded-xl shadow-sm border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
               >
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex items-start gap-3 min-w-0">
@@ -871,13 +871,13 @@ export default function TerminePage() {
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
+                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                       <Check className="w-3 h-3 text-brand-green" />{g.confirmed_count}
                     </span>
-                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
+                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                       <X className="w-3 h-3 text-brand-danger" />{g.declined_count}
                     </span>
-                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded px-2 py-1 flex items-center gap-1">
+                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                       <HelpCircle className="w-3 h-3 text-brand-text-subtle" />{g.maybe_count}
                     </span>
                   </div>

@@ -83,7 +83,7 @@ function LineupBox({ lineup, filled, children }: { lineup: LineupState | undefin
   return (
     <span
       data-lineup={lineup}
-      className={`relative w-full min-w-[2.75rem] h-8 flex items-center justify-center ${LINEUP_SHAPE} ${surface}`}
+      className={`relative w-full min-w-11 h-8 flex items-center justify-center ${LINEUP_SHAPE} ${surface}`}
     >
       {lineup === 'out' && <LineupDiagonal />}
       <span className="relative">{children}</span>
@@ -117,7 +117,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
 
   if (members.length === 0) {
     return (
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8 text-center">
         <p className="text-brand-text-muted">Für diese Mannschaft ist in der aktiven Saison kein Kader hinterlegt.</p>
       </div>
     )
@@ -131,7 +131,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
         {' | '}<span className="font-semibold text-brand-text">{counts.sonstige}</span> Sonstige
       </p>
 
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
         {/* Eigener Scrollbereich in beiden Achsen, höhenbegrenzt: nur so hat
             `sticky top-0` am Kopf einen Bezug. Mit overflow-x-auto allein wäre
             der Wrapper Scroll-Container ohne senkrechten Scroll (den macht <main>).
@@ -189,7 +189,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
                   <tr key={m.member_id} className="group">
                     <th
                       scope="row"
-                      className={`sticky left-0 z-10 bg-brand-surface-card group-hover:bg-brand-table-select px-4 py-2.5 text-left font-medium text-brand-text border-b border-r border-brand-border-subtle max-w-[9rem] sm:max-w-[14rem] truncate ${groupBorder}`}
+                      className={`sticky left-0 z-10 bg-brand-surface-card group-hover:bg-brand-table-select px-4 py-2.5 text-left font-medium text-brand-text border-b border-r border-brand-border-subtle max-w-36 sm:max-w-56 truncate ${groupBorder}`}
                       title={m.extended ? `${m.name} (erweiterter Kader)` : m.name}
                     >
                       {m.name}
@@ -220,7 +220,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
                               onClick={() => onCellClick(rowIdx, i)}
                               title={`${label} – ändern`}
                               aria-label={`${m.name}, ${formatColumnDate(ev.date)}: ${label} – ändern`}
-                              className="w-full flex items-center justify-center rounded-md hover:ring-2 hover:ring-brand-yellow focus:outline-none focus:ring-2 focus:ring-brand-yellow"
+                              className="w-full flex items-center justify-center rounded-md hover:ring-2 hover:ring-brand-yellow focus:outline-hidden focus:ring-2 focus:ring-brand-yellow"
                             >
                               {icon}
                             </button>
@@ -252,7 +252,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
         <li className="flex items-center gap-1"><ThumbsUp className="w-4 h-4 text-brand-green opacity-40" /> Voreinstellung</li>
         <li className="flex items-center gap-1"><Minus className="w-4 h-4 text-brand-text-subtle" /> für die Serie abgemeldet</li>
         {onCellClick && members.some(m => m.can_respond) && (
-          <li className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded bg-brand-yellow/30" /> antippen zum Zu-/Absagen</li>
+          <li className="flex items-center gap-1"><span className="inline-block w-4 h-4 rounded-sm bg-brand-yellow/30" /> antippen zum Zu-/Absagen</li>
         )}
         {(['in', 'out', 'open'] as const).map(state => (
           <li key={state} className="flex items-center gap-1">

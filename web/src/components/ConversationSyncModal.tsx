@@ -138,7 +138,7 @@ export default function ConversationSyncModal({ convId, onClose, onApplied }: Pr
   const nothingToDo = preview !== null && preview.add.length === 0 && preview.remove.length === 0
 
   return (
-    <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-[60] p-4">
+    <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-60 p-4">
       <div
         ref={dialogRef}
         role="dialog"
@@ -150,7 +150,7 @@ export default function ConversationSyncModal({ convId, onClose, onApplied }: Pr
           <h2 id={titleId} className={MODAL_TITLE}>Teilnehmer aktualisieren</h2>
           <button
             onClick={onClose}
-            className="p-1 rounded hover:bg-brand-border-subtle transition-colors"
+            className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors"
             aria-label="Schließen"
           >
             <X className="w-5 h-5 text-brand-text-muted" />

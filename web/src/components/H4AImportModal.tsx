@@ -66,7 +66,7 @@ interface Props {
   onClose: () => void
   onImported: (result: H4AApplyResult) => void
 }
-const SELECT_SM = 'border border-brand-border rounded-md px-2 py-1 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
+const SELECT_SM = 'border border-brand-border rounded-md px-2 py-1 text-xs text-brand-text bg-white focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow'
 
 const FIELD_LABELS: Record<string, string> = {
   date: 'Datum',

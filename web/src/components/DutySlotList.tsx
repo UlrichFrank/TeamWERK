@@ -189,12 +189,12 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
       <table className="w-full text-sm table-fixed">
         <colgroup>
           {/* Mobile enger (nur Uhrzeit-Ziffern), Desktop etwas großzügiger. */}
-          <col className="w-22 sm:w-[6rem]" />
+          <col className="w-22 sm:w-24" />
           <col />
           <col style={{ width: '35%' }} />
           {/* Mobile zeigt nur das Punkte-Menü (schmal) statt der Desktop-Buttons —
               schmalere Spalte hier zieht Spalte 3 (rechtsbündig) direkt ans Menü heran. */}
-          <col className="w-11 sm:w-[9.5rem]" />
+          <col className="w-11 sm:w-38" />
         </colgroup>
         <WindowedTableBody
           items={slots}
@@ -209,7 +209,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
                 <td className="pl-4 pr-1 sm:px-4 py-2.5 text-brand-text-muted whitespace-nowrap">{formatTimeSpan(s.event_time, s.hours_value)}</td>
                 <td className="pl-4 pr-4 sm:px-4 py-2.5 font-medium text-brand-text">
                   <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 max-w-full">
-                    <span className="min-w-0 break-words">{s.duty_type}</span>
+                    <span className="min-w-0 wrap-break-word">{s.duty_type}</span>
                     {s.has_instruction ? (
                       <Link
                         to={`/dienste/anleitung/${s.duty_type_id}`}
@@ -252,7 +252,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
                     {s.audiences && s.audiences.length > 0 && (
                       <div className="flex flex-wrap justify-end gap-1">
                         {s.audiences.map(a => (
-                          <span key={a} className="text-xs bg-brand-info/10 text-brand-text px-1.5 py-0.5 rounded">
+                          <span key={a} className="text-xs bg-brand-info/10 text-brand-text px-1.5 py-0.5 rounded-sm">
                             {AUDIENCE_LABELS[a] ?? a}
                           </span>
                         ))}

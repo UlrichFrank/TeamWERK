@@ -173,7 +173,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
   return (
     <div className="space-y-6">
       {/* Bankdaten */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-4`}>Bankdaten</h2>
 
         {bankdatenDraft && !privateKey && (
@@ -182,7 +182,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
               <p>Bankdaten-Antrag liegt vor — Tresor entsperren um einzusehen und anzunehmen (Menü „Tresor").</p>
               <button
                 onClick={() => onDraftReject(bankdatenDraft.id)}
-                className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-brand-danger/20 text-xs font-medium shrink-0"
+                className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded-sm hover:bg-brand-danger/20 text-xs font-medium shrink-0"
               >
                 Ablehnen
               </button>
@@ -216,13 +216,13 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
               <div className="flex gap-2 shrink-0">
                 <button
                   onClick={() => onDraftAccept(bankdatenDraft.id)}
-                  className="px-2 py-1 bg-brand-success-light text-brand-success rounded hover:bg-brand-success/20 text-xs font-medium"
+                  className="px-2 py-1 bg-brand-success-light text-brand-success rounded-sm hover:bg-brand-success/20 text-xs font-medium"
                 >
                   Annehmen
                 </button>
                 <button
                   onClick={() => onDraftReject(bankdatenDraft.id)}
-                  className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:bg-brand-danger/20 text-xs font-medium"
+                  className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded-sm hover:bg-brand-danger/20 text-xs font-medium"
                 >
                   Ablehnen
                 </button>
@@ -250,7 +250,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
               onBlur={handleIbanBlur}
               placeholder="DE89 3704 0044 0532 0130 00"
               maxLength={42}
-              className={`w-full border rounded-md px-3 py-2 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-brand-yellow ${
+              className={`w-full border rounded-md px-3 py-2 text-sm font-mono tracking-wider focus:outline-hidden focus:ring-2 focus:ring-brand-yellow ${
                 ibanError ? 'border-brand-danger bg-brand-danger-light' : 'border-brand-border'
               }`}
             />
@@ -288,7 +288,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
       </div>
 
       {/* SEPA-Mandat */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-4`}>SEPA-Mandat</h2>
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -309,7 +309,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
               type="date"
               value={form.sepa_mandat_date || ''}
               onChange={e => onFormChange({ sepa_mandat_date: e.target.value })}
-              className="w-full sm:w-auto border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+              className="w-full sm:w-auto border border-brand-border rounded-md px-3 py-2 text-sm text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
             />
             <p className="text-xs text-brand-text-subtle mt-1">
               Tag, an dem das Mitglied das SEPA-Mandat unterzeichnet hat (Pflichtfeld für die XML-Erzeugung im Beitragslauf).
@@ -354,12 +354,12 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
 
               {sepaUploadError && (
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />{sepaUploadError}
+                  <AlertTriangle className="w-4 h-4 shrink-0" />{sepaUploadError}
                 </div>
               )}
               {deleteError && (
                 <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />{deleteError}
+                  <AlertTriangle className="w-4 h-4 shrink-0" />{deleteError}
                 </div>
               )}
             </div>
@@ -375,13 +375,13 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
                 <div className="flex gap-2">
                   <button
                     onClick={() => onDraftAccept(sepaDraft.id)}
-                    className="px-2 py-1 bg-brand-success-light text-brand-success rounded hover:bg-brand-success/20 font-medium text-xs"
+                    className="px-2 py-1 bg-brand-success-light text-brand-success rounded-sm hover:bg-brand-success/20 font-medium text-xs"
                   >
                     Annehmen
                   </button>
                   <button
                     onClick={() => onDraftReject(sepaDraft.id)}
-                    className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded hover:opacity-80 font-medium text-xs"
+                    className="px-2 py-1 bg-brand-danger-light text-brand-danger rounded-sm hover:opacity-80 font-medium text-xs"
                   >
                     Ablehnen
                   </button>

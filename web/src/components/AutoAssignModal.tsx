@@ -103,7 +103,7 @@ export default function AutoAssignModal({ seasonId, onDone, onClose }: Props) {
               </p>
               <div className="space-y-2 mb-6">
                 {kader.map(k => (
-                  <label key={k.id} className="flex items-center gap-3 text-sm p-2 rounded hover:bg-brand-surface-card cursor-pointer">
+                  <label key={k.id} className="flex items-center gap-3 text-sm p-2 rounded-sm hover:bg-brand-surface-card cursor-pointer">
                     <input
                       type="checkbox"
                       checked={selectedIds.has(k.id)}

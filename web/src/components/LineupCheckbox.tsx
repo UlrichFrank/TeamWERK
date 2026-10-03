@@ -32,7 +32,7 @@ export default function LineupCheckbox({ state, memberName, onToggle }: {
       onClick={onToggle ? toggle : undefined}
       onKeyDown={onToggle ? onKeyDown : undefined}
       className={`inline-flex w-5 h-5 items-center justify-center align-middle ${LINEUP_SHAPE} ${LINEUP_SURFACE[state]} ${
-        onToggle ? 'cursor-pointer hover:ring-2 hover:ring-brand-yellow focus:outline-none focus:ring-2 focus:ring-brand-yellow' : ''
+        onToggle ? 'cursor-pointer hover:ring-2 hover:ring-brand-yellow focus:outline-hidden focus:ring-2 focus:ring-brand-yellow' : ''
       }`}
     >
       {checked && <Check className="w-3.5 h-3.5 text-white" aria-hidden="true" />}

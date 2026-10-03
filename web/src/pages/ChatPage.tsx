@@ -1707,7 +1707,7 @@ export default function ChatPage() {
       <div className="flex flex-1 min-h-0 gap-4">
         {/* Left panel: list */}
         <div
-          className={`${isMobile && mobileShowChat ? "hidden" : "flex"} flex-col w-full sm:w-72 bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden`}
+          className={`${isMobile && mobileShowChat ? "hidden" : "flex"} flex-col w-full sm:w-72 bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden`}
         >
           {/* Tabs */}
           <div className="flex border-b border-brand-border-subtle">
@@ -1853,7 +1853,7 @@ export default function ChatPage() {
 
         {/* Right panel: active chat or broadcast */}
         <div
-          className={`${isMobile && !mobileShowChat ? "hidden" : "flex"} flex-col flex-1 min-w-0 bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-hidden`}
+          className={`${isMobile && !mobileShowChat ? "hidden" : "flex"} flex-col flex-1 min-w-0 bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden`}
         >
           {activeConv && tab === "chats" && (
             <>
@@ -2246,7 +2246,7 @@ export default function ChatPage() {
                     </>
                   )}
               </p>
-              <p className="text-sm text-brand-text whitespace-pre-wrap break-words">
+              <p className="text-sm text-brand-text whitespace-pre-wrap wrap-break-word">
                 {renderWithLinks(activeBroadcast.body, false)}
               </p>
               <ChatImageGrid
@@ -2711,7 +2711,7 @@ function MessageBubble({
           ) : (
             <>
               {body && (
-                <span className="whitespace-pre-wrap break-words">
+                <span className="whitespace-pre-wrap wrap-break-word">
                   {renderWithLinks(body, isOwn)}
                 </span>
               )}
@@ -2752,7 +2752,7 @@ function MessageBubble({
                 <div
                   className={`pointer-events-none absolute bottom-full mb-1.5 hidden group-hover/reaction:block z-50 ${isOwn ? "right-0" : "left-0"}`}
                 >
-                  <div className="bg-brand-text text-white text-xs rounded px-2 py-1.5 text-left min-w-max max-w-[200px]">
+                  <div className="bg-brand-text text-white text-xs rounded-sm px-2 py-1.5 text-left min-w-max max-w-[200px]">
                     {r.userNames.map((name) => (
                       <div key={name}>{name}</div>
                     ))}
@@ -2865,7 +2865,7 @@ function MobileMessageActionOverlay({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6 bg-brand-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 p-6 bg-brand-black/40 backdrop-blur-xs"
       onTouchStart={onClose}
     >
       <div
@@ -2906,7 +2906,7 @@ function MobileMessageActionOverlay({
               <p className="truncate">{(msg.replyToBody ?? "").slice(0, 60)}</p>
             </div>
           )}
-          <span className="whitespace-pre-wrap break-words">
+          <span className="whitespace-pre-wrap wrap-break-word">
             {renderWithLinks(body, isOwn)}
           </span>
         </div>
@@ -3130,7 +3130,7 @@ function NewConversationModal({
             placeholder="Person suchen…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full border border-brand-border rounded-md pl-9 pr-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            className="w-full border border-brand-border rounded-md pl-9 pr-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
           />
         </div>
 

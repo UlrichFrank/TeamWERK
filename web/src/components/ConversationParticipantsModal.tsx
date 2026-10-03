@@ -124,7 +124,7 @@ export default function ConversationParticipantsModal({
             {isOwner && !editing && (
               <button
                 onClick={() => setSyncing(true)}
-                className="p-1 rounded hover:bg-brand-border-subtle transition-colors"
+                className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors"
                 aria-label="Aktualisieren"
                 title="Mit Standard-Gruppen abgleichen"
               >
@@ -134,7 +134,7 @@ export default function ConversationParticipantsModal({
             {isOwner && !editing && (
               <button
                 onClick={() => setEditing(true)}
-                className="p-1 rounded hover:bg-brand-border-subtle transition-colors"
+                className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors"
                 aria-label="Bearbeiten"
               >
                 <Pencil className="w-4 h-4 text-brand-text-muted" />
@@ -142,7 +142,7 @@ export default function ConversationParticipantsModal({
             )}
             <button
               onClick={onClose}
-              className="p-1 rounded hover:bg-brand-border-subtle transition-colors"
+              className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors"
               aria-label="Schließen"
             >
               <X className="w-5 h-5 text-brand-text-muted" />
@@ -204,7 +204,7 @@ export default function ConversationParticipantsModal({
                   placeholder="Person suchen…"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  className="w-full border border-brand-border rounded-md pl-9 pr-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                  className="w-full border border-brand-border rounded-md pl-9 pr-3 py-2 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                 />
               </div>
               <div className="max-h-40 overflow-y-auto border border-brand-border-subtle rounded-md">

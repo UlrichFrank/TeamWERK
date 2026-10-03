@@ -96,7 +96,7 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
             onChange={e => setQuery(e.target.value)}
             onFocus={() => fetchSuggestions(query, filterTrainer)}
             placeholder="Trainer suchen…"
-            className="w-full border border-brand-border rounded-md px-3 py-2 pr-9 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+            className="w-full border border-brand-border rounded-md px-3 py-2 pr-9 text-sm text-brand-text placeholder:text-brand-text-subtle focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
           />
           <div className="absolute right-2 top-1/2 -translate-y-1/2">
             <BrandCheckbox
@@ -140,7 +140,7 @@ export default function KaderTrainerSearch({ assignedTrainers, onAdd, onRemove }
                 onClick={() => handleRemove(t.id)}
                 disabled={busy[t.id]}
                 aria-label={`${t.name} entfernen`}
-                className="text-brand-text-subtle hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded"
+                className="text-brand-text-subtle hover:text-brand-danger transition-colors disabled:opacity-40 p-1 rounded-sm"
               >
                 <X className="w-4 h-4" />
               </button>

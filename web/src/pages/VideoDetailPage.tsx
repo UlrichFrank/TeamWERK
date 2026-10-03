@@ -388,7 +388,7 @@ export default function VideoDetailPage() {
     <div className="max-w-3xl">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
         <div className="min-w-0">
-          <h1 className={`${PAGE_TITLE} break-words`}>{video.title}</h1>
+          <h1 className={`${PAGE_TITLE} wrap-break-word`}>{video.title}</h1>
           <div className="mt-1 flex items-center gap-2 flex-wrap text-sm text-brand-text-muted">
             <VideoStatusPill status={video.status} />
             <span>{video.team_name}</span>
@@ -439,7 +439,7 @@ export default function VideoDetailPage() {
       </div>
 
       {/* Metadaten */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-6 space-y-3">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 space-y-3">
         <div>
           <div className="text-xs uppercase text-brand-text-muted mb-1">Beschreibung</div>
           <div className="text-sm text-brand-text whitespace-pre-wrap">

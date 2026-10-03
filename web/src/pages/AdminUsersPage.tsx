@@ -418,7 +418,7 @@ export default function AdminUsersPage() {
                 type="checkbox"
                 checked={unlinkedFilter}
                 onChange={e => setUnlinkedFilter(e.target.checked)}
-                className="rounded border-brand-border accent-brand-yellow"
+                className="rounded-sm border-brand-border accent-brand-yellow"
               />
               nicht verknüpft
             </label>
@@ -550,7 +550,7 @@ export default function AdminUsersPage() {
                     type="button"
                     onClick={handleCopyPassword}
                     aria-label="Passwort kopieren"
-                    className="flex-shrink-0 border border-brand-border rounded-md px-2.5 text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                    className="shrink-0 border border-brand-border rounded-md px-2.5 text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
                   >
                     {createCopied ? <Check className="w-4 h-4 text-brand-info" /> : <Copy className="w-4 h-4" />}
                   </button>
@@ -558,7 +558,7 @@ export default function AdminUsersPage() {
                     type="button"
                     onClick={() => setCreatePassword(generatePassword())}
                     aria-label="Neu generieren"
-                    className="flex-shrink-0 border border-brand-border rounded-md px-2.5 text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
+                    className="shrink-0 border border-brand-border rounded-md px-2.5 text-brand-text-muted hover:text-brand-text hover:border-brand-text-muted transition-colors"
                   >
                     <RefreshCw className="w-4 h-4" />
                   </button>
@@ -605,7 +605,7 @@ export default function AdminUsersPage() {
               ) : (
                 <div className="space-y-3">
                   <p className="text-sm text-brand-text-muted">
-                    Liest die Spalten <code className="bg-brand-surface-card px-1 rounded">Email</code> und <code className="bg-brand-surface-card px-1 rounded">Email 2</code> aus der CSV-Datei. Bereits vorhandene Adressen werden übersprungen.
+                    Liest die Spalten <code className="bg-brand-surface-card px-1 rounded-sm">Email</code> und <code className="bg-brand-surface-card px-1 rounded-sm">Email 2</code> aus der CSV-Datei. Bereits vorhandene Adressen werden übersprungen.
                   </p>
                   {csvError && (
                     <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{csvError}</p>
@@ -782,7 +782,7 @@ export default function AdminUsersPage() {
       {/* Pending requests and invitations */}
       {(filteredRequests.length > 0 || filteredInvitations.length > 0) && (
         <div className="mb-8">
-          <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-x-auto">
+          <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-x-auto">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
               <h2 className={SECTION_TITLE}>Ausstehende Anfragen & Einladungen ({filteredRequests.length + filteredInvitations.length})</h2>
             </div>
@@ -793,7 +793,7 @@ export default function AdminUsersPage() {
                     <td className="px-4 py-3 font-medium text-brand-text">
                       {req.first_name} {req.last_name}
                       {req.is_child && (
-                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-brand-info/10 text-brand-info align-middle">
+                        <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-xs font-medium bg-brand-info/10 text-brand-info align-middle">
                           <Baby className="w-3 h-3" />
                           Kind
                         </span>
@@ -805,7 +805,7 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="hidden md:table-cell px-4 py-3 text-brand-text-subtle text-xs">{req.comment || '–'}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-yellow text-brand-black">Anfrage</span>
+                      <span className="inline-block px-2 py-0.5 rounded-sm text-xs font-medium bg-brand-yellow text-brand-black">Anfrage</span>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <ActionMenu actions={[
@@ -835,7 +835,7 @@ export default function AdminUsersPage() {
                         {feedback ? (
                           <span className={`text-xs font-medium ${feedback.ok ? 'text-brand-info' : 'text-brand-danger'}`}>{feedback.msg}</span>
                         ) : (
-                          <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-border-subtle text-brand-text-muted">Einladung</span>
+                          <span className="inline-block px-2 py-0.5 rounded-sm text-xs font-medium bg-brand-border-subtle text-brand-text-muted">Einladung</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -860,7 +860,7 @@ export default function AdminUsersPage() {
       )}
 
       {/* Registered users */}
-      <div className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu overflow-x-auto mt-6">
+      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-x-auto mt-6">
         <div className="px-6 py-4 border-b border-brand-border-subtle">
           <h2 className={SECTION_TITLE}>Registrierte Nutzer ({total})</h2>
         </div>
@@ -873,7 +873,7 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 font-medium text-brand-text">
                     {u.first_name} {u.last_name}
                     {u.proxy && (
-                      <span className="ml-2 inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-brand-border-subtle text-brand-text-muted">Proxy</span>
+                      <span className="ml-2 inline-block px-1.5 py-0.5 rounded-sm text-xs font-medium bg-brand-border-subtle text-brand-text-muted">Proxy</span>
                     )}
                   </td>
                   <td className="hidden md:table-cell px-4 py-3 text-brand-text-muted">{u.email || '–'}</td>
@@ -882,7 +882,7 @@ export default function AdminUsersPage() {
                       <select
                         value={u.role}
                         onChange={e => handleRoleChange(u, e.target.value)}
-                        className="border border-brand-border rounded-md px-2 py-1 pr-6 text-xs text-brand-text bg-white focus:outline-none focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
+                        className="border border-brand-border rounded-md px-2 py-1 pr-6 text-xs text-brand-text bg-white focus:outline-hidden focus:ring-2 focus:ring-brand-yellow focus:border-brand-yellow"
                       >
                         {allowedRoles(self?.role ?? '').map(r => (
                           <option key={r} value={r}>{ROLE_LABELS[r]}</option>

@@ -154,7 +154,7 @@ export default function UebungsgruppenPage() {
       )}
 
       {groups.map(g => (
-        <div key={g.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu mb-3">
+        <div key={g.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu mb-3">
           <div className="px-5 py-3 border-b border-brand-border-subtle flex items-center justify-between gap-2">
             <button
               onClick={() => { setRenaming(g); setRenameValue(g.name) }}

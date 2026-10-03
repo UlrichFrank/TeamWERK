@@ -172,7 +172,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
           <h2 id={titleId} className={MODAL_TITLE}>
             {isGeneric ? 'Event bearbeiten' : 'Spieltag bearbeiten'}
           </h2>
-          <button onClick={onClose} className="p-1 rounded hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
+          <button onClick={onClose} className="p-1 rounded-sm hover:bg-brand-border-subtle transition-colors" aria-label="Schließen">
             <X className="w-5 h-5 text-brand-text-muted" />
           </button>
         </div>
@@ -236,7 +236,7 @@ export default function GameEditModal({ game, onClose, onSaved, onDeleted }: Pro
                       type="checkbox"
                       checked={selectedTeamIds.includes(t.id)}
                       onChange={() => toggleTeam(t.id)}
-                      className="rounded accent-brand-yellow"
+                      className="rounded-sm accent-brand-yellow"
                     />
                     <span className="text-sm text-brand-text">{teamShortNames.get(t.id)}</span>
                   </label>

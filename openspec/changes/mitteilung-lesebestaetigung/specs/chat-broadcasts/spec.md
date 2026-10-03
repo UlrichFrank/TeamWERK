@@ -2,24 +2,34 @@
 
 ### Requirement: Empfangene Broadcasts abrufen
 
-Das System SHALL die sichtbaren Broadcasts eines Users zurückgeben. Zu jedem Broadcast werden geliefert: `id`, `senderName`, `body`, `mediaId` (null wenn kein Bild), `mediaUrl` (null wenn kein Bild; sonst `"/media/<mediaId>"`), `mediaWidth` (nur bei Bild-Broadcasts mit bekannter Dimension; sonst weggelassen), `mediaHeight` (nur bei Bild-Broadcasts mit bekannter Dimension; sonst weggelassen), `sentAt`, `isRead`, `isSent`, `editedAt`.
+Das System SHALL die sichtbaren Broadcasts eines Users zurückgeben. Zu jedem Broadcast werden geliefert: `id`, `senderName`, `body`, `media` (Liste der Bilder in Album-Reihenfolge, leer ohne Bild; je Eintrag `id`, `url = "/media/<id>"`, `width`/`height` nur bei bekannter Dimension, sonst weggelassen), `mediaId`/`mediaUrl`/`mediaWidth`/`mediaHeight` (Angaben zum **ersten** Bild, Kompatibilität für ältere Clients; null bzw. weggelassen ohne Bild), `sentAt`, `isRead`, `isSent`, `editedAt`.
 
 Für Broadcasts, die der Aufrufer **selbst gesendet** hat (`isSent = true`), SHALL die Antwort zusätzlich `readCount` und `readTotal` tragen — die Anzahl der Empfänger, die den Broadcast gelesen haben, und die beim Fan-out festgeschriebene Empfängermenge, beide **ohne** den Absender. Für fremde Broadcasts SHALL keines der beiden Felder im JSON-Objekt erscheinen, damit der Lese-Zustand Dritter für Empfänger unsichtbar bleibt.
 
+#### Scenario: Broadcast mit mehreren Bildern
+
+- **WHEN** ein User `GET /api/chat/broadcasts` aufruft und ein Broadcast drei Bilder A, B, C trägt
+- **THEN** enthält `media` genau A, B, C in dieser Reihenfolge, und `mediaId`/`mediaUrl` bezeichnen A
+
 #### Scenario: Broadcast mit Bild und bekannten Dimensionen
 
-- **WHEN** ein User `GET /api/chat/broadcasts` aufruft und ein Broadcast `media_id` gesetzt hat, dessen `media`-Zeile `width=800`, `height=600` hat
-- **THEN** enthält das Broadcast-Objekt `mediaId`, `mediaUrl = "/media/<mediaId>"`, `mediaWidth=800`, `mediaHeight=600`
+- **WHEN** ein User `GET /api/chat/broadcasts` aufruft und ein Broadcast ein Bild trägt, dessen `media`-Zeile `width=800`, `height=600` hat
+- **THEN** enthält der `media`-Eintrag `width=800`, `height=600`, und das Broadcast-Objekt `mediaId`, `mediaUrl = "/media/<mediaId>"`, `mediaWidth=800`, `mediaHeight=600`
 
 #### Scenario: Broadcast mit Bild ohne bekannte Dimensionen
 
-- **WHEN** ein Broadcast mit `media_id` abgerufen wird, dessen `media`-Zeile `width IS NULL` hat
-- **THEN** enthält das Broadcast-Objekt `mediaId`, `mediaUrl`; `mediaWidth` und `mediaHeight` fehlen im JSON-Objekt
+- **WHEN** ein Broadcast mit einem Bild abgerufen wird, dessen `media`-Zeile `width IS NULL` hat
+- **THEN** fehlen `width`/`height` im `media`-Eintrag sowie `mediaWidth`/`mediaHeight` im Broadcast-Objekt; `mediaId` und `mediaUrl` sind gesetzt
+
+#### Scenario: Bestands-Broadcast mit Einzelbild
+
+- **WHEN** ein vor Einführung der Alben gesendeter Broadcast mit einem Bild abgerufen wird
+- **THEN** enthält `media` genau diesen einen Eintrag
 
 #### Scenario: Broadcast ohne Bild abrufen
 
-- **WHEN** ein Broadcast ohne `media_id` abgerufen wird
-- **THEN** sind `mediaId` und `mediaUrl` beide null; `mediaWidth`/`mediaHeight` fehlen
+- **WHEN** ein Broadcast ohne Bild abgerufen wird
+- **THEN** ist `media` eine leere Liste, `mediaId` und `mediaUrl` sind null; `mediaWidth`/`mediaHeight` fehlen
 
 #### Scenario: Eigener Broadcast trägt das Lese-Aggregat
 

@@ -25,7 +25,7 @@ const RULES: { name: string; pattern: RegExp; hint: string }[] = [
   {
     name: 'Raw-Tailwind-Palette',
     pattern: new RegExp(`(?<![\\w-])(?:[a-z-]+:)*(?:${UTILITIES})-(?:${PALETTE})-\\d{2,3}\\b`, 'g'),
-    hint: 'brand-*-Token verwenden (tailwind.config.js)',
+    hint: 'brand-*-Token verwenden (@theme in index.css)',
   },
   {
     // `bg-brand-black` ist ein anderer Farbton als Tailwinds `black`; ein

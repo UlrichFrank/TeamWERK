@@ -408,7 +408,7 @@ export default function AdminKaderPage() {
                 setSelectedSeason(season)
                 if (season) loadKader(season.id, 0)
               }}
-              className={`${HEADER_FIELD} min-w-[9rem]`}
+              className={`${HEADER_FIELD} min-w-36`}
             >
               {seasons.map(s => (
                 <option key={s.id} value={s.id}>
@@ -509,7 +509,7 @@ export default function AdminKaderPage() {
               const title = buildTeamLongName(k, group.length)
 
               return (
-                <div key={k.id} className="bg-brand-surface-card rounded-xl shadow border-t-4 border-brand-yellow transform-gpu mb-3">
+                <div key={k.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu mb-3">
                   {/* Card header */}
                   <div className="px-5 py-3 border-b border-brand-border-subtle flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -570,7 +570,7 @@ export default function AdminKaderPage() {
                           const yr = parseInt(e.target.value)
                           if (!isNaN(yr)) handleSetDedicatedYear(k, yr)
                         }}
-                        className="border border-brand-border-subtle rounded px-2 py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow"
+                        className="border border-brand-border-subtle rounded-sm px-2 py-1 text-xs bg-white text-brand-text focus:outline-hidden focus:ring-1 focus:ring-brand-yellow"
                       >
                         <option value="">Jahrgang wählen…</option>
                         {k.bracket_years.map(yr => (
@@ -584,7 +584,7 @@ export default function AdminKaderPage() {
                         <select
                           value={k.age_class}
                           onChange={e => handleSetAgeClass(k, e.target.value)}
-                          className="border border-brand-border-subtle rounded px-2 py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow w-28"
+                          className="border border-brand-border-subtle rounded-sm px-2 py-1 text-xs bg-white text-brand-text focus:outline-hidden focus:ring-1 focus:ring-brand-yellow w-28"
                         >
                           <optgroup label="Wettkampf">
                             {ageClassOptions.map(ac => (
@@ -607,7 +607,7 @@ export default function AdminKaderPage() {
                           value={gpsValues[k.id] ?? k.games_per_season}
                           onChange={e => setGpsValues(prev => ({ ...prev, [k.id]: Math.max(0, parseInt(e.target.value) || 0) }))}
                           onBlur={e => handlePatchGamesPerSeason(k.id, Math.max(0, parseInt(e.target.value) || 0))}
-                          className="border border-brand-border-subtle rounded px-2 py-2.5 sm:py-1 text-xs bg-white text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-yellow w-16 min-h-[44px] sm:min-h-0"
+                          className="border border-brand-border-subtle rounded-sm px-2 py-2.5 sm:py-1 text-xs bg-white text-brand-text focus:outline-hidden focus:ring-1 focus:ring-brand-yellow w-16 min-h-[44px] sm:min-h-0"
                           aria-label="Spiele pro Saison"
                         />
                       </div>
