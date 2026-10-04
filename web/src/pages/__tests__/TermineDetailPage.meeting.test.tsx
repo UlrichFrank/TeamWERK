@@ -1,7 +1,8 @@
 /**
  * TermineDetailPage — Treffzeit (spiel-treffpunkt): jeder sieht Treffzeit und
- * Ort unter dem Anwurf; den Editor nur, wer das Spiel bearbeiten darf
- * (`can.edit` vom Server).
+ * Ort unter dem Anwurf. Gepflegt wird die Treffzeit ausschließlich im
+ * Kalender (EventInfoModal) — die Detailseite zeigt auch mit `can.edit`
+ * keinen Editor.
  */
 import { describe, test, expect, vi } from 'vitest'
 import { screen } from '@testing-library/react'
@@ -48,12 +49,13 @@ describe('TermineDetailPage — Treffzeit', () => {
     expect(screen.queryByLabelText('Treffzeit')).toBeNull()
   })
 
-  test('Trainer mit Bearbeitungsrecht sieht den Editor mit aktuellen Werten', async () => {
+  test('Trainer mit Bearbeitungsrecht sieht Treffzeit, aber keinen Editor (Pflege nur im Kalender)', async () => {
     renderDetail('trainer', true, WITH_MEETING)
     await screen.findByText('Jonas Keller')
     await flushAsync()
-    expect((screen.getByLabelText('Treffzeit') as HTMLInputElement).value).toBe('13:30')
-    expect((screen.getByLabelText('Treffpunkt (optional)') as HTMLInputElement).value).toBe('Parkplatz Vereinsheim')
+    expect(screen.getByText('Treffen 13:30 Uhr · Parkplatz Vereinsheim')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Treffzeit')).toBeNull()
+    expect(screen.queryByLabelText('Treffpunkt (optional)')).toBeNull()
   })
 
   test('ohne Treffzeit erscheint keine Treffzeit-Zeile', async () => {

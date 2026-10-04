@@ -8,7 +8,6 @@ import PersonChip from '../components/PersonChip'
 import MapsLink from '../components/MapsLink'
 import SpielberichtPanel from '../components/SpielberichtPanel'
 import EventNoteIndicator from '../components/EventNoteIndicator'
-import MeetingPointEditor from '../components/MeetingPointEditor'
 import MeetingPointLine from '../components/MeetingPointLine'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { useAuth } from '../contexts/AuthContext'
@@ -666,20 +665,6 @@ export default function TermineDetailPage() {
       </div>
 
       <EventNoteSection note={g.note} />
-
-      {/* Treffzeit pflegen (spiel-treffpunkt): gleicher Personenkreis wie das
-          Bearbeiten des Spiels; bis einschließlich Spieltag. */}
-      {g.can?.edit && !isOver && (
-        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
-          <h2 className={`${SECTION_TITLE} mb-3`}>Treffzeit</h2>
-          <MeetingPointEditor
-            gameId={g.id}
-            initialTime={g.meet_time}
-            initialPlace={g.meet_place}
-            onSaved={(m) => setGame(prev => (prev ? { ...prev, ...m } : prev))}
-          />
-        </div>
-      )}
 
       {/* Offizieller BWHV-Spielbericht. Das Panel meldet sich selbst ab, wenn
           es keinen gibt — der Abruf läuft erst nach Freigabe durch den Verband. */}
