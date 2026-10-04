@@ -3,13 +3,13 @@ package gamestats
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	appconfig "github.com/teamstuttgart/teamwerk/internal/config"
 
 	"database/sql"
 
-	"github.com/teamstuttgart/teamwerk/internal/background"
 	"github.com/teamstuttgart/teamwerk/internal/bwhv"
 	"github.com/teamstuttgart/teamwerk/internal/timez"
 )
@@ -25,6 +25,12 @@ const catalogHour = 6
 // pollRunTimeout deckt einen vollständigen Lauf über alle Staffeln ab.
 const pollRunTimeout = 30 * time.Minute
 
+// pollLockName ist die Sperrdatei im Ablageverzeichnis. Sie verhindert, dass
+// sich zwei Minuten-Ticks überlappen: ein Lauf dauert wegen der
+// Höflichkeitspause je Abruf bis zu einer Minute und länger, der Cron startet
+// aber jede Minute einen neuen Prozess.
+const pollLockName = ".poll.lock"
+
 // SchedulerJob liefert den Minutentakt-Einstieg des BWHV-Polls.
 //
 // Er wird von der Komposition (main.go) in den Scheduler eingehängt, statt dass
@@ -32,13 +38,18 @@ const pollRunTimeout = 30 * time.Minute
 // keine Domäne importieren. Die Alternative wäre, den ganzen Lauf im Scheduler
 // zu duplizieren (design.md §8).
 //
-// Der eigentliche Lauf läuft über background.Go (Goroutine-Gate) mit eigenem
-// Context: er dauert Minuten und darf den Scheduler-Tick nicht blockieren.
+// Der Lauf ist SYNCHRON. Der Scheduler läuft nicht im Server-Prozess, sondern
+// als Cron-Prozess (`teamwerk scheduler:run`), der nach dem letzten Job endet.
+// Ein über background.Go gestarteter Lauf starb deshalb mit dem Prozess, bevor
+// er die erste Anfrage beendet hatte — auf Prod lief so wochenlang kein
+// einziger automatischer Abruf, nur die manuellen. Die Sperrdatei ersetzt die
+// Nebenläufigkeit: ein Tick, der einen noch laufenden Vorgänger findet,
+// überspringt.
 func SchedulerJob(db *sql.DB, cfg *appconfig.Config) func() {
-	return func() { runPollTick(db, cfg) }
+	return func() { runPollTick(db, cfg, bwhv.NewClient(), time.Now()) }
 }
 
-func runPollTick(db *sql.DB, cfg *appconfig.Config) {
+func runPollTick(db *sql.DB, cfg *appconfig.Config, client *bwhv.Client, now time.Time) {
 	// BwhvOrgID ist der Abschalter, NICHT BwhvReportDir: dessen getEnv-Default
 	// (./storage/bwhv-reports) greift immer, der Wert ist also nie leer. Ein
 	// Guard darauf wäre wirkungslos gewesen.
@@ -58,45 +69,55 @@ func runPollTick(db *sql.DB, cfg *appconfig.Config) {
 		return // ohne aktive Saison gibt es nichts abzurufen
 	}
 
-	now := time.Now().In(timez.Berlin())
-	poller := NewPoller(store, bwhv.NewClient(),
-		NewReportStore(cfg.BwhvReportDir), cfg.BwhvOrgID)
+	now = now.In(timez.Berlin())
+	catalogRun := now.Hour() == catalogHour && now.Minute() == 0
 
-	if now.Hour() == catalogHour && now.Minute() == 0 {
-		background.Go("bwhv-catalog", func() {
-			runCtx, runCancel := context.WithTimeout(context.Background(), pollRunTimeout)
-			defer runCancel()
-			res, err := poller.SyncStaffeln(runCtx, seasonID)
-			if err != nil {
-				slog.Error("bwhv: Katalog-Lauf fehlgeschlagen", "error", err)
-				return
-			}
-			slog.Info("bwhv: Katalog-Lauf", "staffeln", res.Staffeln, "spiele_geaendert", res.GamesChanged)
-		})
-		return
-	}
-
-	due, err := store.DueStaffeln(ctx, seasonID, now)
-	if err != nil {
-		slog.Error("bwhv: Fälligkeit nicht ermittelbar", "error", err)
-		return
-	}
-	if len(due) == 0 {
-		return
-	}
-	background.Go("bwhv-poll", func() {
-		runCtx, runCancel := context.WithTimeout(context.Background(), pollRunTimeout)
-		defer runCancel()
-		res, err := poller.RunDue(runCtx, seasonID, due)
+	var due []DueStaffel
+	if !catalogRun {
+		due, err = store.DueStaffeln(ctx, seasonID, now)
 		if err != nil {
-			slog.Error("bwhv: Poll fehlgeschlagen", "error", err)
+			slog.Error("bwhv: Fälligkeit nicht ermittelbar", "error", err)
 			return
 		}
-		if res.Changed() {
-			slog.Info("bwhv: Poll",
-				"staffeln", res.Staffeln, "spiele_geaendert", res.GamesChanged,
-				"berichte_geparst", res.ReportsParsed, "berichte_fehlgeschlagen", res.ReportsFailed,
-				"spieler_zugeordnet", res.PlayersLinked)
+		if len(due) == 0 {
+			return
 		}
-	})
+	}
+
+	release, ok, err := tryLock(filepath.Join(cfg.BwhvReportDir, pollLockName))
+	if err != nil {
+		slog.Error("bwhv: Sperrdatei nicht anlegbar", "error", err)
+		return
+	}
+	if !ok {
+		slog.Info("bwhv: vorheriger Lauf noch aktiv, Tick übersprungen")
+		return
+	}
+	defer release()
+
+	poller := NewPoller(store, client, NewReportStore(cfg.BwhvReportDir), cfg.BwhvOrgID)
+	runCtx, runCancel := context.WithTimeout(context.Background(), pollRunTimeout)
+	defer runCancel()
+
+	if catalogRun {
+		res, err := poller.SyncStaffeln(runCtx, seasonID)
+		if err != nil {
+			slog.Error("bwhv: Katalog-Lauf fehlgeschlagen", "error", err)
+			return
+		}
+		slog.Info("bwhv: Katalog-Lauf", "staffeln", res.Staffeln, "spiele_geaendert", res.GamesChanged)
+		return
+	}
+
+	res, err := poller.RunDue(runCtx, seasonID, due)
+	if err != nil {
+		slog.Error("bwhv: Poll fehlgeschlagen", "error", err)
+		return
+	}
+	if res.Changed() {
+		slog.Info("bwhv: Poll",
+			"staffeln", res.Staffeln, "spiele_geaendert", res.GamesChanged,
+			"berichte_geparst", res.ReportsParsed, "berichte_fehlgeschlagen", res.ReportsFailed,
+			"spieler_zugeordnet", res.PlayersLinked)
+	}
 }
