@@ -2,7 +2,7 @@
 
 ## 1. Ziel-URL
 
-- [ ] 1.1 Helfer `calendarLink(kind: 'game' | 'training', id, date)` in `web/src/lib/calendarLink.ts` anlegen, der `/kalender?date=<YYYY-MM-DD>&focus=<kind>-<id>` baut (Datum per `.slice(0, 10)`). Verifikation: Vitest `calendarLink.test.ts` mit ISO-Timestamp-Datum (`2026-10-11T00:00:00Z` → `date=2026-10-11`) und beiden Kinds.
+- [x] 1.1 Helfer `calendarLink(kind: 'game' | 'training', id, date)` in `web/src/lib/calendarLink.ts` anlegen, der `/kalender?date=<YYYY-MM-DD>&focus=<kind>-<id>` baut (Datum per `.slice(0, 10)`). Verifikation: Vitest `calendarLink.test.ts` mit ISO-Timestamp-Datum (`2026-10-11T00:00:00Z` → `date=2026-10-11`) und beiden Kinds.
 
 ## 2. Aktion auf /termine und /dienste
 
