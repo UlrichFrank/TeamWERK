@@ -7,7 +7,7 @@
 ## 2. Aktion auf /termine und /dienste
 
 - [x] 2.1 `TerminePage.tsx`: Icon-Button `CalendarDays` (`aria-label`/`title` „Im Kalender öffnen“, `p-2`, nur `brand-*`-Farben) rechts in der Kopfzeile jeder Spiel-/Event- und Trainings-Karte; `stopPropagation`, dann `navigate(calendarLink(...))`. Verifikation: Vitest — Klick navigiert zu `/kalender?date=…&focus=game-17` bzw. `training-42` und NICHT zur Detailseite.
-- [ ] 2.2 `DutyPage.tsx`: derselbe Icon-Button im Block-Kopf rechts neben den Team-Namen, nur bei gesetztem `game_id`. Verifikation: Vitest — Klick navigiert zu `/kalender?date=…&focus=game-<id>`; ein Block ohne `game_id` hat keinen Button.
+- [x] 2.2 `DutyPage.tsx`: derselbe Icon-Button im Block-Kopf rechts neben den Team-Namen, nur bei gesetztem `game_id`. Verifikation: Vitest — Klick navigiert zu `/kalender?date=…&focus=game-<id>`; ein Block ohne `game_id` hat keinen Button.
 
 ## 3. Fokus im Kalender
 

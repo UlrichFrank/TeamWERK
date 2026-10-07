@@ -17,6 +17,8 @@ import { HEADER_CTRL, HEADER_CTRL_ICON, HEADER_NEUTRAL, HEADER_PRIMARY, HEADER_G
 import DutySlotList, { BoardSlot } from '../components/DutySlotList'
 import AushilfeBadge from '../components/AushilfeBadge'
 import { PAGE_TITLE } from '../lib/typography'
+import CalendarJumpButton from '../components/CalendarJumpButton'
+import { calendarLink } from '../lib/calendarLink'
 
 interface BoardGroup {
   game_id: number | null
@@ -423,6 +425,7 @@ export default function DutyPage() {
                 <span className="flex items-center gap-2 text-xs text-brand-text-muted font-medium">
                   {g.aushilfe && <AushilfeBadge />}
                   {g.team_names.join(', ')}
+                  {g.game_id && g.date ? <CalendarJumpButton to={calendarLink('game', g.game_id, g.date)} /> : null}
                 </span>
               </div>
 
