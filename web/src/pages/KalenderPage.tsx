@@ -311,6 +311,12 @@ export default function KalenderPage() {
   const [editingGame, setEditingGame] = useState<Game | null>(null)
   const [detailGameId, setDetailGameId] = useState<number | null>(null)
   const [infoItem, setInfoItem] = useState<{ type: 'game' | 'training' | 'absence'; game?: Game; training?: Training; absence?: Absence } | null>(null)
+  // Sprung aus /termine bzw. /dienste (kalender-sprung): ?focus=<game|training>-<id>
+  // öffnet den Termin-Dialog, sobald die Erstdaten da sind.
+  const [initialLoaded, setInitialLoaded] = useState(false)
+  const [highlightKey, setHighlightKey] = useState<string | null>(null)
+  const [focusMissing, setFocusMissing] = useState(false)
+  const focusHandledRef = useRef<string | null>(null)
 
 
   const loadGames = async () => {
@@ -406,6 +412,7 @@ export default function KalenderPage() {
       if (user?.isParent) {
         loadAbsenceChildren()
       }
+      setInitialLoaded(true)
     }
     loadInitialData()
     // Initial-Load nur beim Mount; load*-Funktionen kapseln year/month/Filter, soll nicht erneut feuern
@@ -583,6 +590,56 @@ export default function KalenderPage() {
   // Kadernamen), sonst fiele die Kachel auf "Training" zurück.
   const trainingLabel = (t: Training) =>
     shortNames.get(t.team_id) ?? (t.team_name?.trim() || t.title || 'Training')
+
+  // Dialog-Form eines Spiels: Teams mit Kurznamen, wie die Kachel sie zeigt.
+  const gameInfo = (g: Game): Game => ({
+    ...g,
+    teams: (g.teams ?? []).map(t => ({ id: t.id, name: t.display_short ?? shortNames.get(t.id) ?? t.name })),
+  })
+
+  const focusParam = searchParams.get('focus')
+  useEffect(() => {
+    const m = focusParam?.match(/^(game|training)-(\d+)$/)
+    if (!m || !initialLoaded || focusHandledRef.current === focusParam) return
+    focusHandledRef.current = focusParam
+    const kind = m[1] as 'game' | 'training'
+    const id = Number(m[2])
+    let cancelled = false
+    const resolve = async () => {
+      try {
+        if (kind === 'game') {
+          // Die Spieleliste ist serverseitig gedeckelt — fehlt das Spiel dort,
+          // holt der Einzelabruf es nach (design.md Decision 3).
+          // Die Einzelroute trägt keine Dienst-Zähler; ohne sie ist „In Diensten
+          // öffnen“ im Dialog gesperrt.
+          let g = games.find(x => x.id === id)
+          if (!g) {
+            const d = (await api.get<Partial<Game>>(`/games/${id}`)).data
+            g = { ...d, slot_count: d.slot_count ?? 0, filled_count: d.filled_count ?? 0, total_count: d.total_count ?? 0 } as Game
+          }
+          if (!cancelled) setInfoItem({ type: 'game', game: gameInfo(g) })
+        } else {
+          const t = trainings.find(x => x.id === id) ?? (await api.get<Training>(`/training-sessions/${id}`)).data
+          if (!cancelled) setInfoItem({ type: 'training', training: { ...t, team_name: trainingLabel(t) } })
+        }
+        if (cancelled) return
+        setFocusMissing(false)
+        setHighlightKey(`${kind}-${id}`)
+        window.setTimeout(() => setHighlightKey(k => (k === `${kind}-${id}` ? null : k)), 2000)
+      } catch {
+        if (!cancelled) setFocusMissing(true)
+      }
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev)
+        next.delete('focus')
+        return next
+      }, { replace: true })
+    }
+    resolve()
+    return () => { cancelled = true }
+    // Nur auf Fokus und Erstdaten reagieren; spätere Reloads öffnen nichts erneut.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusParam, initialLoaded])
 
   const safeGames = Array.isArray(games) ? games : []
   const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`
@@ -1007,6 +1064,14 @@ export default function KalenderPage() {
 
   return (
     <div>
+      {focusMissing && (
+        <div role="status" className="mb-4 p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text flex items-start justify-between gap-2">
+          <span>Dieser Termin ist nicht verfügbar</span>
+          <button onClick={() => setFocusMissing(false)} aria-label="Hinweis schließen" className="shrink-0">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
       {regenSummary && (
         <RegenSummaryCard summary={regenSummary} onDismiss={() => setRegenSummary(null)} />
       )}
@@ -1262,10 +1327,11 @@ export default function KalenderPage() {
                   return (
                   <button
                     key={g.id}
+                    id={`kalender-game-${g.id}`}
                     onPointerDown={e => e.stopPropagation()}
-                    onClick={() => setInfoItem({ type: 'game', game: { ...g, teams: teamsForRender.map(t => ({ id: t.id, name: t.display_short ?? t.name })) } })}
+                    onClick={() => setInfoItem({ type: 'game', game: gameInfo(g) })}
                     title={`${tooltipLabel} · ${g.opponent || '–'} · ${g.time}`}
-                    className={`w-full text-left mb-1 p-1 sm:p-1.5 rounded-md text-xs overflow-hidden transition-colors border ${getEventColors(g.event_type).pill}`}
+                    className={`w-full text-left mb-1 p-1 sm:p-1.5 rounded-md text-xs overflow-hidden transition-colors border ${getEventColors(g.event_type).pill} ${highlightKey === `game-${g.id}` ? 'ring-2 ring-brand-yellow' : ''}`}
                   >
                     <div className="flex items-center gap-1 mb-0.5">
                       {g.event_type === 'heim'
@@ -1304,6 +1370,7 @@ export default function KalenderPage() {
                 {dayTrainings.map(t => (
                   <button
                     key={`t-${t.id}`}
+                    id={`kalender-training-${t.id}`}
                     onPointerDown={e => e.stopPropagation()}
                     title={`${trainingLabel(t)} · ${t.start_time}`}
                     onClick={() => setInfoItem({ type: 'training', training: { ...t, team_name: trainingLabel(t) } })}
@@ -1311,7 +1378,7 @@ export default function KalenderPage() {
                       t.status === 'cancelled'
                         ? 'bg-white/50 border-brand-border-subtle opacity-50 line-through'
                         : `${getEventColors('training').pill} transition-colors`
-                    }`}
+                    } ${highlightKey === `training-${t.id}` ? 'ring-2 ring-brand-yellow' : ''}`}
                   >
                     <div className="flex items-center gap-1 mb-0.5">
                       <Dumbbell className={`w-3 h-3 shrink-0 ${getEventColors('training').pillIcon}`} />
