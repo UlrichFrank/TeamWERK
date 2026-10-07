@@ -9,6 +9,8 @@ import { api } from '../lib/api'
 import MapsLink from '../components/MapsLink'
 import EventNoteIndicator from '../components/EventNoteIndicator'
 import MeetingPointLine from '../components/MeetingPointLine'
+import CalendarJumpButton from '../components/CalendarJumpButton'
+import { calendarLink } from '../lib/calendarLink'
 import { type RsvpDefault } from '../components/RsvpDefaultsEditor'
 import { getEventColors } from '../lib/eventColors'
 import { buildTeamOptions, effectiveTeamIds, matchesTeamFilter, parseTeamIds, serializeTeamIds, toggleTeamId, trainingFilterId } from '../lib/teamFilter'
@@ -750,19 +752,22 @@ export default function TerminePage() {
                       </div>
                     </div>
 
-                    {s.status === 'active' && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
-                          <Check className="w-3 h-3 text-brand-green" />{s.confirmed_count}
-                        </span>
-                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
-                          <X className="w-3 h-3 text-brand-danger" />{s.declined_count}
-                        </span>
-                        <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
-                          <HelpCircle className="w-3 h-3 text-brand-text-subtle" />{s.maybe_count}
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {s.status === 'active' && (
+                        <>
+                          <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
+                            <Check className="w-3 h-3 text-brand-green" />{s.confirmed_count}
+                          </span>
+                          <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
+                            <X className="w-3 h-3 text-brand-danger" />{s.declined_count}
+                          </span>
+                          <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
+                            <HelpCircle className="w-3 h-3 text-brand-text-subtle" />{s.maybe_count}
+                          </span>
+                        </>
+                      )}
+                      <span className="ml-1"><CalendarJumpButton to={calendarLink('training', s.id, s.date)} /></span>
+                    </div>
                   </div>
 
                   {s.status === 'active' && (s.am_i_participant || isParent) && (() => {
@@ -891,6 +896,7 @@ export default function TerminePage() {
                     <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                       <HelpCircle className="w-3 h-3 text-brand-text-subtle" />{g.maybe_count}
                     </span>
+                    <span className="ml-1"><CalendarJumpButton to={calendarLink('game', g.id, g.date)} /></span>
                   </div>
                 </div>
 
