@@ -130,11 +130,16 @@ cat > /usr/local/bin/teamwerk-scheduler.sh <<'EOF'
 #!/bin/bash
 # Wrapper für cron — lädt Env aus /etc/teamwerk/env und sendet
 # Better-Stack-Heartbeat nur bei erfolgreichem scheduler:run.
+# Der Cron läuft in der root-Crontab (die Env-Datei ist root-only), der
+# Scheduler selbst aber als www-data wie der Server: Dateien, die er anlegt
+# (BWHV-PDFs, .poll.lock), müssen dem Server und dem Backup-User
+# (tw-backup, Gruppe www-data) lesbar bleiben. Als root angelegt brach
+# das externe Backup an ihnen ab (rsync code 23).
 set -e
 set -a
 . /etc/teamwerk/env
 set +a
-/usr/local/bin/teamwerk scheduler:run
+/usr/sbin/runuser -u www-data -- /usr/local/bin/teamwerk scheduler:run
 HEARTBEAT_URL=$(cat /etc/teamwerk/heartbeat-url 2>/dev/null || true)
 if [ -n "$HEARTBEAT_URL" ] && [ "$HEARTBEAT_URL" != "REPLACE_WITH_BETTERSTACK_HEARTBEAT_URL" ]; then
     curl -fsS --retry 3 "$HEARTBEAT_URL" > /dev/null
