@@ -30,7 +30,7 @@ func newMeetingFixture(t *testing.T) meetingFixture {
 	return meetingFixture{db, seasonID, teamID, gameID}
 }
 
-func putMeeting(t *testing.T, f meetingFixture, token string, body map[string]string) (*http.Response, map[string]any) {
+func putMeeting(t *testing.T, f meetingFixture, token string, body any) (*http.Response, map[string]any) {
 	t.Helper()
 	srv := testServer(t, f.db)
 	res := testutil.Do(t, srv, http.MethodPut, fmt.Sprintf("/api/games/%d/meeting", f.gameID), token, body)
@@ -73,6 +73,41 @@ func TestUpdateGameMeeting_TrainerSetztTreffzeit(t *testing.T) {
 		t.Errorf("pending row: n=%d prev=%v, want 1 row with prev NULL", n, prev)
 	}
 
+}
+
+// Der Kalender-Dialog pflegt den Abstand direkt („90 Min. vor Anwurf").
+func TestUpdateGameMeeting_AbstandInMinuten(t *testing.T) {
+	f := newMeetingFixture(t)
+	trainer := makeTrainer(t, f.db, f.teamID, f.seasonID)
+	token := testutil.Token(t, trainer, "standard", []string{"trainer"})
+
+	res, out := putMeeting(t, f, token, map[string]any{"meet_offset_minutes": 90, "meet_place": "Bus"})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d (%v)", res.StatusCode, out)
+	}
+	if out["meet_time"] != "16:30" || out["meet_offset_minutes"] != float64(90) || out["meet_place"] != "Bus" {
+		t.Errorf("unexpected response %v", out)
+	}
+	off, place := storedMeeting(t, f)
+	if !off.Valid || off.Int64 != 90 || place != "Bus" {
+		t.Errorf("stored offset=%v place=%q, want 90 / Bus", off, place)
+	}
+}
+
+func TestUpdateGameMeeting_AbstandAusserhalbDesBereichs(t *testing.T) {
+	for _, v := range []int{-5, 721} {
+		f := newMeetingFixture(t)
+		admin := testutil.CreateUser(t, f.db, "admin")
+		token := testutil.Token(t, admin, "admin", nil)
+
+		res, out := putMeeting(t, f, token, map[string]any{"meet_offset_minutes": v})
+		if res.StatusCode != http.StatusBadRequest || out["error"] != "meet_offset_out_of_range" {
+			t.Fatalf("offset %d: expected 400 meet_offset_out_of_range, got %d %v", v, res.StatusCode, out)
+		}
+		if off, _ := storedMeeting(t, f); off.Valid {
+			t.Errorf("offset %d stored: %v", v, off)
+		}
+	}
 }
 
 // Der Ausgangsstand des Debounce-Fensters bleibt bei weiteren Korrekturen stehen.

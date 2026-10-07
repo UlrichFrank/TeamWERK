@@ -6,6 +6,7 @@
 export interface MeetingFields {
   meet_time: string | null
   meet_date: string | null
+  meet_offset_minutes?: number | null
   meet_place: string
 }
 

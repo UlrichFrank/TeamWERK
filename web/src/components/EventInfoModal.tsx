@@ -7,7 +7,7 @@ import { formatTeamList } from '../lib/teamName'
 import MapsLink from './MapsLink'
 import EventNoteIndicator from './EventNoteIndicator'
 import EventNoteEditor from './EventNoteEditor'
-import MeetingPointEditor from './MeetingPointEditor'
+import GameInfoEditor from './GameInfoEditor'
 import MeetingPointLine from './MeetingPointLine'
 import type { MeetingFields } from '../lib/meeting'
 import GameDayHostSection from './GameDayHostPicker'
@@ -39,6 +39,7 @@ interface Game {
   note?: string
   meet_time?: string | null
   meet_date?: string | null
+  meet_offset_minutes?: number | null
   meet_place?: string
   slot_count?: number
   filled_count?: number
@@ -280,14 +281,12 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
             )}
             {onEdit && (
               <div className="pt-2 border-t border-brand-border-subtle">
-                <p className="text-xs text-brand-text-muted mb-1">Hinweis</p>
-                <EventNoteEditor eventType="game" eventId={game.id} initialNote={game.note ?? ''} />
-                <p className="text-xs text-brand-text-muted mt-3 mb-1">Treffzeit</p>
-                <MeetingPointEditor
+                <GameInfoEditor
                   gameId={game.id}
-                  initialTime={game.meet_time}
+                  initialNote={game.note ?? ''}
+                  initialOffset={game.meet_offset_minutes}
                   initialPlace={game.meet_place}
-                  onSaved={setMeeting}
+                  onMeetingSaved={setMeeting}
                 />
               </div>
             )}

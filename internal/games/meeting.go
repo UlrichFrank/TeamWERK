@@ -25,9 +25,10 @@ const (
 // Spiel-Antwort neben `time` trägt. Gespeichert ist nur der Abstand zum Anwurf;
 // meet_time/meet_date entstehen bei jedem Lesen über timez.MeetTime.
 type Meeting struct {
-	MeetTime  *string `json:"meet_time"`
-	MeetDate  *string `json:"meet_date"`
-	MeetPlace string  `json:"meet_place"`
+	MeetTime          *string `json:"meet_time"`
+	MeetDate          *string `json:"meet_date"`
+	MeetOffsetMinutes *int    `json:"meet_offset_minutes"`
+	MeetPlace         string  `json:"meet_place"`
 }
 
 func newMeeting(date, start string, offset sql.NullInt64, place string) Meeting {
@@ -35,12 +36,15 @@ func newMeeting(date, start string, offset sql.NullInt64, place string) Meeting 
 	if !ok {
 		return Meeting{MeetPlace: ""}
 	}
-	return Meeting{MeetTime: &hm, MeetDate: &d, MeetPlace: place}
+	off := int(offset.Int64)
+	return Meeting{MeetTime: &hm, MeetDate: &d, MeetOffsetMinutes: &off, MeetPlace: place}
 }
 
 // PUT /api/games/{id}/meeting — setzt oder entfernt Treffzeit und Treffpunkt-Ort.
-// Berechtigung wie beim Hinweistext (canEditGameInfo). Die Uhrzeit wird gegen
-// den gespeicherten Anwurf in einen Abstand umgerechnet; eine Änderung landet
+// Berechtigung wie beim Hinweistext (canEditGameInfo). Eingabe ist entweder der
+// Abstand in Minuten vor dem Anwurf (`meet_offset_minutes`, so pflegt ihn der
+// Kalender-Dialog) oder eine Uhrzeit (`meet_time`), die gegen den gespeicherten
+// Anwurf in einen Abstand umgerechnet wird; eine Änderung landet
 // gebündelt in pending_game_meeting_push (Scheduler meldet den Netto-Unterschied).
 func (h *Handler) UpdateGameMeeting(w http.ResponseWriter, r *http.Request) {
 	claims := auth.ClaimsFromCtx(r.Context())
@@ -50,8 +54,9 @@ func (h *Handler) UpdateGameMeeting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		MeetTime  string `json:"meet_time"`
-		MeetPlace string `json:"meet_place"`
+		MeetTime          string `json:"meet_time"`
+		MeetOffsetMinutes *int   `json:"meet_offset_minutes"`
+		MeetPlace         string `json:"meet_place"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		httpx.WriteError(w, r, http.StatusBadRequest, httpx.CodeInvalidBody, nil)
@@ -81,7 +86,18 @@ func (h *Handler) UpdateGameMeeting(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var offset sql.NullInt64
-	if strings.TrimSpace(req.MeetTime) == "" {
+	if req.MeetOffsetMinutes != nil {
+		if *req.MeetOffsetMinutes < 0 || *req.MeetOffsetMinutes > maxMeetOffsetMinutes {
+			httpx.WriteError(w, r, http.StatusBadRequest, "meet_offset_out_of_range", nil)
+			return
+		}
+		if _, ok := timez.ParseHHMM(start); !ok {
+			// Kein auswertbarer Anwurf — eine Treffzeit davor wäre erfunden.
+			httpx.WriteError(w, r, http.StatusBadRequest, "meet_after_start", nil)
+			return
+		}
+		offset = sql.NullInt64{Int64: int64(*req.MeetOffsetMinutes), Valid: true}
+	} else if strings.TrimSpace(req.MeetTime) == "" {
 		if place != "" {
 			httpx.WriteError(w, r, http.StatusBadRequest, "meet_place_without_time", nil)
 			return
