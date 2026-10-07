@@ -13,31 +13,31 @@ afterEach(() => {
   mock.restore()
 })
 
-const OFFSET = 'Treffen (Min. vor Anwurf)'
+const OFFSET = 'Treffen vor Anwurf'
 
 describe('GameInfoEditor', () => {
   test('ein Speichern sendet Hinweis und Treffzeit-Abstand', async () => {
     const onMeetingSaved = vi.fn()
     mock.onPut('/games/7/note').reply(200, {})
-    mock.onPut('/games/7/meeting').reply(200, { meet_time: '13:30', meet_date: '2026-10-11', meet_offset_minutes: 45, meet_place: 'Parkplatz' })
+    mock.onPut('/games/7/meeting').reply(200, { meet_time: '13:30', meet_date: '2026-10-11', meet_offset_minutes: 90, meet_place: 'Parkplatz' })
 
     render(<GameInfoEditor gameId={7} initialNote="" initialOffset={null} initialPlace="" onMeetingSaved={onMeetingSaved} />)
     expect(screen.getAllByRole('button', { name: 'Speichern' })).toHaveLength(1)
     fireEvent.change(screen.getByLabelText('Hinweis'), { target: { value: 'Trikots mitbringen' } })
-    fireEvent.change(screen.getByLabelText(OFFSET), { target: { value: '45' } })
+    fireEvent.change(screen.getByLabelText(OFFSET), { target: { value: '1h 30min' } })
     fireEvent.change(screen.getByLabelText('Treffpunkt'), { target: { value: ' Parkplatz ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }))
 
     await waitFor(() => expect(onMeetingSaved).toHaveBeenCalled())
     expect(JSON.parse(mock.history.put[0].data)).toEqual({ note: 'Trikots mitbringen' })
-    expect(JSON.parse(mock.history.put[1].data)).toEqual({ meet_offset_minutes: 45, meet_place: 'Parkplatz' })
+    expect(JSON.parse(mock.history.put[1].data)).toEqual({ meet_offset_minutes: 90, meet_place: 'Parkplatz' })
   })
 
   test('nur geänderte Teile werden gesendet', async () => {
     mock.onPut('/games/7/note').reply(200, {})
 
     render(<GameInfoEditor gameId={7} initialNote="alt" initialOffset={60} initialPlace="Bus" />)
-    expect((screen.getByLabelText(OFFSET) as HTMLInputElement).value).toBe('60')
+    expect((screen.getByLabelText(OFFSET) as HTMLInputElement).value).toBe('1h')
     fireEvent.change(screen.getByLabelText('Hinweis'), { target: { value: 'neu' } })
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }))
 
@@ -57,6 +57,14 @@ describe('GameInfoEditor', () => {
     expect(JSON.parse(mock.history.put[0].data)).toEqual({ meet_offset_minutes: null, meet_place: '' })
   })
 
+  test('Eingabe wird beim Verlassen normalisiert', () => {
+    render(<GameInfoEditor gameId={7} initialNote="" initialOffset={null} initialPlace="" />)
+    const input = screen.getByLabelText(OFFSET) as HTMLInputElement
+    fireEvent.change(input, { target: { value: '75' } })
+    fireEvent.blur(input)
+    expect(input.value).toBe('1h 15min')
+  })
+
   test('zeigt den übersetzten Fehler des Backends', async () => {
     mock.onPut('/games/7/meeting').reply(400, { error: 'meet_offset_out_of_range' })
 
@@ -72,9 +80,11 @@ describe('GameInfoEditor', () => {
     const save = () => screen.getByRole('button', { name: 'Speichern' }) as HTMLButtonElement
     fireEvent.change(screen.getByLabelText('Treffpunkt'), { target: { value: 'Halle' } })
     expect(save().disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText(OFFSET), { target: { value: '800' } })
+    fireEvent.change(screen.getByLabelText(OFFSET), { target: { value: '13h' } })
     expect(save().disabled).toBe(true)
-    fireEvent.change(screen.getByLabelText(OFFSET), { target: { value: '60' } })
+    fireEvent.change(screen.getByLabelText(OFFSET), { target: { value: 'bald' } })
+    expect(save().disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText(OFFSET), { target: { value: '45min' } })
     expect(save().disabled).toBe(false)
   })
 })

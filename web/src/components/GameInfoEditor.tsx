@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import { BTN_PRIMARY, INPUT, LABEL } from '../lib/buttonStyles'
 import { errorMessage } from '../lib/errors'
+import { formatDuration, parseDuration } from '../lib/time'
 import type { MeetingFields } from '../lib/meeting'
 
 type GameInfoEditorProps = {
@@ -16,29 +17,40 @@ const MAX_NOTE = 200
 const MAX_PLACE = 100
 const MAX_OFFSET = 720
 
+function offsetToInput(minutes: number | null | undefined): string {
+  return minutes == null ? '' : formatDuration(minutes)
+}
+
+/** Minuten aus der Eingabe („1h 30min“, „90“); null = keine Treffzeit, NaN = nicht lesbar. */
+function inputToOffset(s: string): number | null {
+  if (s.trim() === '') return null
+  return /\d/.test(s) ? parseDuration(s) : NaN
+}
+
 /**
  * Hinweis und Treffzeit eines Spiels mit einem gemeinsamen Speichern
  * (Kalender-Dialog). Die Treffzeit wird als Abstand in Minuten vor dem Anwurf
- * gepflegt — genau so speichert sie der Server, deshalb wandert sie bei einer
+ * gepflegt (Format wie die Versätze der Diensttypen: „1h 30min“) — genau so
+ * speichert sie der Server, deshalb wandert sie bei einer
  * Verlegung mit. Ruft nur die Routen, deren Wert sich geändert hat:
  * `PUT /api/games/{id}/note` und `PUT /api/games/{id}/meeting`.
  */
 export default function GameInfoEditor({ gameId, initialNote, initialOffset, initialPlace, onMeetingSaved }: GameInfoEditorProps) {
   const [savedNote, setSavedNote] = useState(initialNote)
-  const [savedOffset, setSavedOffset] = useState(initialOffset == null ? '' : String(initialOffset))
+  const [savedOffset, setSavedOffset] = useState<number | null>(initialOffset ?? null)
   const [savedPlace, setSavedPlace] = useState(initialPlace ?? '')
   const [note, setNote] = useState(savedNote)
-  const [offset, setOffset] = useState(savedOffset)
+  const [offset, setOffset] = useState(offsetToInput(savedOffset))
   const [place, setPlace] = useState(savedPlace)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
   const noteChanged = note !== savedNote
-  const meetingChanged = offset !== savedOffset || place.trim() !== savedPlace
+  const offsetMin = inputToOffset(offset)
+  const meetingChanged = offsetMin !== savedOffset || place.trim() !== savedPlace
   const noteTooLong = note.length > MAX_NOTE
-  const offsetNum = Number(offset)
-  const offsetInvalid = offset !== '' && (!Number.isInteger(offsetNum) || offsetNum < 0 || offsetNum > MAX_OFFSET)
-  const placeWithoutTime = offset === '' && place.trim() !== ''
+  const offsetInvalid = offsetMin !== null && (Number.isNaN(offsetMin) || offsetMin > MAX_OFFSET)
+  const placeWithoutTime = offsetMin === null && place.trim() !== ''
   const blocked = noteTooLong || offsetInvalid || placeWithoutTime
 
   async function save() {
@@ -51,13 +63,12 @@ export default function GameInfoEditor({ gameId, initialNote, initialOffset, ini
       }
       if (meetingChanged) {
         const res = await api.put<MeetingFields>(`/games/${gameId}/meeting`, {
-          meet_offset_minutes: offset === '' ? null : offsetNum,
+          meet_offset_minutes: offsetMin,
           meet_place: place.trim(),
         })
         const m = res.data
-        const off = m.meet_offset_minutes == null ? '' : String(m.meet_offset_minutes)
-        setSavedOffset(off)
-        setOffset(off)
+        setSavedOffset(m.meet_offset_minutes ?? null)
+        setOffset(offsetToInput(m.meet_offset_minutes))
         setSavedPlace(m.meet_place)
         setPlace(m.meet_place)
         onMeetingSaved?.(m)
@@ -87,18 +98,18 @@ export default function GameInfoEditor({ gameId, initialNote, initialOffset, ini
       </div>
       <div className="flex gap-2">
         <div className="shrink-0">
-          <label className={LABEL} htmlFor={`meet-offset-${gameId}`}>Treffen (Min. vor Anwurf)</label>
+          <label className={LABEL} htmlFor={`meet-offset-${gameId}`}>Treffen vor Anwurf</label>
           <input
             id={`meet-offset-${gameId}`}
-            type="number"
-            inputMode="numeric"
-            min={0}
-            max={MAX_OFFSET}
-            step={5}
+            type="text"
             value={offset}
             onChange={(e) => setOffset(e.target.value)}
-            placeholder="z. B. 60"
-            className={`${INPUT} sm:w-40`}
+            onBlur={() => {
+              const m = inputToOffset(offset)
+              if (m !== null && !Number.isNaN(m)) setOffset(formatDuration(m))
+            }}
+            placeholder="z. B. 1h 30min"
+            className={`${INPUT} w-32 sm:w-40`}
           />
         </div>
         <div className="flex-1 min-w-0">
@@ -115,7 +126,7 @@ export default function GameInfoEditor({ gameId, initialNote, initialOffset, ini
         </div>
       </div>
       {offsetInvalid && (
-        <p className="text-xs text-brand-danger">Bitte 0 bis {MAX_OFFSET} Minuten angeben.</p>
+        <p className="text-xs text-brand-danger">Bitte eine Dauer bis 12h angeben (z. B. 45min oder 1h 30min).</p>
       )}
       {placeWithoutTime && (
         <p className="text-xs text-brand-text-muted">Für einen Treffpunkt bitte auch eine Treffzeit angeben.</p>
