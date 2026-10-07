@@ -41,7 +41,7 @@ Siehe proposal.md – Why. Relevanter Ist-Stand:
 ## Risks / Trade-offs
 
 - [Spieleliste im Kalender gekappt auf 200] → Der Fokus umgeht das über den Einzelabruf. Das eigentliche Problem (fehlende späte Spiele im Gitter) bleibt; als Folgebefund festhalten, nicht hier lösen.
-- [Einzelabruf liefert andere Feldform als die Liste] → Mapping im Kalender, Test mit realer Antwortform (Task 3.3).
+- [Einzelabruf liefert andere Feldform als die Liste] → Mapping im Kalender, Test mit realer Antwortform (Task 3.3). Beim Implementieren festgestellt: `GET /api/games/{id}` trägt keine Dienst-Zähler (`slot_count` & Co.); ein so nachgeladenes Spiel zeigt „In Diensten öffnen“ gesperrt. Betrifft nur Spiele jenseits der 200er-Kappung und verschwindet mit deren Behebung.
 - [Dialog öffnet über einem noch ladenden Monat] → Fokus erst auswerten, wenn Spiele und Trainings geladen sind.
 - [Icon allein ist nicht selbsterklärend] → `title`-Tooltip auf Desktop, `aria-label` für Screenreader; dasselbe Muster wie andere Icon-Aktionen der App.
 
