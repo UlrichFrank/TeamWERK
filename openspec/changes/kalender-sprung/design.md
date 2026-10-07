@@ -22,7 +22,7 @@ Siehe proposal.md – Why. Relevanter Ist-Stand:
 ## Decisions
 
 **1. Platzierung als Icon-Aktion, nicht als Text-Button oder Menüeintrag.**
-- `/termine`: `CalendarDays`-Icon-Button rechts in der Kopfzeile der Karte, hinter den Zusage-Zählern. Die ganze Karte ist bereits klickbar (Detailseite); der Button stoppt die Propagation wie heute schon `MapsLink`.
+- `/termine`: `CalendarDays`-Icon-Button ganz rechts oben in der Karte, außerhalb der umbrechenden Kopfzeile — dieselbe Position wie im Kopf der Dienst-Blöcke. Die ganze Karte ist bereits klickbar (Detailseite); der Button stoppt die Propagation wie heute schon `MapsLink`.
 - `/dienste`: derselbe Icon-Button im Block-Kopf rechts neben den Team-Namen, nur wenn `game_id` gesetzt ist.
 - Alternativen: Eintrag in einem `ActionMenu` (`MoreVertical`) — auf den Karten gibt es kein Menü, eins nur dafür einzuführen kostet einen Klick mehr. Ein Text-Button „Im Kalender öffnen“ wäre auf Mobile zu breit für die ohnehin umbrechende Kopfzeile. Das Icon ist in der App bereits mit „Kalender“ konnotiert.
 - Touch-Target: `p-2` um ein `w-4 h-4`-Icon, `aria-label` und `title` „Im Kalender öffnen“.

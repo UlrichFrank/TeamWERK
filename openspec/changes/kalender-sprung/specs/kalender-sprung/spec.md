@@ -7,7 +7,7 @@ Rückweg von den Listenseiten `/termine` und `/dienste` in den Monatskalender: j
 ## ADDED Requirements
 
 ### Requirement: Aktion „Im Kalender öffnen“ auf Termin-Karten
-Jede Termin-Karte auf `/termine` (Spiel, Event und Training, auch abgesagte) SHALL eine Icon-Aktion „Im Kalender öffnen“ (Icon `CalendarDays`, `aria-label="Im Kalender öffnen"`) tragen. Ein Klick SHALL zu `/kalender?date=<Termindatum YYYY-MM-DD>&focus=<game|training>-<id>` navigieren (Client-Navigation, kein Neuladen) und SHALL NICHT den Karten-Klick (Detailseite) auslösen. Die Aktion steht in der Kopfzeile der Karte rechts, bei den Zusage-Zählern.
+Jede Termin-Karte auf `/termine` (Spiel, Event und Training, auch abgesagte) SHALL eine Icon-Aktion „Im Kalender öffnen“ (Icon `CalendarDays`, `aria-label="Im Kalender öffnen"`) tragen. Ein Klick SHALL zu `/kalender?date=<Termindatum YYYY-MM-DD>&focus=<game|training>-<id>` navigieren (Client-Navigation, kein Neuladen) und SHALL NICHT den Karten-Klick (Detailseite) auslösen. Die Aktion steht wie bei den Dienst-Blöcken ganz rechts oben in der Kopfzeile der Karte, rechts von den Zusage-Zählern, und bricht auf schmalen Bildschirmen nicht mit ihnen in die nächste Zeile um.
 
 #### Scenario: Spiel-Karte springt in den Kalender
 - **WHEN** ein Nutzer auf `/termine` bei der Karte von Spiel 17 am 2026-10-11 „Im Kalender öffnen“ klickt

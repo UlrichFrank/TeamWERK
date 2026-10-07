@@ -724,37 +724,37 @@ export default function TerminePage() {
                       : `${getEventColors('training').card.bg} ${getEventColors('training').card.border}`
                   }`}
                 >
-                  <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div className="flex items-start gap-3 min-w-0">
-                      <Dumbbell className={`w-5 h-5 mt-0.5 shrink-0 ${s.status === 'cancelled' ? 'text-brand-text-muted' : getEventColors('training').card.icon}`} />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`font-semibold text-brand-text ${s.status === 'cancelled' ? 'line-through' : ''}`}>
-                            {fmtDate(s.date)}
-                          </span>
-                          <span className="text-brand-text-muted text-sm">{s.start_time} – {s.end_time}</span>
-                          {s.team_name && (
-                            <span className="text-brand-text-subtle text-xs">{s.team_name}</span>
-                          )}
-                          {s.status === 'cancelled' && (
-                            <span className="bg-brand-danger-light text-brand-danger text-xs font-medium px-2 py-0.5 rounded-full">
-                              Abgesagt
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0 flex items-start justify-between gap-4 flex-wrap">
+                      <div className="flex items-start gap-3 min-w-0">
+                        <Dumbbell className={`w-5 h-5 mt-0.5 shrink-0 ${s.status === 'cancelled' ? 'text-brand-text-muted' : getEventColors('training').card.icon}`} />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`font-semibold text-brand-text ${s.status === 'cancelled' ? 'line-through' : ''}`}>
+                              {fmtDate(s.date)}
                             </span>
+                            <span className="text-brand-text-muted text-sm">{s.start_time} – {s.end_time}</span>
+                            {s.team_name && (
+                              <span className="text-brand-text-subtle text-xs">{s.team_name}</span>
+                            )}
+                            {s.status === 'cancelled' && (
+                              <span className="bg-brand-danger-light text-brand-danger text-xs font-medium px-2 py-0.5 rounded-full">
+                                Abgesagt
+                              </span>
+                            )}
+                          </div>
+                          <span onClick={e => e.stopPropagation()}>
+                            <MapsLink venue={s.venue} className="mt-0.5" />
+                          </span>
+                          {s.status === 'cancelled' && s.cancel_reason && (
+                            <p className="text-sm text-brand-danger mt-0.5">{s.cancel_reason}</p>
                           )}
+                          <EventNoteIndicator variant="inline" note={s.note ?? ''} className="mt-0.5" />
                         </div>
-                        <span onClick={e => e.stopPropagation()}>
-                          <MapsLink venue={s.venue} className="mt-0.5" />
-                        </span>
-                        {s.status === 'cancelled' && s.cancel_reason && (
-                          <p className="text-sm text-brand-danger mt-0.5">{s.cancel_reason}</p>
-                        )}
-                        <EventNoteIndicator variant="inline" note={s.note ?? ''} className="mt-0.5" />
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
                       {s.status === 'active' && (
-                        <>
+                        <div className="flex items-center gap-1 shrink-0">
                           <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                             <Check className="w-3 h-3 text-brand-green" />{s.confirmed_count}
                           </span>
@@ -764,10 +764,11 @@ export default function TerminePage() {
                           <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
                             <HelpCircle className="w-3 h-3 text-brand-text-subtle" />{s.maybe_count}
                           </span>
-                        </>
+                        </div>
                       )}
-                      <span className="ml-1"><CalendarJumpButton to={calendarLink('training', s.id, s.date)} /></span>
                     </div>
+                    {/* Wie im Kopf der Dienst-Blöcke: immer ganz rechts oben, bricht nicht mit den Zählern um. */}
+                    <CalendarJumpButton to={calendarLink('training', s.id, s.date)} />
                   </div>
 
                   {s.status === 'active' && (s.am_i_participant || isParent) && (() => {
@@ -858,46 +859,48 @@ export default function TerminePage() {
                 }}
                 className={`rounded-xl shadow-sm border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
               >
-                <div className="flex items-start justify-between gap-4 flex-wrap">
-                  <div className="flex items-start gap-3 min-w-0">
-                    <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${getEventColors(g.event_type).card.icon}`} />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-brand-text">{fmtDate(g.date)}</span>
-                        <span className="text-brand-text-muted text-sm">{g.time} Uhr</span>
-                        {(g.team_display_short_csv || g.team_names) && (
-                          <span className="text-brand-text-subtle text-xs">
-                            {g.team_display_short_csv || g.team_names}
-                          </span>
-                        )}
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0 flex items-start justify-between gap-4 flex-wrap">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <Icon className={`w-5 h-5 mt-0.5 shrink-0 ${getEventColors(g.event_type).card.icon}`} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-brand-text">{fmtDate(g.date)}</span>
+                          <span className="text-brand-text-muted text-sm">{g.time} Uhr</span>
+                          {(g.team_display_short_csv || g.team_names) && (
+                            <span className="text-brand-text-subtle text-xs">
+                              {g.team_display_short_csv || g.team_names}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-brand-text-muted mt-0.5">{label}</p>
+                        <span onClick={e => e.stopPropagation()}>
+                          <MapsLink venue={g.venue} className="mt-0.5" />
+                        </span>
+                        <MeetingPointLine
+                          gameDate={g.date}
+                          meetTime={g.meet_time}
+                          meetDate={g.meet_date}
+                          meetPlace={g.meet_place}
+                          className="mt-0.5"
+                        />
+                        <EventNoteIndicator variant="inline" note={g.note ?? ''} className="mt-0.5" />
                       </div>
-                      <p className="text-sm text-brand-text-muted mt-0.5">{label}</p>
-                      <span onClick={e => e.stopPropagation()}>
-                        <MapsLink venue={g.venue} className="mt-0.5" />
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
+                        <Check className="w-3 h-3 text-brand-green" />{g.confirmed_count}
                       </span>
-                      <MeetingPointLine
-                        gameDate={g.date}
-                        meetTime={g.meet_time}
-                        meetDate={g.meet_date}
-                        meetPlace={g.meet_place}
-                        className="mt-0.5"
-                      />
-                      <EventNoteIndicator variant="inline" note={g.note ?? ''} className="mt-0.5" />
+                      <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
+                        <X className="w-3 h-3 text-brand-danger" />{g.declined_count}
+                      </span>
+                      <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
+                        <HelpCircle className="w-3 h-3 text-brand-text-subtle" />{g.maybe_count}
+                      </span>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
-                      <Check className="w-3 h-3 text-brand-green" />{g.confirmed_count}
-                    </span>
-                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
-                      <X className="w-3 h-3 text-brand-danger" />{g.declined_count}
-                    </span>
-                    <span className="text-xs text-brand-text-muted bg-white border border-brand-border-subtle rounded-sm px-2 py-1 flex items-center gap-1">
-                      <HelpCircle className="w-3 h-3 text-brand-text-subtle" />{g.maybe_count}
-                    </span>
-                    <span className="ml-1"><CalendarJumpButton to={calendarLink('game', g.id, g.date)} /></span>
-                  </div>
+                  <CalendarJumpButton to={calendarLink('game', g.id, g.date)} />
                 </div>
 
                 {(g.am_i_participant || isParent) && (() => {
