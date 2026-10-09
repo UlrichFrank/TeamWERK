@@ -98,7 +98,8 @@
   deckte es ab. Das Pseudo-Element braucht einen Containing Block, deshalb setzt
   die Utility `position: relative`; eine Kachel mit Eckfahne darf deshalb nicht
   `sticky`/`fixed`/`absolute` sein (eckfahne.gate.test.ts). `pointer-events:
-  none`, damit das Dreieck keinen Klick schluckt.
+  none`, damit das Dreieck keinen Klick schluckt; `mix-blend-mode: multiply`,
+  damit Schrift darunter lesbar bleibt (Tabellenkopf auf /diensttypen).
 
   `eckfahne-bg` (Inhaltsbereich `<main>`, Einstiegsseiten) bleibt ein
   `background-image`: `<main>` ist der Scroll-Container der App, ein absolut
@@ -140,6 +141,9 @@
     height: var(--_ef-size);
     background: linear-gradient(135deg, var(--_ef-color) 50%, transparent calc(50% + 0.5px));
     pointer-events: none;
+    /* Multiplizieren statt überdecken: dunkle Schrift im Dreieck (Tabellenkopf
+       „NAME") bleibt dunkel und lesbar, heller Untergrund wird zur Fahnenfarbe. */
+    mix-blend-mode: multiply;
   }
 }
 
