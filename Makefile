@@ -17,18 +17,58 @@ NEW_REMOTE_DIR_RESOLVED := $(or $(REMOTE_NEW_DIR),/usr/local/bin)
 # Domains ohne Schema (für Host-Header, nginx server_name, Cert-Pfade)
 SOURCE_DOMAIN := $(patsubst https://%,%,$(BASE_URL))
 NEW_DOMAIN    := $(patsubst https://%,%,$(BASE_URL_NEW))
-DB_PATH        := /var/lib/teamwerk/teamwerk.db
-# Storage-Verzeichnisse auf dem VPS (Prod-Pfade aus deploy/setup-vps.sh).
+# ── Ziel-Umgebung: ENV=prod (Default) | ENV=beta ─────────────────────────────
+# Alle Server-Targets (deploy, deploy-rollback, migrate-remote-up,
+# create-admin-remote, push-test-remote, backup*, pull-*, setup-vps, dev-remote)
+# wirken auf die gewählte Umgebung. Ohne ENV bleibt alles wie bisher Prod.
+# Beta = zweite, vollständig getrennte Instanz auf demselben VPS (eigenes
+# Binary, eigene Env, DB + Storage unter /var/lib/teamwerk-beta, Dienst
+# teamwerk-beta auf Port 8081) — Details: docs/agent/10-deployment.md.
+# Branch-Bindung: deploy ENV=prod nur von main oder einem vX.Y.Z-Tag,
+# deploy ENV=beta nur vom Branch beta (jeweils ohne uncommittete Änderungen);
+# Notausgang ALLOW_BRANCH=1.
+ENV ?= prod
+ifeq ($(ENV),prod)
+REMOTE_DATA      := /var/lib/teamwerk
+REMOTE_ENV_FILE  := /etc/teamwerk/env
+REMOTE_SERVICE   := teamwerk
+REMOTE_BIN       := $(REMOTE_DIR)/teamwerk
+REMOTE_PORT      := 8080
+VIDEO_STORAGE_DIR_REMOTE := /storage/videos
+DEPLOY_BRANCH    := main
+DEPLOYED_HASH    := .deployed-hash
+BACKUP_ROOT      := $(REPO_ROOT)/backup
+# Prod läuft historisch als SSH-Nutzer (root) und chownt danach; das trägt auch
+# den allerersten Deploy auf einen frischen Server (server-bootstrap).
+AS_SERVICE_USER  :=
+else ifeq ($(ENV),beta)
+REMOTE_DATA      := /var/lib/teamwerk-beta
+REMOTE_ENV_FILE  := /etc/teamwerk-beta/env
+REMOTE_SERVICE   := teamwerk-beta
+REMOTE_BIN       := $(REMOTE_DIR)/teamwerk-beta
+REMOTE_PORT      := 8081
+VIDEO_STORAGE_DIR_REMOTE := /var/lib/teamwerk-beta/videos
+DEPLOY_BRANCH    := beta
+DEPLOYED_HASH    := .deployed-beta-hash
+# Eigener Unterordner: restore-local sucht backup/20*/ und darf nie einen
+# Beta-Stand für einen Prod-Stand halten.
+BACKUP_ROOT      := $(REPO_ROOT)/backup/beta
+# Auf der Beta entsteht nichts root-eigenes im Datenverzeichnis.
+AS_SERVICE_USER  := sudo -u www-data
+else
+$(error ENV=$(ENV) unbekannt — erlaubt: prod, beta)
+endif
+DB_PATH    := $(REMOTE_DATA)/teamwerk.db
+# Storage-Verzeichnisse auf dem VPS (unter REMOTE_DATA der gewählten Umgebung).
 # UPLOAD_DIR enthält Profilfotos + SEPA-Mandat-PDFs (Tresor-Blobs) und gehört
 # semantisch zum `backup`-Target neben der DB. Die anderen sind File-Bulk.
-UPLOAD_DIR_REMOTE                 := /var/lib/teamwerk/uploads
-FILES_DIR_REMOTE                  := /var/lib/teamwerk/files
-MEDIA_DIR_REMOTE                  := /var/lib/teamwerk/media
-BEITRAGSLAUF_DIR_REMOTE           := /var/lib/teamwerk/beitragslauf-protokolle
-MATCH_REPORT_IMAGE_DIR_REMOTE     := /var/lib/teamwerk/match-report-images
-TRAINING_DIARY_DIR_REMOTE         := /var/lib/teamwerk/training-diary
-BWHV_REPORT_DIR_REMOTE            := /var/lib/teamwerk/bwhv-reports
-VIDEO_STORAGE_DIR_REMOTE          := /storage/videos
+UPLOAD_DIR_REMOTE                 := $(REMOTE_DATA)/uploads
+FILES_DIR_REMOTE                  := $(REMOTE_DATA)/files
+MEDIA_DIR_REMOTE                  := $(REMOTE_DATA)/media
+BEITRAGSLAUF_DIR_REMOTE           := $(REMOTE_DATA)/beitragslauf-protokolle
+MATCH_REPORT_IMAGE_DIR_REMOTE     := $(REMOTE_DATA)/match-report-images
+TRAINING_DIARY_DIR_REMOTE         := $(REMOTE_DATA)/training-diary
+BWHV_REPORT_DIR_REMOTE            := $(REMOTE_DATA)/bwhv-reports
 UPLOAD_DIR_LOCAL                  := $(REPO_ROOT)/storage/uploads
 FILES_DIR_LOCAL                   := $(REPO_ROOT)/storage/files
 MEDIA_DIR_LOCAL                   := $(REPO_ROOT)/storage/media
@@ -41,9 +81,9 @@ EMAIL      ?= $(shell grep '^EMAIL=' .env 2>/dev/null | cut -d= -f2-)
 PASSWORD   ?= $(shell grep '^PASSWORD=' .env 2>/dev/null | cut -d= -f2-)
 NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
-BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
+BACKUP_DIR := $(BACKUP_ROOT)/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-beta seed-beta mirror-beta deploy-beta setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e folien schulung lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
+.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-beta seed-beta mirror-beta deploy-beta _check-branch _check-env _check-prod-only _smoke setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e folien schulung lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -80,9 +120,9 @@ dev: ## Backend (mit air Auto-Reload) + Vite Dev-Server lokal starten
 	@sleep 1
 	@cd web && pnpm dev
 
-dev-remote: ## SSH-Tunnel zum VPS + Vite Dev-Server (kein lokales Backend)
-	@echo "Opening SSH tunnel to $(REMOTE) and starting frontend dev server..."
-	@ssh -N -L 8080:localhost:8080 $(REMOTE) &
+dev-remote: ## SSH-Tunnel zum VPS + Vite Dev-Server (kein lokales Backend; ENV=beta tunnelt zur Beta)
+	@echo "Opening SSH tunnel to $(REMOTE) ($(REMOTE_SERVICE), Port $(REMOTE_PORT)) and starting frontend dev server..."
+	@ssh -N -L 8080:localhost:$(REMOTE_PORT) $(REMOTE) &
 	@cd web && pnpm dev
 
 build: ## Frontend + Backend für Linux/amd64 bauen
@@ -92,54 +132,95 @@ build: ## Frontend + Backend für Linux/amd64 bauen
 	cd web && pnpm build
 	GOOS=linux GOARCH=amd64 $(GO) build -ldflags "-X 'main.buildHash=$(shell git rev-parse --short HEAD)'" -o $(BUILD_DIR)/$(BINARY) ./cmd/teamwerk
 
-setup-vps: ## VPS einmalig einrichten (Nginx, Certbot, systemd)
+setup-vps: ## VPS einmalig einrichten (Nginx, Certbot, systemd; ENV=beta richtet die Beta-Instanz ein)
+ifeq ($(ENV),beta)
+	@$(MAKE) --no-print-directory setup-beta
+else
 	rsync -az deploy/ $(REMOTE):/tmp/teamwerk-deploy/
 	ssh $(REMOTE) "cd /tmp/teamwerk-deploy && sudo bash setup-vps.sh"
+endif
 
-deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart, Smoke-Test)
-	rsync -az $(BUILD_DIR)/$(BINARY) $(REMOTE):/tmp/$(BINARY).new
+# Branch-Bindung (siehe ENV-Block oben). Prüft VOR dem Build: Prod nur von
+# main oder einem vX.Y.Z-Tag (deploy.yml checkt das Tag detached aus), Beta nur
+# vom Branch beta; uncommittete Änderungen an versionierten Dateien brechen ab,
+# sonst wäre „von main deployt" keine Aussage über den Stand.
+_check-branch:
+	@if [ "$(ALLOW_BRANCH)" = "1" ]; then echo "WARNUNG: Branch-Bindung für ENV=$(ENV) übersprungen (ALLOW_BRANCH=1)"; exit 0; fi; \
+	branch=$$(git rev-parse --abbrev-ref HEAD); \
+	tag=$$(git describe --exact-match --tags --match 'v[0-9]*.[0-9]*.[0-9]*' HEAD 2>/dev/null || true); \
+	if [ -n "$$(git status --porcelain --untracked-files=no)" ]; then \
+		echo "Abbruch: uncommittete Änderungen — ENV=$(ENV) deployt nur committete Stände (Notausgang ALLOW_BRANCH=1)." >&2; exit 1; fi; \
+	case "$(ENV)" in \
+		prod) if [ "$$branch" != main ] && [ -z "$$tag" ]; then \
+			echo "Abbruch: Prod wird nur von main oder einem vX.Y.Z-Tag deployt (aktuell: $$branch)." >&2; exit 1; fi ;; \
+		beta) if [ "$$branch" != beta ]; then \
+			echo "Abbruch: Beta wird nur vom Branch beta deployt (aktuell: $$branch)." >&2; exit 1; fi ;; \
+	esac; \
+	echo "Branch-Bindung OK: ENV=$(ENV), $${tag:-$$branch} @ $$(git rev-parse --short HEAD)"
+
+# Schutz der Prod-Instanz vor Beta-Aufrufen: jeder Pfad und Dienstname einer
+# ENV=beta-Operation muss „teamwerk-beta" enthalten. Durch den ENV-Block gilt
+# das per Konstruktion; der Check fängt künftige Tippfehler dort ab.
+_check-env:
+ifeq ($(ENV),beta)
+	@for v in "$(REMOTE_DATA)" "$(REMOTE_ENV_FILE)" "$(REMOTE_SERVICE)" "$(REMOTE_BIN)" "$(DB_PATH)" "$(VIDEO_STORAGE_DIR_REMOTE)"; do \
+		case "$$v" in *teamwerk-beta*) ;; *) echo "Abbruch: ENV=beta zeigt auf '$$v' — kein Beta-Pfad" >&2; exit 1 ;; esac; \
+	done
+	@ssh $(REMOTE) "test -f $(REMOTE_ENV_FILE)" || { echo "Beta nicht eingerichtet — erst 'make setup-vps ENV=beta'" >&2; exit 1; }
+else
+	@true
+endif
+
+# Targets, die es nur für Prod gibt (Server-Umzug).
+_check-prod-only:
+	@[ "$(ENV)" = prod ] || { echo "Abbruch: dieses Target gibt es nur für ENV=prod" >&2; exit 1; }
+
+deploy: _check-env _check-branch build ## Build + Deploy auf VPS (ENV=prod|beta; Binary, Migrations, Service-Neustart, Smoke-Test)
+	rsync -az $(BUILD_DIR)/$(BINARY) $(REMOTE):/tmp/$(REMOTE_SERVICE).new
+ifeq ($(ENV),prod)
 	rsync -az deploy/teamwerk.service $(REMOTE):/tmp/teamwerk.service
 	rsync -az deploy/backup-cron.sh $(REMOTE):/tmp/teamwerk-backup.sh
 	ssh $(REMOTE) "[ -f /etc/teamwerk/env ]" 2>/dev/null || \
 		grep -E '^(PORT|DB_PATH|JWT_SECRET|BASE_URL|SMTP_HOST|SMTP_PORT|SMTP_USER|SMTP_PASS|SMTP_FROM)=' .env | \
 		sed 's|DB_PATH=.*|DB_PATH=/var/lib/teamwerk/teamwerk.db|; s|BASE_URL=.*|BASE_URL=https://teamwerk.team-stuttgart.org|' | \
 		ssh $(REMOTE) "sudo mkdir -p /etc/teamwerk && sudo tee /etc/teamwerk/env > /dev/null && sudo chmod 600 /etc/teamwerk/env"
+endif
 	@# Storage-Verzeichnisse + zugehörige Env-Schlüssel idempotent sicherstellen,
-	@# dazu reine Konfig-Schlüssel ohne Verzeichnis (HSTS_ENABLED). Nötig, weil der
-	@# Block oben /etc/teamwerk/env nur beim ERSTEN Deploy schreibt: ein neuer
-	@# Schlüssel fehlt auf Bestandsservern sonst dauerhaft. Schlüssel mit Endung
-	@# _DIR bekommen zusätzlich mkdir+chown; Ohne Env-Eintrag greift bei diesen der
-	@# relative Default (./storage/... relativ zu WorkingDirectory=/usr/local/bin)
-	@# — dort darf www-data nicht schreiben, der Prozess kommt nicht hoch und
-	@# Nginx antwortet mit 502. HSTS_ENABLED=true setzt voraus, dass hier bereits
-	@# ein gültiges TLS-Zertifikat aktiv ist (siehe docs/agent/10-deployment.md) —
-	@# auf einem frischen VPS mit nur selbstsigniertem Zertifikat schreibt
-	@# deploy/setup-vps.sh den Schlüssel deshalb schon explizit als false vor, das
-	@# hier greift nur bei fehlendem Schlüssel.
-	@for kv in "TRAINING_DIARY_DIR=$(TRAINING_DIARY_DIR_REMOTE)" "BEITRAGSLAUF_DIR=$(BEITRAGSLAUF_DIR_REMOTE)" "BWHV_REPORT_DIR=$(BWHV_REPORT_DIR_REMOTE)" "HSTS_ENABLED=true"; do \
+	@# dazu reine Konfig-Schlüssel ohne Verzeichnis (HSTS_ENABLED, nur Prod). Nötig,
+	@# weil die Env-Datei nur beim ERSTEN Deploy (Prod) bzw. von setup-beta (Beta)
+	@# geschrieben wird: ein neuer Schlüssel fehlt auf Bestandsservern sonst
+	@# dauerhaft. Schlüssel mit Endung _DIR bekommen zusätzlich mkdir+chown; ohne
+	@# Env-Eintrag greift bei diesen der relative Default (./storage/... relativ
+	@# zum WorkingDirectory) — dort darf www-data nicht schreiben, der Prozess
+	@# kommt nicht hoch und Nginx antwortet mit 502. HSTS_ENABLED=true setzt
+	@# voraus, dass bereits ein gültiges TLS-Zertifikat aktiv ist (siehe
+	@# docs/agent/10-deployment.md); die Beta-Env trägt bewusst false.
+	@for kv in "TRAINING_DIARY_DIR=$(TRAINING_DIARY_DIR_REMOTE)" "BEITRAGSLAUF_DIR=$(BEITRAGSLAUF_DIR_REMOTE)" "BWHV_REPORT_DIR=$(BWHV_REPORT_DIR_REMOTE)" $(if $(filter prod,$(ENV)),"HSTS_ENABLED=true"); do \
 		key=$${kv%%=*}; val=$${kv#*=}; \
 		mkcmd=""; \
 		case "$$key" in \
 			*_DIR) mkcmd="sudo mkdir -p $$val && sudo chown www-data:www-data $$val && " ;; \
 		esac; \
-		ssh $(REMOTE) "$${mkcmd}if ! sudo grep -q '^$$key=' /etc/teamwerk/env; then \
-				echo '$$kv' | sudo tee -a /etc/teamwerk/env > /dev/null; \
-				echo '  $$key in /etc/teamwerk/env ergänzt'; \
+		ssh $(REMOTE) "$${mkcmd}if ! sudo grep -q '^$$key=' $(REMOTE_ENV_FILE); then \
+				echo '$$kv' | sudo tee -a $(REMOTE_ENV_FILE) > /dev/null; \
+				echo '  $$key in $(REMOTE_ENV_FILE) ergänzt'; \
 			fi" || exit 1; \
 	done
 	@# JWT_SECRET-Mindestlänge VOR dem Restart prüfen (analog config.Load): ein zu
 	@# kurzes oder fehlendes Secret darf nicht erst beim Prozessstart auffallen,
 	@# sonst bleibt der alte Prozess unten (kein Halb-Deploy), aber die Migration
 	@# lief schon — deshalb Abbruch hier, bevor migrate/restart überhaupt laufen.
-	@echo "Prüfe JWT_SECRET-Länge auf $(REMOTE)..."
-	@ssh $(REMOTE) 'secret=$$(sudo grep "^JWT_SECRET=" /etc/teamwerk/env | cut -d= -f2-); \
+	@echo "Prüfe JWT_SECRET-Länge in $(REMOTE_ENV_FILE) auf $(REMOTE)..."
+	@ssh $(REMOTE) 'secret=$$(sudo grep "^JWT_SECRET=" $(REMOTE_ENV_FILE) | cut -d= -f2-); \
 		if [ -z "$$secret" ] || [ $${#secret} -lt 32 ]; then \
-			echo "JWT_SECRET in /etc/teamwerk/env fehlt oder ist kuerzer als 32 Byte - Deploy abgebrochen (kein Restart)." >&2; \
+			echo "JWT_SECRET in $(REMOTE_ENV_FILE) fehlt oder ist kuerzer als 32 Byte - Deploy abgebrochen (kein Restart)." >&2; \
 			exit 1; \
 		fi' || exit 1
+ifeq ($(ENV),prod)
 	@# Serverseitigen Backup-Cron installieren/aktualisieren (idempotent) — das
 	@# Skript selbst darf sich mit jedem Deploy ändern, der Cron-Eintrag wird
 	@# nur einmal ergänzt. Analog zum Scheduler-Cron in deploy/setup-vps.sh.
+	@# Nur Prod: die Beta ist Wegwerf-Zustand und hat bewusst kein Backup.
 	ssh $(REMOTE) "sudo mkdir -p /var/backups/teamwerk && \
 		sudo mv /tmp/teamwerk-backup.sh /usr/local/bin/teamwerk-backup.sh && \
 		sudo chmod +x /usr/local/bin/teamwerk-backup.sh && \
@@ -147,88 +228,79 @@ deploy: build ## Build + Deploy auf VPS (Binary, Migrations, Service-Neustart, S
 			( sudo crontab -l 2>/dev/null; echo '30 3 * * * /usr/local/bin/teamwerk-backup.sh >> /var/log/teamwerk-backup.log 2>&1' ) | sudo crontab -; \
 			echo '  Backup-Cron ergaenzt'; \
 		fi"
-	@# Vor dem Austausch das laufende Binary als .prev sichern (Rückweg für
-	@# `make deploy-rollback`, falls der Smoke-Test unten fehlschlägt). Auf dem
-	@# allerersten Deploy existiert noch kein Binary am Zielpfad — die
-	@# `|| true` macht das harmlos statt den Deploy abzubrechen.
+	@# Systemd-Unit beim allerersten Deploy installieren (Beta: setup-beta).
 	ssh $(REMOTE) "sudo mkdir -p $(dir $(DB_PATH)) && \
 		if ! [ -f /etc/systemd/system/teamwerk.service ]; then \
 			sudo mv /tmp/teamwerk.service /etc/systemd/system/teamwerk.service && \
 			sudo systemctl daemon-reload && sudo systemctl enable teamwerk; \
-		fi && \
-		sudo cp $(REMOTE_DIR)/$(BINARY) $(REMOTE_DIR)/$(BINARY).prev 2>/dev/null || true; \
-		sudo mv /tmp/$(BINARY).new $(REMOTE_DIR)/$(BINARY) && \
-		$(REMOTE_DIR)/$(BINARY) migrate up --db $(DB_PATH) && \
+		fi"
+endif
+	@# Vor dem Austausch das laufende Binary als .prev sichern (Rückweg für
+	@# `make deploy-rollback`, falls der Smoke-Test unten fehlschlägt). Auf dem
+	@# allerersten Deploy existiert noch kein Binary am Zielpfad — die
+	@# `|| true` macht das harmlos statt den Deploy abzubrechen.
+	ssh $(REMOTE) "sudo cp $(REMOTE_BIN) $(REMOTE_BIN).prev 2>/dev/null || true; \
+		sudo mv /tmp/$(REMOTE_SERVICE).new $(REMOTE_BIN) && \
+		$(AS_SERVICE_USER) $(REMOTE_BIN) migrate up --db $(DB_PATH) && \
 		sudo chown www-data:www-data $(DB_PATH) $(DB_PATH)-shm $(DB_PATH)-wal 2>/dev/null; \
-		sudo systemctl restart teamwerk"
+		sudo systemctl restart $(REMOTE_SERVICE)"
 	@# Smoke-Test: bis zu 30s auf /api/healthz warten (health.Handler.Healthz,
 	@# internal/health/health.go — 200 bei gesunder DB, sonst 503; `curl -f`
 	@# behandelt beides korrekt als Erfolg/Fehlschlag). Schlägt das fehl, bricht
-	@# der Deploy ab BEVOR .deployed-hash geschrieben wird (siehe unten) — der
+	@# der Deploy ab BEVOR der Deploy-Hash geschrieben wird (siehe unten) — der
 	@# Hinweis zeigt auf `make deploy-rollback`.
-	@echo "Smoke-Test: warte auf /api/healthz (bis 30s)..."
-	ssh $(REMOTE) 'PORT=$$(sudo grep -E "^PORT=" /etc/teamwerk/env | cut -d= -f2-); PORT=$${PORT:-8080}; \
+	@$(MAKE) --no-print-directory _smoke ENV=$(ENV) SMOKE_FAIL="Deploy fehlgeschlagen: Prozess antwortet nicht - make deploy-rollback ENV=$(ENV)"
+	@echo "Deployed successfully (ENV=$(ENV))."
+	@git rev-parse --short HEAD > $(DEPLOYED_HASH)
+
+# Smoke-Test der gewählten Umgebung (Port aus ihrer Env-Datei).
+_smoke:
+	@echo "Smoke-Test $(REMOTE_SERVICE): warte auf /api/healthz (bis 30s)..."
+	@ssh $(REMOTE) 'PORT=$$(sudo grep -E "^PORT=" $(REMOTE_ENV_FILE) | cut -d= -f2-); PORT=$${PORT:-$(REMOTE_PORT)}; \
 		ok=0; \
 		for i in $$(seq 1 15); do \
 			if curl -fsS "http://127.0.0.1:$$PORT/api/healthz" > /dev/null 2>&1; then ok=1; break; fi; \
 			sleep 2; \
 		done; \
 		if [ "$$ok" != "1" ]; then \
-			echo "systemctl status teamwerk:" >&2; \
-			sudo systemctl status teamwerk --no-pager | tail -20 >&2; \
-			echo "Deploy fehlgeschlagen: Prozess antwortet nicht - make deploy-rollback" >&2; \
+			echo "systemctl status $(REMOTE_SERVICE):" >&2; \
+			sudo systemctl status $(REMOTE_SERVICE) --no-pager | tail -20 >&2; \
+			echo "$(SMOKE_FAIL)" >&2; \
 			exit 1; \
 		fi; \
-		echo "Smoke-Test OK (Port $$PORT)."' || exit 1
-	@echo "Deployed successfully."
-	@git rev-parse --short HEAD > .deployed-hash
+		echo "Smoke-Test OK ($(REMOTE_SERVICE), Port $$PORT)."' || exit 1
 
-deploy-rollback: ## Vorheriges Binary zurückspielen (Notfall, wenn der Smoke-Test in `make deploy` fehlschlägt)
-	@echo "Prüfe $(REMOTE_DIR)/$(BINARY).prev auf $(REMOTE)..."
-	@ssh $(REMOTE) "test -f $(REMOTE_DIR)/$(BINARY).prev" \
-		|| { echo "Fehler: kein $(REMOTE_DIR)/$(BINARY).prev vorhanden - kein Rollback moeglich (setzt einen vorherigen 'make deploy' voraus)."; exit 1; }
+deploy-rollback: _check-env ## Vorheriges Binary zurückspielen (ENV=prod|beta; Notfall, wenn der Smoke-Test in `make deploy` fehlschlägt)
+	@echo "Prüfe $(REMOTE_BIN).prev auf $(REMOTE)..."
+	@ssh $(REMOTE) "test -f $(REMOTE_BIN).prev" \
+		|| { echo "Fehler: kein $(REMOTE_BIN).prev vorhanden - kein Rollback moeglich (setzt einen vorherigen 'make deploy ENV=$(ENV)' voraus)."; exit 1; }
 	@# Kein Rückwärts-Migrieren: Migrationen sind additiv (siehe
 	@# docs/agent/10-deployment.md „Smoke-Test und Rollback") — die aktuelle
 	@# DB bleibt mit dem vorherigen Binary kompatibel, ein `migrate down` ist
 	@# hier bewusst nicht Teil des Ablaufs.
-	ssh $(REMOTE) "sudo mv $(REMOTE_DIR)/$(BINARY) $(REMOTE_DIR)/$(BINARY).failed && \
-		sudo mv $(REMOTE_DIR)/$(BINARY).prev $(REMOTE_DIR)/$(BINARY) && \
-		sudo systemctl restart teamwerk"
-	@echo "Smoke-Test: warte auf /api/healthz (bis 30s)..."
-	ssh $(REMOTE) 'PORT=$$(sudo grep -E "^PORT=" /etc/teamwerk/env | cut -d= -f2-); PORT=$${PORT:-8080}; \
-		ok=0; \
-		for i in $$(seq 1 15); do \
-			if curl -fsS "http://127.0.0.1:$$PORT/api/healthz" > /dev/null 2>&1; then ok=1; break; fi; \
-			sleep 2; \
-		done; \
-		if [ "$$ok" != "1" ]; then \
-			echo "systemctl status teamwerk:" >&2; \
-			sudo systemctl status teamwerk --no-pager | tail -20 >&2; \
-			echo "Rollback-Smoke-Test fehlgeschlagen - Prozess antwortet weiterhin nicht." >&2; \
-			exit 1; \
-		fi; \
-		echo "Smoke-Test OK (Port $$PORT)."' || exit 1
-	@echo "Rollback abgeschlossen — $(REMOTE_DIR)/$(BINARY) ist wieder die vorherige Version."
-	@echo "Das fehlgeschlagene Binary liegt als $(REMOTE_DIR)/$(BINARY).failed zur Analyse bereit."
+	ssh $(REMOTE) "sudo mv $(REMOTE_BIN) $(REMOTE_BIN).failed && \
+		sudo mv $(REMOTE_BIN).prev $(REMOTE_BIN) && \
+		sudo systemctl restart $(REMOTE_SERVICE)"
+	@$(MAKE) --no-print-directory _smoke ENV=$(ENV) SMOKE_FAIL="Rollback-Smoke-Test fehlgeschlagen - Prozess antwortet weiterhin nicht."
+	@echo "Rollback abgeschlossen — $(REMOTE_BIN) ist wieder die vorherige Version."
+	@echo "Das fehlgeschlagene Binary liegt als $(REMOTE_BIN).failed zur Analyse bereit."
 
-deploy-new: _check-new-remote ## Build + Deploy auf Umzugs-Zielhost (NEW_REMOTE=<alias> oder REMOTE_NEW aus .env)
+deploy-new: _check-prod-only _check-new-remote ## Build + Deploy auf Umzugs-Zielhost (NEW_REMOTE=<alias> oder REMOTE_NEW aus .env)
 	$(MAKE) deploy REMOTE=$(NEW_REMOTE_RESOLVED) REMOTE_DIR=$(NEW_REMOTE_DIR_RESOLVED)
 
-# ── Beta-Instanz (beta.teamwerk.team-stuttgart.org) ─────────────────────────
-# Zweite, vollständig getrennte Instanz auf demselben VPS: eigenes Binary,
-# eigene Env, eigene DB + Storage unter /var/lib/teamwerk-beta, eigener Dienst
-# (Port 8081). Keines der Targets schreibt einen Prod-Pfad oder startet den
-# Prod-Dienst neu. Details: docs/agent/10-deployment.md „Beta-Instanz".
+# ── Nur Beta ─────────────────────────────────────────────────────────────────
+# Datenpflege, die es für Prod nicht gibt. Pfade fest auf die Beta, unabhängig
+# von ENV.
 BETA_DIR := /var/lib/teamwerk-beta
 BETA_DB  := $(BETA_DIR)/teamwerk.db
 BETA_BIN := $(REMOTE_DIR)/teamwerk-beta
 
-setup-beta: ## Beta-Instanz einrichten (Dienst, Env, Verzeichnisse, nginx, Zertifikat; idempotent)
+setup-beta: ## Beta-Instanz einrichten (= make setup-vps ENV=beta; Dienst, Env, Verzeichnisse, nginx, Zertifikat; idempotent)
 	rsync -az deploy/setup-beta.sh deploy/teamwerk-beta.service deploy/nginx-teamwerk-beta.conf $(REMOTE):/tmp/teamwerk-beta-deploy/
 	ssh $(REMOTE) "sudo bash /tmp/teamwerk-beta-deploy/setup-beta.sh"
 
 seed-beta: ## Beta-DB aus anonymisierter Kopie von ./teamwerk.db neu aufsetzen (ersetzt die Beta-DB! FORCE=1 nötig, wenn schon eine existiert)
-	@ssh $(REMOTE) "test -f $(BETA_BIN)" || { echo "seed-beta: erst 'make deploy-beta'"; exit 1; }
+	@ssh $(REMOTE) "test -f $(BETA_BIN)" || { echo "seed-beta: erst 'make deploy ENV=beta'"; exit 1; }
 	@if ssh $(REMOTE) "sudo test -f $(BETA_DB)" && [ "$(FORCE)" != "1" ]; then \
 		echo "seed-beta: $(BETA_DB) existiert bereits — mit FORCE=1 ersetzen"; exit 1; fi
 	@mkdir -p $(BUILD_DIR)
@@ -237,8 +309,8 @@ seed-beta: ## Beta-DB aus anonymisierter Kopie von ./teamwerk.db neu aufsetzen (
 	ssh $(REMOTE) "sudo systemctl stop teamwerk-beta 2>/dev/null; \
 		sudo rm -f $(BETA_DB) $(BETA_DB)-wal $(BETA_DB)-shm && \
 		sudo mv /tmp/teamwerk-beta-seed.db $(BETA_DB) && \
-		sudo $(BETA_BIN) migrate up --db $(BETA_DB) && \
 		sudo chown www-data:www-data $(BETA_DB) && \
+		sudo -u www-data $(BETA_BIN) migrate up --db $(BETA_DB) && \
 		sudo systemctl start teamwerk-beta"
 	@rm -f $(BUILD_DIR)/beta-seed.db
 	@echo "Beta-DB eingespielt. Logins: vorstand@beispiel.de / trainer@beispiel.de (und alle anderen anonymisierten Konten)"
@@ -249,19 +321,8 @@ mirror-beta: ## Prod-Daten (DB, Dokumente, Protokolle, BWHV-PDFs; ohne Videos un
 	rsync -az deploy/beta-mirror.sh $(REMOTE):/tmp/teamwerk-beta-mirror.sh
 	ssh $(REMOTE) "sudo bash /tmp/teamwerk-beta-mirror.sh; rc=\$$?; rm -f /tmp/teamwerk-beta-mirror.sh; exit \$$rc"
 
-deploy-beta: build ## Aktuellen Arbeitsstand auf die Beta-Instanz deployen (Prod bleibt unberührt)
-	@ssh $(REMOTE) "sudo test -f /etc/teamwerk-beta/env" || { echo "deploy-beta: erst 'make setup-beta'"; exit 1; }
-	rsync -az $(BUILD_DIR)/$(BINARY) $(REMOTE):/tmp/teamwerk-beta.new
-	ssh $(REMOTE) "sudo cp $(BETA_BIN) $(BETA_BIN).prev 2>/dev/null || true; \
-		sudo mv /tmp/teamwerk-beta.new $(BETA_BIN) && sudo chmod 755 $(BETA_BIN) && \
-		if sudo test -f $(BETA_DB); then sudo $(BETA_BIN) migrate up --db $(BETA_DB) && sudo chown www-data:www-data $(BETA_DB); fi; \
-		sudo systemctl restart teamwerk-beta"
-	@echo "Smoke-Test Beta: warte auf /api/healthz (bis 30s)..."
-	@ssh $(REMOTE) 'ok=0; for i in $$(seq 1 15); do \
-			if curl -fsS http://127.0.0.1:8081/api/healthz >/dev/null 2>&1; then ok=1; break; fi; sleep 2; done; \
-		if [ "$$ok" != "1" ]; then sudo systemctl status teamwerk-beta --no-pager | tail -20 >&2; \
-			echo "Beta antwortet nicht" >&2; exit 1; fi; echo "Smoke-Test Beta OK (Port 8081)."'
-	@git rev-parse --short HEAD > .deployed-beta-hash
+deploy-beta: ## Kurzform für make deploy ENV=beta
+	@$(MAKE) --no-print-directory deploy ENV=beta
 
 migrate-up: ## Migrationen lokal anwenden
 	$(GO) run ./cmd/teamwerk migrate up
@@ -269,28 +330,28 @@ migrate-up: ## Migrationen lokal anwenden
 migrate-down: ## Letzte Migration lokal rückgängig machen
 	$(GO) run ./cmd/teamwerk migrate down
 
-migrate-remote-up: ## Ausstehende Migrationen auf VPS anwenden
-	ssh $(REMOTE) "$(REMOTE_DIR)/$(BINARY) migrate up --db $(DB_PATH)"
+migrate-remote-up: _check-env ## Ausstehende Migrationen auf VPS anwenden (ENV=prod|beta)
+	ssh $(REMOTE) "$(AS_SERVICE_USER) $(REMOTE_BIN) migrate up --db $(DB_PATH)"
 
 create-admin: ## Admin lokal anlegen (EMAIL= PASSWORD= NAME=)
 	$(GO) run ./cmd/teamwerk create-admin --db ./teamwerk.db --email=$(EMAIL) --password=$(PASSWORD) --name=$(NAME)
 
-create-admin-remote: ## Admin auf VPS anlegen (EMAIL= PASSWORD= NAME=)
-	ssh $(REMOTE) "/usr/local/bin/teamwerk create-admin --db $(DB_PATH) --email=$(EMAIL) --password=$(PASSWORD) --name='$(NAME)'"
+create-admin-remote: _check-env ## Admin auf VPS anlegen (ENV=prod|beta; EMAIL= PASSWORD= NAME=)
+	ssh $(REMOTE) "$(AS_SERVICE_USER) $(REMOTE_BIN) create-admin --db $(DB_PATH) --email=$(EMAIL) --password=$(PASSWORD) --name='$(NAME)'"
 
-push-test-remote: ## Test-Push an User senden (USER=<id> TITLE=... BODY=... URL=...)
-	ssh $(REMOTE) "/usr/local/bin/teamwerk push-test --env=/etc/teamwerk/env --db=$(DB_PATH) --user=$(USER) --title='$(TITLE)' --body='$(BODY)' --url='$(or $(URL),/)'"
+push-test-remote: _check-env ## Test-Push an User senden (ENV=prod|beta; USER=<id> TITLE=... BODY=... URL=...; Beta hat keine VAPID-Schlüssel und sendet nicht)
+	ssh $(REMOTE) "$(AS_SERVICE_USER) $(REMOTE_BIN) push-test --env=$(REMOTE_ENV_FILE) --db=$(DB_PATH) --user=$(USER) --title='$(TITLE)' --body='$(BODY)' --url='$(or $(URL),/)'"
 
-backup: ## Prod-DB + Tresor-Blobs (uploads: Profilfotos + SEPA-Mandat-PDFs) auf VPS sichern (./backup/<timestamp>/)
-	@echo "Erstelle DB-Backup auf VPS → $(BACKUP_DIR)/"
+backup: _check-env ## DB + Tresor-Blobs (uploads: Profilfotos + SEPA-Mandat-PDFs) vom VPS sichern (ENV=prod → ./backup/<timestamp>/, ENV=beta → ./backup/beta/<timestamp>/)
+	@echo "Erstelle DB-Backup ($(ENV)) auf VPS → $(BACKUP_DIR)/"
 	@mkdir -p $(BACKUP_DIR)/uploads
-	ssh $(REMOTE) "sqlite3 $(DB_PATH) '.backup /tmp/teamwerk-backup.db'"
-	scp $(REMOTE):/tmp/teamwerk-backup.db $(BACKUP_DIR)/teamwerk.db
-	ssh $(REMOTE) "rm -f /tmp/teamwerk-backup.db"
+	ssh $(REMOTE) "$(AS_SERVICE_USER) sqlite3 -readonly $(DB_PATH) '.backup /tmp/$(REMOTE_SERVICE)-backup.db'"
+	scp $(REMOTE):/tmp/$(REMOTE_SERVICE)-backup.db $(BACKUP_DIR)/teamwerk.db
+	ssh $(REMOTE) "rm -f /tmp/$(REMOTE_SERVICE)-backup.db"
 	rsync -az $(REMOTE):$(UPLOAD_DIR_REMOTE)/ $(BACKUP_DIR)/uploads/
 	@echo "Backup gespeichert: $(BACKUP_DIR)/"
 
-backup-files: ## Alle kleinen Datei-Blobs vom VPS sichern (Dokumente, Beitragslauf, Chat-Media, Match-Report-Bilder, Trainingsnachweise) → ./backup/<timestamp>/
+backup-files: _check-env ## Alle kleinen Datei-Blobs vom VPS sichern (Dokumente, Beitragslauf, Chat-Media, Match-Report-Bilder, Trainingsnachweise) → ./backup/<timestamp>/
 	@echo "Synchronisiere Datei-Blobs → $(BACKUP_DIR)/"
 	@mkdir -p $(BACKUP_DIR)/files $(BACKUP_DIR)/beitragslauf-protokolle $(BACKUP_DIR)/media $(BACKUP_DIR)/match-report-images $(BACKUP_DIR)/training-diary
 	@# files-Ordner (Dokumente-UI) — auf Prod immer vorhanden.
@@ -325,7 +386,7 @@ backup-files: ## Alle kleinen Datei-Blobs vom VPS sichern (Dokumente, Beitragsla
 	fi
 	@echo "Backup gespeichert: $(BACKUP_DIR)/"
 
-backup-videos: ## Video-HLS-Transkodes vom VPS sichern (GB-Bereich; bewusst separat) → ./backup/<timestamp>/
+backup-videos: _check-env ## Video-HLS-Transkodes vom VPS sichern (GB-Bereich; bewusst separat) → ./backup/<timestamp>/
 	@echo "Prüfe Größe von $(VIDEO_STORAGE_DIR_REMOTE) auf $(REMOTE) …"
 	@ssh $(REMOTE) "test -d $(VIDEO_STORAGE_DIR_REMOTE) && sudo du -sh $(VIDEO_STORAGE_DIR_REMOTE) 2>/dev/null || echo '  ($(VIDEO_STORAGE_DIR_REMOTE) existiert nicht)'"
 	@mkdir -p $(BACKUP_DIR)/videos
@@ -337,7 +398,7 @@ backup-videos: ## Video-HLS-Transkodes vom VPS sichern (GB-Bereich; bewusst sepa
 	fi
 
 restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
-	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
+	@RESTORE="$${BACKUP:-$$(ls -dt $(BACKUP_ROOT)/20*/ 2>/dev/null | head -1)}"; \
 	if [ -z "$$RESTORE" ] || [ ! -f "$$RESTORE/teamwerk.db" ]; then \
 		echo "Fehler: kein Backup gefunden. Zuerst 'make backup' ausführen."; exit 1; \
 	fi; \
@@ -357,7 +418,7 @@ restore-local: ## Letztes Backup (DB + Bilder) lokal einspielen (optional: BACKU
 	fi
 
 restore-local-files: ## Letztes Backup (Dokumente + Protokolle + Chat-Media + Match-Report-Bilder + Trainingsnachweise) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
-	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
+	@RESTORE="$${BACKUP:-$$(ls -dt $(BACKUP_ROOT)/20*/ 2>/dev/null | head -1)}"; \
 	if [ -z "$$RESTORE" ] || { [ ! -d "$$RESTORE/files" ] && [ ! -d "$$RESTORE/beitragslauf-protokolle" ] && [ ! -d "$$RESTORE/media" ] && [ ! -d "$$RESTORE/match-report-images" ] && [ ! -d "$$RESTORE/training-diary" ]; }; then \
 		echo "Fehler: kein Backup gefunden. Zuerst 'make backup-files' ausführen."; exit 1; \
 	fi; \
@@ -387,7 +448,7 @@ restore-local-files: ## Letztes Backup (Dokumente + Protokolle + Chat-Media + Ma
 	fi
 
 restore-local-videos: ## Letztes Backup (Videos) lokal einspielen (optional: BACKUP=/pfad/<timestamp>)
-	@RESTORE="$${BACKUP:-$$(ls -dt $(REPO_ROOT)/backup/20*/ 2>/dev/null | head -1)}"; \
+	@RESTORE="$${BACKUP:-$$(ls -dt $(BACKUP_ROOT)/20*/ 2>/dev/null | head -1)}"; \
 	if [ -z "$$RESTORE" ] || [ ! -d "$$RESTORE/videos" ]; then \
 		echo "Fehler: kein Video-Backup gefunden. Zuerst 'make backup-videos' ausführen."; exit 1; \
 	fi; \
@@ -480,7 +541,7 @@ _check-base-url-new:
 		*) echo "Fehler: BASE_URL_NEW muss mit 'https://' beginnen (aktuell: $(BASE_URL_NEW))"; exit 1;; \
 	esac
 
-server-bootstrap: _check-remote _check-new-remote _check-base-url-new build ## Server-Umzug: initialen Zielhost aufsetzen (setup + Env + DB + Storage + Deploy)
+server-bootstrap: _check-prod-only _check-remote _check-new-remote _check-base-url-new build ## Server-Umzug: initialen Zielhost aufsetzen (setup + Env + DB + Storage + Deploy)
 	@echo ">>> Bootstrap: Quelle=$(REMOTE)  Ziel=$(NEW_REMOTE_RESOLVED)  Domain=$(NEW_DOMAIN)"
 	@echo ">>> A) setup-vps auf Ziel"
 	rsync -az deploy/ $(NEW_REMOTE_RESOLVED):/tmp/teamwerk-deploy/
@@ -537,7 +598,7 @@ server-bootstrap: _check-remote _check-new-remote _check-base-url-new build ## S
 	@echo "  3. DNS + Certbot: siehe deploy/server-migration-runbook.md Abschnitt 3"
 	@echo "  4. Cutover: make server-cutover NEW_REMOTE=$(NEW_REMOTE_RESOLVED)"
 
-server-sync-data: _check-remote _check-new-remote _check-base-url-new build ## Server-Umzug: DB + Storage von Quelle auf Ziel neu synchronisieren (überschreibt Testdaten auf Ziel)
+server-sync-data: _check-prod-only _check-remote _check-new-remote _check-base-url-new build ## Server-Umzug: DB + Storage von Quelle auf Ziel neu synchronisieren (überschreibt Testdaten auf Ziel)
 	@if [ "$$MAKE_CONFIRMED" = "1" ]; then \
 		echo ">>> Auto-Confirm (aus server-cutover)"; \
 	else \
@@ -580,7 +641,7 @@ server-sync-data: _check-remote _check-new-remote _check-base-url-new build ## S
 		|| { echo "Fehler: /api/healthz auf Ziel nicht ok"; exit 1; }
 	@echo "Sync fertig."
 
-server-cutover: _check-remote _check-new-remote _check-base-url-new ## Server-Umzug: Alt-Host auf 301-Redirect umschalten (final)
+server-cutover: _check-prod-only _check-remote _check-new-remote _check-base-url-new ## Server-Umzug: Alt-Host auf 301-Redirect umschalten (final)
 	@printf "server-cutover stoppt teamwerk auf $(REMOTE) und schaltet den Alt-Host auf 301 → $(BASE_URL_NEW). Ein letzter server-sync-data läuft davor. Fortfahren? [y/N] "; \
 	read ans; \
 	case "$$ans" in y|Y) ;; *) echo "Abgebrochen." ; exit 1;; esac

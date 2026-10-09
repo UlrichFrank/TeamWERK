@@ -1,4 +1,4 @@
-# Pull-Request- und main-Push-Gate. Spiegelt den gate-Job aus deploy.yml
+# Pull-Request- und Push-Gate für main und beta. Spiegelt den gate-Job aus deploy.yml
 # und .githooks/pre-push (go vet/test, golangci-lint, pnpm build/test/lint).
 # Wird u.a. von Dependabot-PRs zur Validierung benutzt.
 #
@@ -9,9 +9,9 @@ name: ci
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, beta]
   push:
-    branches: [main]
+    branches: [main, beta]
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}

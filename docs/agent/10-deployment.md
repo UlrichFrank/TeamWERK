@@ -245,11 +245,19 @@ Zweite Instanz auf demselben VPS zum Ausprobieren neuer Oberflächen (zuerst: Ka
 **Daten:** `make seed-beta` baut **lokal** aus `./teamwerk.db` (vorher `make pull-db`) eine anonymisierte Kopie (`deploy/beta-seed.sh` → `docs/schulung/tools/anon.py`) und härtet sie für eine öffentlich erreichbare Instanz: Bank-/SEPA-Ciphertexte und der Tresor-Schlüssel werden entfernt (die Ciphertexte wären mit der Vereins-Passphrase entschlüsselbar), alle Tokens gelöscht, alle Logins bekommen ein **zufälliges** Passwort (anon.py setzt ein im Repo dokumentiertes) — es steht danach in `bin/beta-password.txt`. Personas: `vorstand@beispiel.de`, `trainer@beispiel.de`. Ersetzt die Beta-DB nur mit `FORCE=1`. Den Tresor richtet man auf der Beta bei Bedarf neu ein.
 
 ```bash
-make setup-beta                  # einmalig + idempotent: Verzeichnisse, Env (Secrets zufällig), Dienst, nginx, certbot
-make deploy-beta                 # Arbeitsstand bauen und NUR auf die Beta ausrollen (+ Smoke-Test Port 8081)
+make setup-vps ENV=beta          # einmalig + idempotent (= make setup-beta): Verzeichnisse, Env (Secrets zufällig), Dienst, nginx, certbot
+make deploy ENV=beta             # nur vom Branch beta; bauen und NUR auf die Beta ausrollen (+ Smoke-Test Port 8081)
+make deploy-rollback ENV=beta    # vorheriges Beta-Binary zurück
+make migrate-remote-up ENV=beta  # / create-admin-remote / backup / backup-files / pull-db … ENV=beta
 make seed-beta [FORCE=1]         # Beta-DB aus anonymisierter lokaler Kopie neu aufsetzen
 make mirror-beta FORCE=1         # Beta-Daten durch Prod-Stand ersetzen (ohne Videos/Bilder; Prod nur gelesen)
 ```
+
+**`ENV=prod|beta` an allen Server-Targets** (Change `beta-branch-prozess`): Ohne `ENV` ist alles Prod wie bisher. `ENV=beta` setzt Binary, Env-Datei, Datenverzeichnis, Dienst, Port, Video-Ablage, Deploy-Hash (`.deployed-beta-hash`) und Backup-Ziel (`backup/beta/<ts>/` — `restore-local` sucht `backup/20*/` bzw. mit `ENV=beta` nur `backup/beta/20*/`, ein Beta-Stand wird nie für einen Prod-Stand gehalten) auf die Beta. `_check-env` bricht ab, wenn ein Pfad einer `ENV=beta`-Operation nicht `teamwerk-beta` enthält; schreibende Remote-Schritte laufen auf der Beta als `www-data`. Nur Prod: Server-Umzug (`server-*`, `deploy-new`), Backup-Cron, `HSTS_ENABLED=true`, Erst-Installation der Unit. Nur Beta: `seed-beta`, `mirror-beta`.
+
+**Branch-Bindung:** `make deploy` deployt Prod nur von `main` oder einem `vX.Y.Z`-Tag (so checkt `deploy.yml` aus), die Beta nur vom Branch `beta` — jeweils ohne uncommittete Änderungen an versionierten Dateien; geprüft **vor** dem Build. Notausgang `ALLOW_BRANCH=1` (gibt eine Warnung aus). `deploy-rollback` ist bewusst nicht gebunden (Notfall).
+
+**Ablauf:** Feature-Branch → entweder direkt nach `main` (Release/Tag → Prod wie bisher) oder erst nach `beta` (Push löst `.github/workflows/deploy-beta.yml` aus: Gate wie Prod, dann `make deploy ENV=beta`, Smoke über nginx) und danach `beta` → `main`. `ci.yml` läuft für Pushes und PRs auf beide Branches. Der Beta-Workflow nutzt das GitHub-Environment `beta` mit denselben drei Deploy-Secrets wie `production` (siehe `deploy/github-actions-setup.md`).
 
 **Prod-Spiegel:** `make mirror-beta FORCE=1` ersetzt die Beta-Daten durch den aktuellen Prod-Stand (`deploy/beta-mirror.sh`, Change `beta-prod-spiegel`): DB, Dokumente (`files`), Beitragslauf-Protokolle, BWHV-PDFs — **ohne** Videos und Bild-Ablagen (`uploads`, `media`, `training-diary`, `match-report-images`; deren Beta-Verzeichnisse werden geleert, Bilder erscheinen leer). Läuft komplett auf dem VPS. Prod wird nur gelesen: Online-Backup aus `sqlite3 -readonly`, alle Schritte als `www-data` mit `nice -n 19 ionice -c3` (kein root-eigener Rest im Prod-Verzeichnis), jedes Schreibziel wird gegen `/var/lib/teamwerk-beta` geprüft, nur `teamwerk-beta` wird gestoppt. Die Kopie verliert Push-Abos und Refresh-Tokens, der Wartungsmodus geht aus. Danach melden sich echte Nutzer mit ihrem Prod-Passwort an; alles, was sie auf der Beta ändern, bleibt dort und wird beim nächsten Spiegeln überschrieben. Die Beta enthält damit echte personenbezogene Daten — gleiche Rechte wie Prod (`www-data`, `0750`), nicht im Backup.
 

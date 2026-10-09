@@ -82,6 +82,25 @@ mit **Required reviewers** versehen, damit jeder Deploy manuell abgenickt werden
 muss. Die Secrets oben dann **am Environment** statt am Repo hinterlegen, dann
 sind sie nur für Jobs mit `environment: production` zugreifbar.
 
+## Beta-Deploy (`deploy-beta.yml`) und Environment "beta"
+
+Jeder Push auf den Branch `beta` läuft durch dasselbe Gate wie Prod und dann
+`make deploy ENV=beta` (nur Beta-Pfade, Dienst `teamwerk-beta`). Der Job ist an
+das Environment `beta` gebunden; da die Deploy-Secrets am Environment
+`production` liegen, müssen sie dort **einmal zusätzlich** hinterlegt werden
+(Werte sind in GitHub nicht auslesbar — aus der eigenen Ablage nehmen):
+
+```bash
+gh api -X PUT repos/UlrichFrank/TeamWERK/environments/beta
+gh secret set DEPLOY_SSH_PRIVATE_KEY --env beta < ~/.ssh/<ci-deploy-key>
+gh secret set DEPLOY_SSH_KNOWN_HOSTS --env beta --body "$(ssh-keyscan -t ed25519,rsa teamwerk.team-stuttgart.org 2>/dev/null)"
+gh secret set DEPLOY_REMOTE --env beta --body '<user@host wie bei production>'
+```
+
+Ist `DEPLOY_REMOTE` kein root, braucht der Deploy-User für die Beta zusätzlich
+sudo für `cp` und das Ausführen als `www-data` (`sudo -u www-data …`, Migrationen
+der Beta-DB laufen so, damit dort nichts root-eigenes entsteht).
+
 ## Erst-Release
 
 Ohne existierendes Tag erzeugt `scripts/next-version.sh` `v0.1.0` (sofern

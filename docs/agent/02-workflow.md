@@ -6,7 +6,8 @@ go run ./cmd/teamwerk        # Backend :8080  (braucht cmd/teamwerk/web/dist/ we
 cd web && pnpm dev           # Vite :5173, proxyt /api → :8080
 
 make build                   # pnpm build + go build → bin/teamwerk
-make deploy                  # build + rsync auf VPS + systemctl restart (führt automatisch migrate up aus)
+make deploy                  # build + rsync auf VPS + systemctl restart (führt automatisch migrate up aus) — nur von main/vX.Y.Z-Tag
+make deploy ENV=beta         # dasselbe für die Beta-Instanz (beta.teamwerk…) — nur vom Branch beta; ENV=beta gilt für alle Server-Targets
 make migrate-up / migrate-down
 make test / lint / coverage
 make test-e2e                # Playwright (echter Chromium gegen Prod-Binary + Seed-DB) — ~2–4 min, NICHT Teil von make test/pre-push; für UI-riskante Änderungen (Scroll/Layout/Focus)
@@ -19,5 +20,7 @@ make schulung                # wie folien + Screenshots aus anonymisierter Kopie
 cd tools/video-encoder && go test ./internal/...   # reines Go; mit ffmpeg/ffprobe im PATH laufen auch die Integrationstests
 cd tools/video-encoder && go run .                 # Fyne braucht einen C-Compiler; ohne eingebettetes ffmpeg wird das aus dem PATH genutzt
 ```
+
+**Branches:** `main` = Prod (Release-Tag → `deploy.yml`), `beta` = Beta-Instanz (Push → `deploy-beta.yml`). Feature-Branches gehen direkt nach `main` oder erst nach `beta` und von dort nach `main`. Die Beta darf Prod nie beeinflussen — Details `docs/agent/10-deployment.md` „Beta-Instanz“.
 
 **Neue Migration:** `internal/db/migrations/00N_beschreibung.up.sql` + `.down.sql` mit der **nächsten freien Nummer**. Nie eine Nummer ≤ aktueller DB-Version — golang-migrate überspringt sie lautlos.

@@ -1,0 +1,153 @@
+# Bei jedem Push auf den Branch beta auf die Beta-Instanz deployen
+# (beta.teamwerk.team-stuttgart.org). Gegenstück zu deploy.yml (Prod, per Tag).
+#
+# Pipeline:
+#   gate   → identisch zu deploy.yml (go vet/test/lint, pnpm build/test/lint)
+#   deploy → `make deploy ENV=beta` (nur /usr/local/bin/teamwerk-beta,
+#            /etc/teamwerk-beta/env, /var/lib/teamwerk-beta, Dienst teamwerk-beta)
+#
+# Kein Tag, kein Release, kein DB-Backup: die Beta ist Wegwerf-Zustand und wird
+# per `make mirror-beta FORCE=1` aus Prod neu befüllt. `make deploy ENV=beta`
+# prüft selbst, dass der Stand vom Branch beta kommt (Branch-Bindung im
+# Makefile) — ein Lauf von einem anderen Ref bricht dort ab.
+#
+# Secrets: dieselben wie deploy.yml (DEPLOY_SSH_PRIVATE_KEY,
+# DEPLOY_SSH_KNOWN_HOSTS, DEPLOY_REMOTE), hinterlegt am Environment `beta`
+# (siehe deploy/github-actions-setup.md).
+name: deploy-beta
+
+on:
+  push:
+    branches: [beta]
+  workflow_dispatch:
+
+# Nur ein Beta-Deploy gleichzeitig; eigene Gruppe, blockiert Prod-Deploys nicht.
+concurrency:
+  group: deploy-beta
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.26.0'
+  NODE_VERSION: '22'
+  PNPM_VERSION: '11.17.0'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm -C web install --frozen-lockfile
+
+      # libxml2-utils (xmllint) fürs SEPA-XSD-Gate — identisch zu ci.yml. Fehlt
+      # es, skippt sepaXml.xsd.test.ts still, und ausgerechnet vor dem Prod-Deploy
+      # liefe der Generator ungeprüft durch (siehe docs/agent/08-verification.md).
+      - run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      # Frontend zuerst bauen: vite schreibt nach cmd/teamwerk/web/dist/
+      # (gitignored). //go:embed all:web/dist braucht das Verzeichnis, sonst
+      # schlagen go vet/test mit "pattern all:web/dist: no matching files" fehl.
+      - run: pnpm -C web build
+
+      - run: go vet ./...
+
+      # Ohne -race, konsistent mit ci.yml und .githooks/pre-push (siehe
+      # docs/agent/08-verification.md: Race-Detector läuft separat über
+      # `make test-race`). Der Detector kostete hier ~40 min und war der Grund,
+      # warum manuelle Deploys abgebrochen statt zu Ende geführt wurden; der
+      # Tag-Commit ist zu diesem Zeitpunkt ohnehin schon durch ci.yml gelaufen.
+      - run: go test ./...
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+
+      - run: pnpm -C web test
+        env:
+          TEAMWERK_REQUIRE_XSD: '1'
+
+      - run: pnpm -C web lint
+
+  deploy:
+    needs: gate
+    # workflow_dispatch lässt sich auf jedem Branch auslösen — nur beta deployt.
+    if: github.ref == 'refs/heads/beta'
+    runs-on: ubuntu-latest
+    environment: beta
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # make build/gen-changelog.py liest die Git-Historie
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - run: pnpm -C web install --frozen-lockfile
+
+      - name: SSH-Key + known_hosts einrichten
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: REMOTE/REMOTE_DIR für make in .env schreiben
+        env:
+          REMOTE: ${{ secrets.DEPLOY_REMOTE }}
+          REMOTE_DIR: ${{ vars.DEPLOY_REMOTE_DIR || '/usr/local/bin' }}
+        run: |
+          set -euo pipefail
+          : > .env
+          printf 'REMOTE=%s\nREMOTE_DIR=%s\n' "$REMOTE" "$REMOTE_DIR" >> .env
+
+      - name: Deploy (make deploy ENV=beta)
+        run: |
+          set -euo pipefail
+          echo "Deploye beta @ $(git rev-parse --short HEAD)"
+          make deploy ENV=beta
+
+      - name: Smoke-Check über nginx
+        run: |
+          set -euo pipefail
+          for i in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 https://beta.teamwerk.team-stuttgart.org/api/healthz || echo 000)
+            echo "Versuch $i: HTTP $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 3
+          done
+          echo "::error::Beta-healthz nach Deploy nicht 200" && exit 1
