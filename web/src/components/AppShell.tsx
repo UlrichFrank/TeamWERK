@@ -525,7 +525,7 @@ export default function AppShell() {
         )}
 
         {/* Main content */}
-        <main ref={mainRef} className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white text-brand-text sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne sm:eckfahne-lg">
+        <main ref={mainRef} className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white text-brand-text sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne-bg sm:eckfahne-lg">
           {canGoBack && (
             <div className="hidden sm:block -mt-2 mb-3">
               <button

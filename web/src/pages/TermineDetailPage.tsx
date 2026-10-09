@@ -481,7 +481,7 @@ export default function TermineDetailPage() {
       <>
         {declineModal}
       <div className="max-w-2xl space-y-4">
-        <div className={`bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne p-6 ${session.status === 'cancelled' ? 'border-brand-border' : 'border-brand-yellow'}`}>
+        <div className={`bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne p-6 ${session.status === 'cancelled' ? 'border-brand-border fahne-brand-border' : 'border-brand-yellow'}`}>
           <div className="flex items-start gap-3">
             <Dumbbell className="w-6 h-6 mt-0.5 text-brand-text-muted shrink-0" />
             <div className="flex-1 min-w-0">

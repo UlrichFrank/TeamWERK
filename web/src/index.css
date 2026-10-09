@@ -90,16 +90,28 @@
 
 /*
   Eckfahne: farbiges Dreieck in der Ecke oben links, Gegenstück zur 2-px-Oberkante
-  (`border-t-2`) von Kachel und Modal. Als `background-image`, nicht als
-  Pseudo-Element: ein `::before` bräuchte `position: relative` am Träger und
-  überstimmte damit `sticky`/`fixed` einzelner Karten. Folge: ein Kind mit eigener
-  Hintergrundfarbe (Tabellenkopf, Kalendergitter) deckt die Fahne ab — gewollt,
-  die Oberkante bleibt sichtbar. Die Farbe folgt nicht automatisch der
-  Rahmenfarbe; Karten mit Statusfarbe setzen sie über `fahne-*`
-  (z. B. `fahne-brand-green`), Default ist Gelb. `eckfahne-lg` ist die größere
-  Fahne des Inhaltsbereichs (AppShell `<main>`). Beide Variablen vererben sich
-  NICHT (`@property … inherits: false`): sonst trüge jede Kachel im `<main>` dessen
-  44-px-Fahne und jede Karte in einer Statuskarte deren Farbe.
+  (`border-t-2`) von Kachel und Modal.
+
+  `eckfahne` (Kacheln, Modals) zeichnet das Dreieck als `::before` ÜBER dem
+  Inhalt. Die erste Fassung war ein `background-image` der Kachel — jedes Kind
+  mit eigener Hintergrundfarbe (Tabellenkopf auf /diensttypen, Kalendergitter)
+  deckte es ab. Das Pseudo-Element braucht einen Containing Block, deshalb setzt
+  die Utility `position: relative`; eine Kachel mit Eckfahne darf deshalb nicht
+  `sticky`/`fixed`/`absolute` sein (eckfahne.gate.test.ts). `pointer-events:
+  none`, damit das Dreieck keinen Klick schluckt.
+
+  `eckfahne-bg` (Inhaltsbereich `<main>`, Einstiegsseiten) bleibt ein
+  `background-image`: `<main>` ist der Scroll-Container der App, ein absolut
+  positioniertes Pseudo-Element liefe mit dem Inhalt aus dem Bild, der
+  Hintergrund bleibt in der Ecke stehen.
+
+  Die Farbe folgt nicht automatisch der Rahmenfarbe; Karten mit Statusfarbe
+  setzen sie über `fahne-*` (z. B. `fahne-brand-green`), Default ist Gelb.
+  `eckfahne-lg` ist die größere Fahne des Inhaltsbereichs. Größe und Farbe sind
+  `@property … inherits: false`: als normale Custom Properties erbten alle
+  Kacheln im `<main>` dessen 44-px-Fahne und jede Karte in einer Statuskarte
+  deren Farbe. Weil damit auch das `::before` nichts erbt, reicht die Kachel die
+  aufgelösten Werte über unregistrierte Hilfsvariablen (`--_ef-*`) weiter.
 */
 @property --eckfahne-color {
   syntax: '<color>';
@@ -114,6 +126,24 @@
 }
 
 @utility eckfahne {
+  position: relative;
+  --_ef-color: var(--eckfahne-color);
+  --_ef-size: var(--eckfahne-size);
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+    width: var(--_ef-size);
+    height: var(--_ef-size);
+    background: linear-gradient(135deg, var(--_ef-color) 50%, transparent calc(50% + 0.5px));
+    pointer-events: none;
+  }
+}
+
+@utility eckfahne-bg {
   background-image: linear-gradient(
     135deg,
     var(--eckfahne-color) 50%,

@@ -48,7 +48,7 @@ export default function RequestMembershipPage() {
     return (
       <div className="min-h-screen flex flex-col sm:flex-row bg-brand-gray">
         <Sidebar />
-        <div className="flex-1 flex items-center justify-center bg-brand-white sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne sm:eckfahne-lg">
+        <div className="flex-1 flex items-center justify-center bg-brand-white sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne-bg sm:eckfahne-lg">
           <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
             <MobileLogo />
             <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-8 text-center">
@@ -71,7 +71,7 @@ export default function RequestMembershipPage() {
   return (
     <div className="min-h-screen flex flex-col sm:flex-row bg-brand-gray">
       <Sidebar />
-      <div className="flex-1 flex items-center justify-center bg-brand-white sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne sm:eckfahne-lg">
+      <div className="flex-1 flex items-center justify-center bg-brand-white sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne-bg sm:eckfahne-lg">
         <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
           <MobileLogo />
           <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-8">

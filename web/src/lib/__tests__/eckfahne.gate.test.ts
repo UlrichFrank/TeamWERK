@@ -40,6 +40,11 @@ function findViolations(entries: { rel: string; src: string }[]): string[] {
       if (/(?:^|[\s"'`])sm:rounded-(?:l|tl|bl)-3xl\b/.test(line)) {
         out.push(`${rel}:${i + 1}: alte Abgrenzung des Inhaltsbereichs — sm:border-l-[3px] sm:eckfahne sm:eckfahne-lg verwenden`)
       }
+      // `eckfahne` setzt position: relative für sein ::before — eine anders
+      // positionierte Kachel verlöre ihre Positionierung oder ihre Fahne.
+      if (/(?<![\w-])eckfahne(?![\w-])/.test(line) && /(?:^|[\s"'`])(?:sticky|fixed|absolute)(?=[\s"'`]|$)/.test(line)) {
+        out.push(`${rel}:${i + 1}: eckfahne auf sticky/fixed/absolute-Element — Fahne braucht position: relative`)
+      }
       if (/\beckfahne\b/.test(line) && /\brounded-(?:xl|2xl|lg)\b/.test(line)) {
         out.push(`${rel}:${i + 1}: Eckfahne mit großem Radius — rounded-xs verwenden`)
       }
@@ -75,6 +80,11 @@ describe('Eckfahne-Gate', () => {
 
   it('Poison: alte Abgrenzung neben der Seitenleiste wird erkannt', () => {
     const src = '<div className="flex-1 bg-brand-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow" />'
+    expect(findViolations([{ rel: 'x.tsx', src }])).toHaveLength(1)
+  })
+
+  it('Poison: Eckfahne auf positioniertem Element wird erkannt', () => {
+    const src = '<div className="sticky top-0 rounded-xs border-t-2 eckfahne border-brand-yellow" />'
     expect(findViolations([{ rel: 'x.tsx', src }])).toHaveLength(1)
   })
 
