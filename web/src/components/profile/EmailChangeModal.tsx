@@ -52,7 +52,7 @@ export default function EmailChangeModal({ onClose }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="relative bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
           <h2 id={titleId} className={MODAL_TITLE}>E-Mail-Adresse ändern</h2>

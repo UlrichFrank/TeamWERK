@@ -207,14 +207,14 @@ export default function AdminVenuesPage() {
       {loading ? (
         <p className="text-brand-text-muted text-sm">Lade...</p>
       ) : venues.length === 0 ? (
-        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+        <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-8 text-center">
           <MapPin className="w-10 h-10 text-brand-text-muted mx-auto mb-3" />
           <p className="text-brand-text-muted text-sm">Noch keine Veranstaltungsorte angelegt.</p>
         </div>
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+          <div className="hidden sm:block bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
             <table className="w-full">
               <thead>
                 <tr>
@@ -257,7 +257,7 @@ export default function AdminVenuesPage() {
           {/* Mobile cards */}
           <div className="sm:hidden space-y-3">
             {venues.map(v => (
-              <div key={v.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4">
+              <div key={v.id} className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
@@ -282,7 +282,7 @@ export default function AdminVenuesPage() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h2 className={`${MODAL_TITLE} mb-4`}>
               {editVenue ? 'Ort bearbeiten' : 'Neuer Veranstaltungsort'}
             </h2>
@@ -383,7 +383,7 @@ export default function AdminVenuesPage() {
       {/* Import Modal */}
       {showImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md">
             <h2 className={`${MODAL_TITLE} mb-4`}>CSV importieren</h2>
 
             {!importResult ? (
@@ -475,7 +475,7 @@ export default function AdminVenuesPage() {
       {/* Delete all confirmation */}
       {showDeleteAll && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className={`${MODAL_TITLE} mb-2`}>Alle Orte löschen?</h2>
             <p className="text-sm text-brand-text-muted mb-5">Alle Veranstaltungsorte außer der Heimhalle werden unwiderruflich gelöscht.</p>
             <div className="flex justify-end gap-2">
@@ -491,7 +491,7 @@ export default function AdminVenuesPage() {
       {/* Delete confirmation */}
       {deleteConfirm !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className={`${MODAL_TITLE} mb-2`}>Ort löschen?</h2>
             <p className="text-sm text-brand-text-muted mb-5">Events die diesem Ort zugeordnet sind, verlieren ihre Ortsangabe.</p>
             <div className="flex justify-end gap-2">

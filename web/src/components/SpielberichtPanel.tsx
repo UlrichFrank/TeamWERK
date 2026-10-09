@@ -8,7 +8,7 @@ import { HEADER_CTRL, HEADER_PRIMARY, HEADER_NEUTRAL } from '../lib/buttonStyles
 import TorMomentum from './staffeln/TorMomentum'
 import { SUBSECTION_TITLE } from '../lib/typography'
 
-const CARD = 'bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4'
+const CARD = 'bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-4'
 const TH = 'bg-brand-surface-card text-brand-text-muted text-xs uppercase px-3 py-2 text-left'
 const TD = 'px-3 py-2 text-sm text-brand-text'
 
@@ -124,7 +124,7 @@ export default function SpielberichtPanel({ bwhvGameId, gameId, halfDurationMinu
 function Mannschaftsliste({ title, players }: { title: string; players: PlayerLine[] }) {
   if (players.length === 0) return null
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
       <h3 className={`${SUBSECTION_TITLE} px-3 py-2 border-b border-brand-border-subtle inline-flex items-center gap-1`}>
         <Users className="w-4 h-4" /> {title}
       </h3>
@@ -280,7 +280,7 @@ const KIND_LABEL: Record<string, string> = {
 function Verlauf({ events }: { events: EventLine[] }) {
   if (events.length === 0) return null
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
       <h3 className={`${SUBSECTION_TITLE} px-3 py-2 border-b border-brand-border-subtle`}>
         Ereignisse
       </h3>

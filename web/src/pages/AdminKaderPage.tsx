@@ -463,14 +463,14 @@ export default function AdminKaderPage() {
 
       {/* No seasons at all */}
       {seasons.length === 0 && (
-        <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+        <div className="bg-brand-surface-card rounded-xs border-t-2 eckfahne border-brand-yellow transform-gpu p-8 text-center">
           <p className="text-brand-text-muted text-sm">Bitte legen Sie eine Saison unter <strong>Einstellungen → Saisons</strong> an.</p>
         </div>
       )}
 
       {/* No kader yet */}
       {selectedSeason && kaderList.length === 0 && (
-        <div className="bg-brand-surface-card rounded-xl border-t-4 border-brand-yellow transform-gpu p-8 text-center space-y-4">
+        <div className="bg-brand-surface-card rounded-xs border-t-2 eckfahne border-brand-yellow transform-gpu p-8 text-center space-y-4">
           <p className="text-brand-text-muted text-sm">Noch keine Kader für <strong>{selectedSeason.name}</strong> vorhanden.</p>
           <div className="flex gap-3 justify-center flex-wrap">
             <button
@@ -509,7 +509,7 @@ export default function AdminKaderPage() {
               const title = buildTeamLongName(k, group.length)
 
               return (
-                <div key={k.id} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu mb-3">
+                <div key={k.id} className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu mb-3">
                   {/* Card header */}
                   <div className="px-5 py-3 border-b border-brand-border-subtle flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -697,7 +697,7 @@ export default function AdminKaderPage() {
       {/* Create team modal */}
       {createModal && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
               <h3 className={MODAL_TITLE}>Neue Mannschaft anlegen</h3>
             </div>
@@ -780,7 +780,7 @@ export default function AdminKaderPage() {
       {/* Delete confirmation dialog */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
               <h3 className={MODAL_TITLE}>Kader löschen?</h3>
             </div>

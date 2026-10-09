@@ -133,7 +133,7 @@ function RanglisteBlockCard({ block }: { block: RanglisteBlock }) {
   const scale = Math.max(block.soll, maxRowTotal)
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
+    <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6">
       <div className="flex items-baseline justify-between mb-1 gap-2 flex-wrap">
         <h2 className={SECTION_TITLE}>{block.teamLabel}</h2>
         <span className="text-xs text-brand-text-muted">
@@ -239,7 +239,7 @@ export default function DienstRanglistePage() {
 
       {loading ? (
         <div className="space-y-4">
-          {[1, 2].map(i => <div key={i} className="h-28 bg-brand-border-subtle rounded-xl animate-pulse" />)}
+          {[1, 2].map(i => <div key={i} className="h-28 bg-brand-border-subtle rounded-xs animate-pulse" />)}
         </div>
       ) : showEmptyState ? (
         <p className="text-sm text-brand-text-muted py-8 text-center max-w-md mx-auto">

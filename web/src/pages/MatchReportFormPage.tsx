@@ -364,7 +364,7 @@ export default function MatchReportFormPage() {
                 </div>
             )}
 
-            <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 space-y-6">
+            <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6 space-y-6">
                 <div className="space-y-2">
                     <label className="block text-sm font-medium text-brand-text">Titel</label>
                     <input
@@ -487,7 +487,7 @@ export default function MatchReportFormPage() {
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="return-title"
-                        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md space-y-3"
+                        className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md space-y-3"
                         onClick={e => e.stopPropagation()}
                     >
                         <h2 id="return-title" className={MODAL_TITLE}>Bericht zurückgeben</h2>

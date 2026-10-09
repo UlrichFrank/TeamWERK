@@ -59,7 +59,7 @@ export default function StandingsChart({
   const y = (rank: number) => PAD.top + (rank - 1) * STEP
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4">
+    <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-4">
       <div className="overflow-x-auto">
         <svg
           width={W}

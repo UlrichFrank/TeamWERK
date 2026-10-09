@@ -99,7 +99,7 @@ function NewFolderModal({ parentId, onCreated, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
           <h2 className={MODAL_TITLE}>Neuer Ordner</h2>
           <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
@@ -164,7 +164,7 @@ function UploadModal({ folderId, onUploaded, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
           <h2 className={MODAL_TITLE}>Datei hochladen</h2>
           <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
@@ -338,7 +338,7 @@ export function PermissionsModal({ folderId, canWrite, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className={`${MODAL_TITLE} flex items-center gap-2`}>
             <Lock className="w-4 h-4" />Berechtigungen
@@ -547,7 +547,7 @@ function RenameModal({ type, id, currentName, onRenamed, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm">
         <div className="flex justify-between items-center mb-4">
           <h2 className={MODAL_TITLE}>Umbenennen</h2>
           <button onClick={onClose} aria-label="Schließen"><X className="w-5 h-5 text-brand-text-muted" /></button>
@@ -793,7 +793,7 @@ export default function DocumentsPage() {
           ) : (
             <>
               {/* Mobile: single card with list */}
-              <div className="sm:hidden bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+              <div className="sm:hidden bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
                 {displayFolders.length === 0 && displayFiles.length === 0 ? (
                   <p className="text-sm text-brand-text-muted italic px-4 py-6 text-center">Dieser Ordner ist leer.</p>
                 ) : (
@@ -839,7 +839,7 @@ export default function DocumentsPage() {
               </div>
 
               {/* Desktop: Table */}
-              <div className="hidden sm:block bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+              <div className="hidden sm:block bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
                 {displayFolders.length === 0 && displayFiles.length === 0 ? (
                   <p className="text-sm text-brand-text-muted italic px-4 py-6 text-center">Dieser Ordner ist leer.</p>
                 ) : (
@@ -951,7 +951,7 @@ export default function DocumentsPage() {
       {/* Delete confirmation */}
       {confirmDelete && (
         <div className="fixed inset-0 bg-brand-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm">
             <h2 className={`${MODAL_TITLE} mb-2`}>Löschen bestätigen</h2>
             <p className="text-sm text-brand-text-muted mb-4">„{confirmDelete.name}" wirklich löschen?</p>
             <div className="flex justify-end gap-2">

@@ -42,7 +42,7 @@ describe('AdminKaderPage — Teamname mit Nummer am Ende', () => {
     render()
     await flushAsync()
     await flushAsync()
-    const card = screen.getByRole('heading', { name: 'C-Jugend männlich 1' }).closest('div.rounded-xl') as HTMLElement
+    const card = screen.getByRole('heading', { name: 'C-Jugend männlich 1' }).closest('div.eckfahne') as HTMLElement
     fireEvent.click(within(card).getByRole('button', { name: 'Aktionen' }))
     fireEvent.click(screen.getByText('Löschen'))
     expect(screen.getByText('C-Jugend männlich 1 wird unwiderruflich gelöscht.')).toBeInTheDocument()

@@ -1707,7 +1707,7 @@ export default function ChatPage() {
       <div className="flex flex-1 min-h-0 gap-4">
         {/* Left panel: list */}
         <div
-          className={`${isMobile && mobileShowChat ? "hidden" : "flex"} flex-col w-full sm:w-72 bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden`}
+          className={`${isMobile && mobileShowChat ? "hidden" : "flex"} flex-col w-full sm:w-72 bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden`}
         >
           {/* Tabs */}
           <div className="flex border-b border-brand-border-subtle">
@@ -1853,7 +1853,7 @@ export default function ChatPage() {
 
         {/* Right panel: active chat or broadcast */}
         <div
-          className={`${isMobile && !mobileShowChat ? "hidden" : "flex"} flex-col flex-1 min-w-0 bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden`}
+          className={`${isMobile && !mobileShowChat ? "hidden" : "flex"} flex-col flex-1 min-w-0 bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden`}
         >
           {activeConv && tab === "chats" && (
             <>
@@ -3089,7 +3089,7 @@ function NewConversationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className={MODAL_TITLE}>Neues Gespräch</h2>
           <button onClick={onClose} aria-label="Schließen">
@@ -3381,7 +3381,7 @@ function BroadcastModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className={MODAL_TITLE}>
             Mitteilung senden
@@ -3535,7 +3535,7 @@ function BroadcastEditModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className={MODAL_TITLE}>
             Mitteilung bearbeiten

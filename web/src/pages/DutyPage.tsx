@@ -394,14 +394,14 @@ export default function DutyPage() {
         const cards = visibleGroups.map((g, i) => {
           const colors = getEventColors(g.event_type ?? 'generisch')
           const cardClass = g.past
-            ? 'bg-brand-surface-card border-brand-border opacity-60'
+            ? 'bg-brand-surface-card border-brand-border fahne-brand-border opacity-60'
             : `${colors.card.bg} ${colors.card.border}`
           const EventIcon = g.event_type === 'heim' ? Home : g.event_type === 'auswärts' ? Plane : Calendar
           return (
             <div
               key={i}
               id={g.game_id ? `duty-game-${g.game_id}` : undefined}
-              className={`rounded-xl shadow-sm border-t-4 overflow-hidden ${cardClass}`}
+              className={`rounded-xs shadow-sm border-t-2 eckfahne overflow-hidden ${cardClass}`}
             >
               <div className="px-4 py-3 border-b border-brand-border-subtle flex items-center justify-between">
                 <div className="flex items-center gap-3">

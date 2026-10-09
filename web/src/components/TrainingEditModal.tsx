@@ -174,7 +174,7 @@ export default function TrainingEditModal({ session, teamName, onClose, onSaved 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xs border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id={titleId} className={MODAL_TITLE}>Training bearbeiten</h2>

@@ -439,7 +439,7 @@ export default function VideoDetailPage() {
       </div>
 
       {/* Metadaten */}
-      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 space-y-3">
+      <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6 space-y-3">
         <div>
           <div className="text-xs uppercase text-brand-text-muted mb-1">Beschreibung</div>
           <div className="text-sm text-brand-text whitespace-pre-wrap">
@@ -480,7 +480,7 @@ export default function VideoDetailPage() {
       {/* Bearbeiten-Modal */}
       {showEdit && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-md">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-md">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className={MODAL_TITLE}>Video bearbeiten</h2>
               <button onClick={() => setShowEdit(false)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -545,7 +545,7 @@ export default function VideoDetailPage() {
       {/* Löschen-Modal */}
       {showDelete && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className={MODAL_TITLE}>Video löschen</h2>
               <button onClick={() => setShowDelete(false)} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">

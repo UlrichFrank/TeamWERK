@@ -266,7 +266,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         role="dialog"
         aria-modal="true"
         aria-labelledby={mainTitleId}
-        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-start justify-between mb-4">
           <div className="min-w-0">
@@ -296,7 +296,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
         </div>
 
         {!loading && !notFound && game && (
-          <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-4">
+          <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden mb-4">
             <div className="flex items-center justify-between px-4 py-3 border-b border-brand-border-subtle">
               <h3 className={SUBSECTION_TITLE}>Dienste</h3>
               {canEdit && (
@@ -332,7 +332,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               role="dialog"
               aria-modal="true"
               aria-labelledby={addSlotTitleId}
-              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="bg-brand-white rounded-xs border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               <h3 id={addSlotTitleId} className={`${MODAL_TITLE} mb-4`}>Dienst hinzufügen</h3>
               <div className="space-y-3">
@@ -423,7 +423,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               role="dialog"
               aria-modal="true"
               aria-labelledby={editSlotTitleId}
-              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="bg-brand-white rounded-xs border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               <h3 id={editSlotTitleId} className={`${MODAL_TITLE} mb-4`}>Dienst bearbeiten</h3>
               <p className="text-sm text-brand-text-muted mb-3 font-medium">{editSlot.duty_type_name}</p>
@@ -492,7 +492,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               role="dialog"
               aria-modal="true"
               aria-labelledby={deleteSlotTitleId}
-              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="bg-brand-white rounded-xs border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               <h3 id={deleteSlotTitleId} className={`${MODAL_TITLE} mb-2`}>Dienst löschen?</h3>
               <p className="text-sm text-brand-text-muted mb-4">Dieser Dienst wird endgültig gelöscht.</p>
@@ -523,7 +523,7 @@ export default function SpieltagDetailModal({ gameId, onClose, onChanged, onDele
               role="dialog"
               aria-modal="true"
               aria-labelledby={deleteGameTitleId}
-              className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
+              className="bg-brand-white rounded-xs border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl"
             >
               <h3 id={deleteGameTitleId} className={`${MODAL_TITLE} mb-2`}>Spiel löschen?</h3>
               <p className="text-sm text-brand-text-muted mb-1">

@@ -640,7 +640,7 @@ export default function AdminDutyTemplatesPage() {
         </div>
       </div>
 
-      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden mb-6">
+      <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden mb-6">
         {templates.length === 0 ? (
           <p className="text-sm text-brand-text-subtle text-center py-10 italic">
             Keine Vorlagen vorhanden — lege eine neue an.

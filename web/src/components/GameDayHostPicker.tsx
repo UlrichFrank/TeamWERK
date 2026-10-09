@@ -168,7 +168,7 @@ export function GameDayHostPreviewDialog({ preview, targetName, busy, error, onC
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md"
+        className="relative bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md"
       >
         <div className="flex items-center justify-between mb-4">
           <h2 id={titleId} className={MODAL_TITLE}>Ausrichter wechseln?</h2>

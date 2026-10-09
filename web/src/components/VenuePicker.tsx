@@ -174,7 +174,7 @@ export default function VenuePicker({ value, onChange, disabled }: VenuePickerPr
             role="dialog"
             aria-modal="true"
             aria-labelledby={newVenueTitleId}
-            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md"
+            className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md"
           >
             <h2 id={newVenueTitleId} className={`${MODAL_TITLE} mb-4`}>Neuen Ort anlegen</h2>
             {error && (

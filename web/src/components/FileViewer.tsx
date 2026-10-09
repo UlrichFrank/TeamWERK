@@ -174,7 +174,7 @@ function FileBody({ file, blobUrl }: { file: LoadedFile; blobUrl: string }) {
   }
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 max-w-md mx-auto text-center">
+    <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6 max-w-md mx-auto text-center">
       <p className="text-sm text-brand-text mb-3">
         Diese Datei kann nicht in der App angezeigt werden.
       </p>

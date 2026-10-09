@@ -244,7 +244,7 @@ export default function H4AImportModal({ isOpen, onClose, onImported }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu max-w-4xl mx-4 w-full max-h-[90vh] flex flex-col"
+        className="relative bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu max-w-4xl mx-4 w-full max-h-[90vh] flex flex-col"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
           <h2 id={titleId} className={MODAL_TITLE}>Spielplan aus Handball4All importieren</h2>

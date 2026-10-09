@@ -239,7 +239,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
           role="dialog"
           aria-modal="true"
           aria-label="Bildausschnitt wählen"
-          className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
+          className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
         >
           <p className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger mb-4">
             Bild konnte nicht geladen werden.
@@ -262,7 +262,7 @@ export default function ImageCropModal({ file, onConfirm, onCancel }: Props) {
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full"
+        className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full"
         style={{ maxWidth: `${CANVAS_SIZE + 48}px` }}
         onClick={e => e.stopPropagation()}
       >

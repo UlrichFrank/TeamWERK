@@ -88,6 +88,50 @@
   }
 }
 
+/*
+  Eckfahne: farbiges Dreieck in der Ecke oben links, Gegenstück zur 2-px-Oberkante
+  (`border-t-2`) von Kachel und Modal. Als `background-image`, nicht als
+  Pseudo-Element: ein `::before` bräuchte `position: relative` am Träger und
+  überstimmte damit `sticky`/`fixed` einzelner Karten. Folge: ein Kind mit eigener
+  Hintergrundfarbe (Tabellenkopf, Kalendergitter) deckt die Fahne ab — gewollt,
+  die Oberkante bleibt sichtbar. Die Farbe folgt nicht automatisch der
+  Rahmenfarbe; Karten mit Statusfarbe setzen sie über `fahne-*`
+  (z. B. `fahne-brand-green`), Default ist Gelb. `eckfahne-lg` ist die größere
+  Fahne des Inhaltsbereichs (AppShell `<main>`). Beide Variablen vererben sich
+  NICHT (`@property … inherits: false`): sonst trüge jede Kachel im `<main>` dessen
+  44-px-Fahne und jede Karte in einer Statuskarte deren Farbe.
+*/
+@property --eckfahne-color {
+  syntax: '<color>';
+  inherits: false;
+  initial-value: #fde400;
+}
+
+@property --eckfahne-size {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 28px;
+}
+
+@utility eckfahne {
+  background-image: linear-gradient(
+    135deg,
+    var(--eckfahne-color) 50%,
+    transparent calc(50% + 0.5px)
+  );
+  background-size: var(--eckfahne-size) var(--eckfahne-size);
+  background-repeat: no-repeat;
+  background-position: top left;
+}
+
+@utility eckfahne-lg {
+  --eckfahne-size: 44px;
+}
+
+@utility fahne-* {
+  --eckfahne-color: --value(--color-*);
+}
+
 /* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */
 @media screen and (max-width: 639px) {
   input, textarea, select {

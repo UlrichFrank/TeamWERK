@@ -173,7 +173,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
   return (
     <div className="space-y-6">
       {/* Bankdaten */}
-      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-4`}>Bankdaten</h2>
 
         {bankdatenDraft && !privateKey && (
@@ -288,7 +288,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
       </div>
 
       {/* SEPA-Mandat */}
-      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
+      <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6">
         <h2 className={`${SECTION_TITLE} mb-4`}>SEPA-Mandat</h2>
         <div className="space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
@@ -414,7 +414,7 @@ export default function MemberKontaktTab({ memberId, form, isNew, drafts, onForm
             role="dialog"
             aria-modal="true"
             aria-labelledby={deleteTitleId}
-            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-sm"
+            className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-sm"
           >
             <h2 id={deleteTitleId} className={`${MODAL_TITLE} mb-2`}>Dokument löschen</h2>
             <p className="text-sm text-brand-text-muted mb-4">Das SEPA-Mandat-Dokument wirklich löschen?</p>

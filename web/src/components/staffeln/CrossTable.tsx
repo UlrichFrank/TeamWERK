@@ -24,7 +24,7 @@ export default function CrossTable({
   }
 
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
       <p className="px-4 py-3 text-xs text-brand-text-muted border-b border-brand-border-subtle">
         Zeile = Heimmannschaft, Spalte = Gastmannschaft. Eine Zelle trägt den Endstand
         oder — solange nicht gespielt — das angesetzte Datum.

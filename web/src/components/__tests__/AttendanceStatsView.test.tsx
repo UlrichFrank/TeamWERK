@@ -29,7 +29,7 @@ describe('AttendanceStatsView — Anteile', () => {
     mockGet.mockResolvedValue({ data: stats({ training_present: 5, training_excused: 3, training_missed: 2 }) })
     render(<AttendanceStatsView memberId={1} />)
 
-    const training = (await screen.findByText('Trainings')).closest('div.rounded-xl') as HTMLElement
+    const training = (await screen.findByText('Trainings')).closest('div.eckfahne') as HTMLElement
     expect(within(training).getByText('10 Termine')).toBeTruthy()
     expect(within(training).getByTestId('pillar-present').textContent).toContain('50 %')
     expect(within(training).getByTestId('pillar-present').textContent).toContain('(5)')
@@ -41,7 +41,7 @@ describe('AttendanceStatsView — Anteile', () => {
   test('ohne gezählte Termine keine Prozentwerte', async () => {
     mockGet.mockResolvedValue({ data: stats({}) })
     render(<AttendanceStatsView memberId={1} />)
-    const games = (await screen.findByText('Spiele')).closest('div.rounded-xl') as HTMLElement
+    const games = (await screen.findByText('Spiele')).closest('div.eckfahne') as HTMLElement
     expect(within(games).queryByText(/%/)).toBeNull()
     expect(within(games).getByText('0 Termine')).toBeTruthy()
   })

@@ -122,7 +122,7 @@ export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { ap
 
   return (
     <div className="space-y-6">
-      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
         <div className="p-6 pb-2">
           <h2 className={`${SECTION_TITLE} mb-1`}>Kalender-Abo</h2>
           <p className="text-xs text-brand-text-subtle mb-3">
@@ -144,7 +144,7 @@ export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { ap
       </div>
 
       {token && (
-        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6">
+        <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6">
           <h3 className={`${SUBSECTION_TITLE} mb-2`}>Feed-URL</h3>
           <div className="flex items-center gap-2 mb-4">
             <input
@@ -168,7 +168,7 @@ export default function ProfileKalenderTab({ apiPath = '/calendar/token' }: { ap
       )}
 
       {token && (
-        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6 space-y-5">
+        <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6 space-y-5">
           <h3 className={SUBSECTION_TITLE}>Anleitung: Kalender abonnieren</h3>
 
           <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">

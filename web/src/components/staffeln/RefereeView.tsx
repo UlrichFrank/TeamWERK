@@ -23,7 +23,7 @@ export default function RefereeView({ rows }: { rows: RefereeStat[] }) {
     )
   }
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-4 py-3 border-b border-brand-border-subtle">
         <h2 className={SUBSECTION_TITLE}>Schiedsrichter</h2>
         <p className="text-xs text-brand-text-muted mt-1">

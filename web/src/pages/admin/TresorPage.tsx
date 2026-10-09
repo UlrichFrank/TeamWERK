@@ -6,7 +6,7 @@ import { useLiveUpdates } from '../../hooks/useLiveUpdates'
 import { generateVaultSetup } from '../../lib/crypto'
 import { BTN_PRIMARY, BTN_SECONDARY, INPUT } from '../../lib/buttonStyles'
 import { PAGE_TITLE } from '../../lib/typography'
-const CARD = 'bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-6'
+const CARD = 'bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-6'
 const ALERT_ERR = 'p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger'
 const ALERT_INFO = 'p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text'
 

@@ -65,7 +65,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-4">
-      <div className="w-full max-w-sm bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8">
+      <div className="w-full max-w-sm bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-8">
         <h1 className={`${ENTRY_TITLE} mb-6`}>Konto erstellen</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (

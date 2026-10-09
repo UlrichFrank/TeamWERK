@@ -187,7 +187,7 @@ export default function EventInfoModal({ type, game, training, absence, onClose,
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md"
+        className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">

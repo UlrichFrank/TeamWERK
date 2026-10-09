@@ -314,7 +314,7 @@ function FormModal({ gameId, initialTyp, initialBiete, initialSuche, vehicleSeat
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-brand-black/40">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className={MODAL_TITLE}>Mitfahrgelegenheit eintragen</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -453,7 +453,7 @@ function QuickPairModal({ side, counterpartId, children, vehicleSeats, onClose, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-brand-black/40">
-      <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
+      <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className={MODAL_TITLE}>{isRide ? 'Mitfahren' : 'Platz anbieten'}</h2>
           <button onClick={onClose} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -533,7 +533,7 @@ function GameCard({ data, teamShortNames, focusTab, onDelete, onOpenForm, onRequ
   const Icon = data.game.eventType === 'heim' ? Home : data.game.eventType === 'auswärts' ? Plane : Calendar
 
   return (
-    <div id={`game-${data.game.id}`} className={`rounded-xl shadow-sm border-t-4 overflow-hidden scroll-mt-24 ${colors.card.bg} ${colors.card.border}`}>
+    <div id={`game-${data.game.id}`} className={`rounded-xs shadow-sm border-t-2 eckfahne overflow-hidden scroll-mt-24 ${colors.card.bg} ${colors.card.border}`}>
       <div className="px-4 py-3 border-b border-brand-border-subtle">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-start gap-3 min-w-0">
@@ -896,7 +896,7 @@ export default function MitfahrgelegenheitenPage() {
 
       {loading && (
         <div className="space-y-3">
-          {[1, 2].map(i => <div key={i} className="h-40 bg-brand-border-subtle rounded-xl animate-pulse" />)}
+          {[1, 2].map(i => <div key={i} className="h-40 bg-brand-border-subtle rounded-xs animate-pulse" />)}
         </div>
       )}
 

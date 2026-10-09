@@ -466,7 +466,7 @@ export default function AdminUsersPage() {
       {/* + Neu Modal */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className={MODAL_TITLE}>Einladung versenden</h2>
               <button onClick={closeInviteModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -517,7 +517,7 @@ export default function AdminUsersPage() {
       {/* Account direkt anlegen Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className={MODAL_TITLE}>Account anlegen</h2>
               <button onClick={closeCreateModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -584,7 +584,7 @@ export default function AdminUsersPage() {
       {/* CSV Import Modal */}
       {showCsvModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className={MODAL_TITLE}>CSV importieren</h2>
               <button onClick={closeCsvModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -649,7 +649,7 @@ export default function AdminUsersPage() {
       {/* Member Link Modal */}
       {linkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className={MODAL_TITLE}>Mit Mitglied verknüpfen</h2>
               <button onClick={closeLinkModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -695,7 +695,7 @@ export default function AdminUsersPage() {
       {/* Proxy account activate modal */}
       {activateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className={MODAL_TITLE}>Proxy-Account aktivieren</h2>
               <button onClick={closeActivateModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -738,7 +738,7 @@ export default function AdminUsersPage() {
 
       {recoveryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-black/40">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm mx-4">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border-subtle">
               <h2 className={MODAL_TITLE}>Eltern-E-Mail setzen</h2>
               <button onClick={closeRecoveryModal} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -782,7 +782,7 @@ export default function AdminUsersPage() {
       {/* Pending requests and invitations */}
       {(filteredRequests.length > 0 || filteredInvitations.length > 0) && (
         <div className="mb-8">
-          <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-x-auto">
+          <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-x-auto">
             <div className="px-6 py-4 border-b border-brand-border-subtle">
               <h2 className={SECTION_TITLE}>Ausstehende Anfragen & Einladungen ({filteredRequests.length + filteredInvitations.length})</h2>
             </div>
@@ -860,7 +860,7 @@ export default function AdminUsersPage() {
       )}
 
       {/* Registered users */}
-      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-x-auto mt-6">
+      <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-x-auto mt-6">
         <div className="px-6 py-4 border-b border-brand-border-subtle">
           <h2 className={SECTION_TITLE}>Registrierte Nutzer ({total})</h2>
         </div>

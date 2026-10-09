@@ -48,7 +48,7 @@ export default function LoginPage() {
             <p className="text-brand-black/50 text-sm">Team Stuttgart</p>
           </div>
 
-          <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8">
+          <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-8">
             <h2 className={`${ENTRY_TITLE} mb-6`}>Anmelden</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && <div className="p-3 bg-brand-danger-light border border-brand-danger/30 rounded-lg text-sm text-brand-danger">{error}</div>}

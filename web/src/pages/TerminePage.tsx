@@ -696,7 +696,7 @@ export default function TerminePage() {
         hiddenByOtherFilters > 0 ? (
           <FilterEmptyState hiddenByOtherFilters={hiddenByOtherFilters} onResetFilters={resetFilters} />
         ) : (
-          <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+          <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-8 text-center">
             <Dumbbell className="w-10 h-10 mx-auto mb-3 text-brand-text-subtle" />
             <p className="text-brand-text-muted">
               {query !== '' ? 'Keine Termine passen zum Filter.' : 'Keine Termine vorhanden.'}
@@ -718,9 +718,9 @@ export default function TerminePage() {
                     updateFilter({ focus: { kind: 'training', id: s.id } })
                     navigate(`/termine/training/${s.id}`)
                   }}
-                  className={`rounded-xl shadow border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${
+                  className={`rounded-xs shadow border-t-2 eckfahne p-4 transition-shadow cursor-pointer hover:shadow-md ${
                     s.status === 'cancelled'
-                      ? 'bg-brand-surface-card border-brand-border opacity-60'
+                      ? 'bg-brand-surface-card border-brand-border fahne-brand-border opacity-60'
                       : `${getEventColors('training').card.bg} ${getEventColors('training').card.border}`
                   }`}
                 >
@@ -857,7 +857,7 @@ export default function TerminePage() {
                   updateFilter({ focus: { kind: 'game', id: g.id } })
                   navigate(`/termine/${g.event_type === 'generisch' ? 'ereignis' : 'spiel'}/${g.id}`)
                 }}
-                className={`rounded-xl shadow-sm border-t-4 p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
+                className={`rounded-xs shadow-sm border-t-2 eckfahne p-4 transition-shadow cursor-pointer hover:shadow-md ${getEventColors(g.event_type).card.bg} ${getEventColors(g.event_type).card.border}`}
               >
                 <div className="flex items-start gap-2">
                   <div className="flex-1 min-w-0 flex items-start justify-between gap-4 flex-wrap">
@@ -1014,7 +1014,7 @@ export default function TerminePage() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="matrix-rsvp-title"
-              className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md space-y-3"
+              className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md space-y-3"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-start justify-between gap-2">
@@ -1053,7 +1053,7 @@ export default function TerminePage() {
 
       {pendingRSVP && (
         <div className="fixed inset-0 z-50 bg-brand-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md">
             <h2 className={`${MODAL_TITLE} mb-1`}>
               {pendingRSVP.status === 'declined' ? 'Absagen' : 'Vielleicht'}
               {pendingChildName && <span className="font-normal text-brand-text-muted"> – {pendingChildName}</span>}

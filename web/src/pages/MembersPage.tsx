@@ -509,7 +509,7 @@ export default function MembersPage() {
 
       {/* Table — always visible, columns drop off as screen shrinks.
           Windowing (memberWindow) rendert nur sichtbare Zeilen; Scroll-Quelle ist die Seite. */}
-      <div ref={memberContainerRef} className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div ref={memberContainerRef} className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr>
@@ -579,7 +579,7 @@ export default function MembersPage() {
       {/* Neu-Mitglied Modal */}
       {showNew && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-sm">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-sm">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className={MODAL_TITLE}>Neues Mitglied anlegen</h2>
               <button onClick={resetNew} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -642,7 +642,7 @@ export default function MembersPage() {
       {/* Import Modal */}
       {showImport && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className={MODAL_TITLE}>CSV-Import</h2>
               <button onClick={resetImport} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">
@@ -923,7 +923,7 @@ export default function MembersPage() {
       {/* SEPA-Mandate Bulk Import Modal */}
       {showSepaBulk && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-brand-black/40 p-4">
-          <div className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu w-full max-w-lg max-h-[90vh] flex flex-col">
             <div className="px-6 py-4 border-b border-brand-border-subtle flex items-center justify-between">
               <h2 className={MODAL_TITLE}>SEPA-Mandate importieren</h2>
               <button onClick={resetSepaBulk} aria-label="Schließen" className="text-brand-text-muted hover:text-brand-text transition-colors">

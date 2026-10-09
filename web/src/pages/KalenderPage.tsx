@@ -1249,7 +1249,7 @@ export default function KalenderPage() {
           Balken z-20, Inhalt z-10) in einem eigenen Stacking-Context. Ohne ihn
           konkurrieren sie auf Seitenebene mit den Kopfzeilen-Dropdowns (auch
           z-20) und malen als spätere DOM-Geschwister darüber. */}
-      <div className="isolate rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="isolate rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
       <div
         ref={calendarRef}
         className="bg-brand-surface-card select-none"
@@ -1427,7 +1427,7 @@ export default function KalenderPage() {
       {/* Event Wizard Dialog */}
       {showCreate && (
         <div className="fixed inset-0 bg-brand-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-brand-white rounded-xl border-t-4 border-brand-yellow transform-gpu p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-brand-white rounded-xs border-t-2 eckfahne border-brand-yellow transform-gpu p-6 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto">
             {wizardStep === 1 && (
               <div>
                 <h2 className={`${MODAL_TITLE} mb-6`}>Welche Art von Event?</h2>

@@ -144,7 +144,7 @@ export default function TrainingDiaryStatsView({ teamId }: { teamId: number }) {
       {stats.items.length === 0 ? (
         <p className="text-sm text-brand-text-muted">Keine Kadermitglieder in dieser Saison.</p>
       ) : (
-        <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+        <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
           {stats.items.map(item => {
             const open = expanded === item.member_id
             return (

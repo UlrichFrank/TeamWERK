@@ -56,7 +56,7 @@ const NOCH_NICHTS = 'Noch nichts beim Verband abgerufen.'
 
 const TH = 'bg-brand-surface-card text-brand-text-muted text-xs uppercase px-4 py-3 text-left'
 const TD = 'px-4 py-3 text-sm text-brand-text'
-const CARD = 'bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden'
+const CARD = 'bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden'
 
 export default function StaffelnPage() {
   const [params, setParams] = useSearchParams()
@@ -483,7 +483,7 @@ function ScheduleView({ games, ownTeams, searching, halfDurationMinutes, focusGa
           key={g.ID}
           id={`spiel-${g.ID}`}
           aria-current={own || undefined}
-          className={`rounded-xl shadow border-t-4 border-brand-yellow transform-gpu p-4 scroll-mt-4 ${
+          className={`rounded-xs shadow border-t-2 eckfahne border-brand-yellow transform-gpu p-4 scroll-mt-4 ${
             own ? 'bg-brand-table-select font-semibold' : 'bg-brand-surface-card'
           }`}
         >

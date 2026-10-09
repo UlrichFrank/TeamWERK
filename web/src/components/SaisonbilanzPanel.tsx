@@ -3,7 +3,7 @@ import { Trophy } from 'lucide-react'
 import { PlayerStat, fetchMemberStats, sevenMeterRate } from '../lib/staffeln'
 import { SUBSECTION_TITLE } from '../lib/typography'
 
-const CARD = 'bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-4'
+const CARD = 'bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-4'
 
 /**
  * Saisonbilanz eines Mitglieds aus den ausgewerteten BWHV-Spielberichten.

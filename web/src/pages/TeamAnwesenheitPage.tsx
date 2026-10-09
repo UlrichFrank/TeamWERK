@@ -94,7 +94,7 @@ function StatTable({ title, members, averages, onMember }: {
 }) {
   if (members.length === 0) return null
   return (
-    <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+    <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
       <div className="px-6 py-4 border-b border-brand-border-subtle">
         <h2 className={SECTION_TITLE}>{title}</h2>
       </div>
@@ -254,7 +254,7 @@ export default function TeamAnwesenheitPage() {
       {!loading && stats && (
         <>
           {open.length > 0 && (
-            <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+            <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
               <button
                 onClick={() => setShowOpen(s => !s)}
                 className="w-full flex items-center gap-2 px-6 py-4 text-left hover:bg-brand-table-select transition-colors"

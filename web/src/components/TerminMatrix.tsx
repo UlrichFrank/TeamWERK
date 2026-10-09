@@ -117,7 +117,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
 
   if (members.length === 0) {
     return (
-      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu p-8 text-center">
+      <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu p-8 text-center">
         <p className="text-brand-text-muted">Für diese Mannschaft ist in der aktiven Saison kein Kader hinterlegt.</p>
       </div>
     )
@@ -131,7 +131,7 @@ export default function TerminMatrix({ matrix, columns, today, onCellClick, canO
         {' | '}<span className="font-semibold text-brand-text">{counts.sonstige}</span> Sonstige
       </p>
 
-      <div className="bg-brand-surface-card rounded-xl shadow-sm border-t-4 border-brand-yellow transform-gpu overflow-hidden">
+      <div className="bg-brand-surface-card rounded-xs shadow-sm border-t-2 eckfahne border-brand-yellow transform-gpu overflow-hidden">
         {/* Eigener Scrollbereich in beiden Achsen, höhenbegrenzt: nur so hat
             `sticky top-0` am Kopf einen Bezug. Mit overflow-x-auto allein wäre
             der Wrapper Scroll-Container ohne senkrechten Scroll (den macht <main>).

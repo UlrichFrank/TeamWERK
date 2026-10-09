@@ -323,7 +323,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
             role="dialog"
             aria-modal="true"
             aria-labelledby="duty-no-instruction-title"
-            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
+            className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
           >
             <h2 id="duty-no-instruction-title" className={`${MODAL_TITLE} mb-2`}>Keine Anleitung</h2>
             <p className="text-sm text-brand-text-muted mb-4">
@@ -349,7 +349,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
             role="dialog"
             aria-modal="true"
             aria-labelledby="duty-claim-dialog-title"
-            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
+            className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
           >
             <h2 id="duty-claim-dialog-title" className={`${MODAL_TITLE} mb-3`}>Dienst übernehmen für…</h2>
             <div className="space-y-2 mb-4">
@@ -405,7 +405,7 @@ export default function DutySlotList({ slots, isPast, canEdit, onReload, onEdit,
             role="dialog"
             aria-modal="true"
             aria-labelledby="duty-comment-modal-title"
-            className="bg-white rounded-xl shadow-xl border-t-4 border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
+            className="bg-white rounded-xs shadow-xl border-t-2 eckfahne border-brand-yellow transform-gpu p-6 max-w-sm w-full mx-4"
           >
             <h2 id="duty-comment-modal-title" className={`${MODAL_TITLE} mb-3`}>Kommentare</h2>
             {commentModalLoading ? (
