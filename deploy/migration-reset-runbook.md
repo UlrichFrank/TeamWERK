@@ -10,7 +10,7 @@ versucht, die Initial-Migration ein zweites Mal anzuwenden, wird die
 
 - Lokal: Branch mit dem Reset gemerged in `main`.
 - Prod-Backup ist frisch: `make backup`.
-- VPS-SSH funktioniert (`ssh vServer`).
+- VPS-SSH funktioniert (`ssh teamwerk.team-stuttgart.org`).
 
 ## Ablauf
 
@@ -19,28 +19,28 @@ versucht, die Initial-Migration ein zweites Mal anzuwenden, wird die
 make backup
 
 # 2) Service stoppen, damit nichts in die DB schreibt
-ssh vServer "sudo systemctl stop teamwerk"
+ssh teamwerk.team-stuttgart.org "sudo systemctl stop teamwerk"
 
 # 3) Aktuelles Binary deployen (build + scp) — OHNE migrate auf alten Pfad
 make build
-rsync -az bin/teamwerk vServer:/tmp/teamwerk.new
-ssh vServer "sudo mv /tmp/teamwerk.new /usr/local/bin/teamwerk"
+rsync -az bin/teamwerk teamwerk.team-stuttgart.org:/tmp/teamwerk.new
+ssh teamwerk.team-stuttgart.org "sudo mv /tmp/teamwerk.new /usr/local/bin/teamwerk"
 
 # 4) schema_migrations auf "1, dirty=0" zwingen.
 #    migrate force markiert die angegebene Version als sauber angewendet,
 #    ohne up/down auszuführen. Genau das wollen wir hier: Prod-Schema ist
 #    schon im Stand der Initial-Migration, nur der Versionseintrag muss
 #    angepasst werden.
-ssh vServer "/usr/local/bin/teamwerk migrate force 1 --db /var/lib/teamwerk/teamwerk.db"
+ssh teamwerk.team-stuttgart.org "/usr/local/bin/teamwerk migrate force 1 --db /var/lib/teamwerk/teamwerk.db"
 
 # 5) Verifikation: Version muss jetzt 1 sein, Tabellen unverändert.
-ssh vServer "sqlite3 /var/lib/teamwerk/teamwerk.db 'SELECT version, dirty FROM schema_migrations;'"
-ssh vServer "sqlite3 /var/lib/teamwerk/teamwerk.db 'SELECT count(*) FROM stammvereine;'"
+ssh teamwerk.team-stuttgart.org "sqlite3 /var/lib/teamwerk/teamwerk.db 'SELECT version, dirty FROM schema_migrations;'"
+ssh teamwerk.team-stuttgart.org "sqlite3 /var/lib/teamwerk/teamwerk.db 'SELECT count(*) FROM stammvereine;'"
 # Erwartung: 1|0  bzw.  22
 
 # 6) Service starten
-ssh vServer "sudo systemctl start teamwerk"
-ssh vServer "sudo systemctl status teamwerk --no-pager | head -12"
+ssh teamwerk.team-stuttgart.org "sudo systemctl start teamwerk"
+ssh teamwerk.team-stuttgart.org "sudo systemctl status teamwerk --no-pager | head -12"
 ```
 
 `make deploy` für künftige Releases läuft danach wieder normal — `migrate up`
@@ -53,13 +53,13 @@ Falls nach `migrate force` etwas schief geht und der Service nicht startet:
 
 ```bash
 # Backup einspielen
-ssh vServer "sudo systemctl stop teamwerk"
-scp ./teamwerk-backup.db vServer:/tmp/restore.db
-ssh vServer "sudo mv /var/lib/teamwerk/teamwerk.db /var/lib/teamwerk/teamwerk.db.broken \
+ssh teamwerk.team-stuttgart.org "sudo systemctl stop teamwerk"
+scp ./teamwerk-backup.db teamwerk.team-stuttgart.org:/tmp/restore.db
+ssh teamwerk.team-stuttgart.org "sudo mv /var/lib/teamwerk/teamwerk.db /var/lib/teamwerk/teamwerk.db.broken \
              && sudo mv /tmp/restore.db /var/lib/teamwerk/teamwerk.db \
              && sudo chown www-data:www-data /var/lib/teamwerk/teamwerk.db"
 # Vorheriges Binary (aus Backup) zurücklegen, dann Service starten.
-ssh vServer "sudo systemctl start teamwerk"
+ssh teamwerk.team-stuttgart.org "sudo systemctl start teamwerk"
 ```
 
 Da das Backup vor dem Reset gezogen wurde, sind `schema_migrations.version = 49`

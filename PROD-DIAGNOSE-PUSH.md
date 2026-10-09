@@ -13,14 +13,14 @@ DB-Zugriffe sind **read-only** (`SELECT`).
 
 ## Voraussetzungen
 
-- SSH-Zugang zum VPS (Alias `vServer`, siehe `.env`).
+- SSH-Zugang zum VPS (Alias `teamwerk.team-stuttgart.org`, siehe `.env`).
 - `sqlite3` auf dem VPS vorhanden (wird auch vom Backup genutzt).
 - DB liegt unter `/var/lib/teamwerk/teamwerk.db`.
 
 `-readonly` stellt sicher, dass nichts verändert wird:
 
 ```bash
-ssh vServer 'sqlite3 -readonly /var/lib/teamwerk/teamwerk.db "SELECT 1;"'
+ssh teamwerk.team-stuttgart.org 'sqlite3 -readonly /var/lib/teamwerk/teamwerk.db "SELECT 1;"'
 ```
 
 ---
@@ -28,7 +28,7 @@ ssh vServer 'sqlite3 -readonly /var/lib/teamwerk/teamwerk.db "SELECT 1;"'
 ## Schritt 1 — user_id über die E-Mail finden
 
 ```bash
-ssh vServer 'sqlite3 -readonly -box /var/lib/teamwerk/teamwerk.db \
+ssh teamwerk.team-stuttgart.org 'sqlite3 -readonly -box /var/lib/teamwerk/teamwerk.db \
   "SELECT id, email, role, can_login FROM users WHERE email LIKE '\''%andrea%'\'';"'
 ```
 
@@ -41,7 +41,7 @@ Merke dir die `id` (im Folgenden `<UID>`). Prüfe `can_login=1` — ein Konto mi
 ## Schritt 2 — Push-Abos prüfen (Hauptverdacht)
 
 ```bash
-ssh vServer 'sqlite3 -readonly -box /var/lib/teamwerk/teamwerk.db \
+ssh teamwerk.team-stuttgart.org 'sqlite3 -readonly -box /var/lib/teamwerk/teamwerk.db \
   "SELECT id, substr(endpoint,1,45) AS endpoint_prefix, created_at
    FROM push_subscriptions WHERE user_id = <UID>;"'
 ```
@@ -64,7 +64,7 @@ ssh vServer 'sqlite3 -readonly -box /var/lib/teamwerk/teamwerk.db \
 ## Schritt 3 — Notification-Präferenzen prüfen
 
 ```bash
-ssh vServer 'sqlite3 -readonly -box /var/lib/teamwerk/teamwerk.db \
+ssh teamwerk.team-stuttgart.org 'sqlite3 -readonly -box /var/lib/teamwerk/teamwerk.db \
   "SELECT category, push_enabled, email_enabled
    FROM notification_preferences WHERE user_id = <UID>;"'
 ```

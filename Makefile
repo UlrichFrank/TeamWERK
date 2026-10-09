@@ -416,7 +416,7 @@ _check-remote:
 _check-new-remote:
 	@if [ -z "$(NEW_REMOTE_RESOLVED)" ]; then \
 		echo "Fehler: NEW_REMOTE=<alias> oder REMOTE_NEW= in .env setzen."; \
-		echo "Beispiel: make server-bootstrap NEW_REMOTE=vServerNeu"; \
+		echo "Beispiel: make server-bootstrap NEW_REMOTE=teamwerkNeu"; \
 		exit 1; \
 	fi
 
