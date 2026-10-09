@@ -248,7 +248,10 @@ Zweite Instanz auf demselben VPS zum Ausprobieren neuer Oberflächen (zuerst: Ka
 make setup-beta                  # einmalig + idempotent: Verzeichnisse, Env (Secrets zufällig), Dienst, nginx, certbot
 make deploy-beta                 # Arbeitsstand bauen und NUR auf die Beta ausrollen (+ Smoke-Test Port 8081)
 make seed-beta [FORCE=1]         # Beta-DB aus anonymisierter lokaler Kopie neu aufsetzen
+make mirror-beta FORCE=1         # Beta-Daten durch Prod-Stand ersetzen (ohne Videos/Bilder; Prod nur gelesen)
 ```
+
+**Prod-Spiegel:** `make mirror-beta FORCE=1` ersetzt die Beta-Daten durch den aktuellen Prod-Stand (`deploy/beta-mirror.sh`, Change `beta-prod-spiegel`): DB, Dokumente (`files`), Beitragslauf-Protokolle, BWHV-PDFs — **ohne** Videos und Bild-Ablagen (`uploads`, `media`, `training-diary`, `match-report-images`; deren Beta-Verzeichnisse werden geleert, Bilder erscheinen leer). Läuft komplett auf dem VPS. Prod wird nur gelesen: Online-Backup aus `sqlite3 -readonly`, alle Schritte als `www-data` mit `nice -n 19 ionice -c3` (kein root-eigener Rest im Prod-Verzeichnis), jedes Schreibziel wird gegen `/var/lib/teamwerk-beta` geprüft, nur `teamwerk-beta` wird gestoppt. Die Kopie verliert Push-Abos und Refresh-Tokens, der Wartungsmodus geht aus. Danach melden sich echte Nutzer mit ihrem Prod-Passwort an; alles, was sie auf der Beta ändern, bleibt dort und wird beim nächsten Spiegeln überschrieben. Die Beta enthält damit echte personenbezogene Daten — gleiche Rechte wie Prod (`www-data`, `0750`), nicht im Backup.
 
 **Voraussetzung DNS:** A-Record `beta.teamwerk.team-stuttgart.org → 31.70.110.19` in der Zone bei agenturserver/Mittwald. Ohne ihn installiert `setup-beta` nur einen Port-80-Platzhalter (503) und meldet den fehlenden Record; nach dem Anlegen `make setup-beta` erneut ausführen — dann holt certbot das Zertifikat (Webroot `/var/www/certbot`, Erneuerung über denselben Block) und der volle 443-Block geht live. Jeder nginx-Reload läuft nur nach `nginx -t`; scheitert der Test, entfernt das Skript ausschließlich die Beta-Site.
 

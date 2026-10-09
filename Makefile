@@ -43,7 +43,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-beta seed-beta deploy-beta setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e folien schulung lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
+.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-beta seed-beta mirror-beta deploy-beta setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e folien schulung lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -243,6 +243,11 @@ seed-beta: ## Beta-DB aus anonymisierter Kopie von ./teamwerk.db neu aufsetzen (
 	@rm -f $(BUILD_DIR)/beta-seed.db
 	@echo "Beta-DB eingespielt. Logins: vorstand@beispiel.de / trainer@beispiel.de (und alle anderen anonymisierten Konten)"
 	@echo "Passwort steht in $(BUILD_DIR)/beta-password.txt"
+
+mirror-beta: ## Prod-Daten (DB, Dokumente, Protokolle, BWHV-PDFs; ohne Videos und Bilder) auf die Beta spiegeln — ersetzt die Beta-Daten, FORCE=1 nötig. Prod wird nur gelesen.
+	@[ "$(FORCE)" = "1" ] || { echo "mirror-beta: ersetzt alle Beta-Daten durch einen Prod-Stand — mit FORCE=1 bestätigen"; exit 1; }
+	rsync -az deploy/beta-mirror.sh $(REMOTE):/tmp/teamwerk-beta-mirror.sh
+	ssh $(REMOTE) "sudo bash /tmp/teamwerk-beta-mirror.sh; rc=\$$?; rm -f /tmp/teamwerk-beta-mirror.sh; exit \$$rc"
 
 deploy-beta: build ## Aktuellen Arbeitsstand auf die Beta-Instanz deployen (Prod bleibt unberührt)
 	@ssh $(REMOTE) "sudo test -f /etc/teamwerk-beta/env" || { echo "deploy-beta: erst 'make setup-beta'"; exit 1; }
