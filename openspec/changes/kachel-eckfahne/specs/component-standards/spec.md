@@ -37,6 +37,6 @@ Alle `<table>`-Strukturen SHALL folgende Klassen verwenden:
 - **WHEN** der Cursor über eine Tabellenzeile bewegt wird
 - **THEN** wird die Zeile mit `bg-brand-table-select` hinterlegt
 
-#### Scenario: Tabellenkopf deckt die Fahne ab
+#### Scenario: Fahne liegt über dem Tabellenkopf
 - **WHEN** ein Tabellen-Container mit hinterlegtem Kopf gerendert wird
-- **THEN** bleibt die 2-px-Oberkante sichtbar, das Dreieck liegt unter dem Kopf
+- **THEN** ist das Dreieck über dem Kopf sichtbar und die Kopfschrift darunter lesbar

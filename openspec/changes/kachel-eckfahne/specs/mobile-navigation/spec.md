@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Responsive Hauptbereich
-Der Hauptbereich (Main Content) SHALL auf Mobilgeräten die volle Viewport-Breite nutzen. Das Padding MUSS auf Mobile `px-4 py-4` betragen (statt `p-8`). Auf dem Desktop trägt der Hauptbereich links einen 3-px-Streifen in `brand-yellow` ohne Rundung und oben links die große Eckfahne (`sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne sm:eckfahne-lg`). Diese Dekorationsklassen MÜSSEN auf Mobile deaktiviert sein, da sie ohne sichtbare Sidebar keinen Sinn ergeben.
+Der Hauptbereich (Main Content) SHALL auf Mobilgeräten die volle Viewport-Breite nutzen. Das Padding MUSS auf Mobile `px-4 py-4` betragen (statt `p-8`). Auf dem Desktop trägt der Hauptbereich links einen 3-px-Streifen in `brand-yellow` ohne Rundung und oben links die große Eckfahne (`sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne-bg sm:eckfahne-lg`). Diese Dekorationsklassen MÜSSEN auf Mobile deaktiviert sein, da sie ohne sichtbare Sidebar keinen Sinn ergeben.
 
 #### Scenario: Kein unnötiger Whitespace auf Mobile
 - **WHEN** der Viewport unter 640px ist

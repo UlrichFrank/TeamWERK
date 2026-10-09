@@ -8,7 +8,7 @@ Die neue Form soll vor dem Wechsel auf Prod mit echten Nutzern ausprobiert werde
 
 ## What Changes
 
-- **Kachel/Modal:** `rounded-xs` (2 px) statt `rounded-xl`, `border-t-2` statt `border-t-4`, dazu das Dreieck oben links als neue Utility `eckfahne` (`@utility` in `web/src/index.css`, `background-image`, 28 px). Durchgängig in allen 199 Kacheln/Modals in `pages/` und `components/`.
+- **Kachel/Modal:** `rounded-xs` (2 px) statt `rounded-xl`, `border-t-2` statt `border-t-4`, dazu das Dreieck oben links als neue Utility `eckfahne` (`@utility` in `web/src/index.css`, `::before` über dem Inhalt mit `mix-blend-mode: multiply`, 28 px — als `background-image` verdeckten Tabellenköpfe und das Kalendergitter es). Durchgängig in allen 199 Kacheln/Modals in `pages/` und `components/`.
 - **Statusfarben:** Termin-, Dienst- und Mitfahr-Karten tragen die Fahne in ihrer Statusfarbe (`fahne-*`, gesetzt über `card.border` in `lib/eventColors.ts`; abgesagt/vergangen grau).
 - **Inhaltsbereich (Desktop):** `<main>` bekommt `sm:border-l-[3px]` ohne Rundung statt `sm:rounded-tl-3xl sm:rounded-bl-3xl sm:border-l-4`, dazu die größere Fahne (`eckfahne-lg`, 44 px). Mobile unverändert ohne Dekoration.
 - Lade-Platzhalter in Kachelform und das Benutzerhandbuch (`public/benutzerhandbuch.html`, `.card`) ziehen nach.
