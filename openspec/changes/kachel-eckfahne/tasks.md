@@ -13,6 +13,6 @@
 - [x] 2.1 `deploy/teamwerk-beta.service`, `deploy/nginx-teamwerk-beta.conf`
 - [x] 2.2 Make-Targets `setup-beta`, `deploy-beta`
 - [x] 2.3 Matomo auf Nicht-Prod-Hosts aus
-- [ ] 2.4 DNS-Record `beta.teamwerk.team-stuttgart.org` (manuell, Zone bei Mittwald)
-- [ ] 2.5 Zertifikat per certbot, sobald DNS auflöst
+- [x] 2.4 DNS-Record `beta.teamwerk.team-stuttgart.org` (manuell, Zone bei Mittwald)
+- [x] 2.5 Zertifikat per certbot, sobald DNS auflöst
 - [x] 2.6 Doku `docs/agent/10-deployment.md`
