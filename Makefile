@@ -43,7 +43,7 @@ NAME       ?= $(shell grep '^NAME=' .env 2>/dev/null | cut -d= -f2-)
 TS         := $(shell date +%Y-%m-%dT%H-%M-%S)
 BACKUP_DIR := $(REPO_ROOT)/backup/$(TS)
 
-.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e folien schulung lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
+.PHONY: help init hooks dev dev-remote build deploy deploy-rollback deploy-new setup-beta seed-beta deploy-beta setup-vps migrate-up migrate-down migrate-remote-up create-admin create-admin-remote push-test-remote env clean backup backup-files backup-videos restore-local restore-local-files restore-local-videos pull-db pull-files pull-videos test test-race test-e2e folien schulung lint coverage metrics metrics-gate measure server-bootstrap server-sync-data server-cutover _check-remote _check-new-remote _check-base-url-new
 
 .DEFAULT_GOAL := help
 
@@ -213,6 +213,50 @@ deploy-rollback: ## Vorheriges Binary zurückspielen (Notfall, wenn der Smoke-Te
 
 deploy-new: _check-new-remote ## Build + Deploy auf Umzugs-Zielhost (NEW_REMOTE=<alias> oder REMOTE_NEW aus .env)
 	$(MAKE) deploy REMOTE=$(NEW_REMOTE_RESOLVED) REMOTE_DIR=$(NEW_REMOTE_DIR_RESOLVED)
+
+# ── Beta-Instanz (beta.teamwerk.team-stuttgart.org) ─────────────────────────
+# Zweite, vollständig getrennte Instanz auf demselben VPS: eigenes Binary,
+# eigene Env, eigene DB + Storage unter /var/lib/teamwerk-beta, eigener Dienst
+# (Port 8081). Keines der Targets schreibt einen Prod-Pfad oder startet den
+# Prod-Dienst neu. Details: docs/agent/10-deployment.md „Beta-Instanz".
+BETA_DIR := /var/lib/teamwerk-beta
+BETA_DB  := $(BETA_DIR)/teamwerk.db
+BETA_BIN := $(REMOTE_DIR)/teamwerk-beta
+
+setup-beta: ## Beta-Instanz einrichten (Dienst, Env, Verzeichnisse, nginx, Zertifikat; idempotent)
+	rsync -az deploy/setup-beta.sh deploy/teamwerk-beta.service deploy/nginx-teamwerk-beta.conf $(REMOTE):/tmp/teamwerk-beta-deploy/
+	ssh $(REMOTE) "sudo bash /tmp/teamwerk-beta-deploy/setup-beta.sh"
+
+seed-beta: ## Beta-DB aus anonymisierter Kopie von ./teamwerk.db neu aufsetzen (ersetzt die Beta-DB! FORCE=1 nötig, wenn schon eine existiert)
+	@ssh $(REMOTE) "test -f $(BETA_BIN)" || { echo "seed-beta: erst 'make deploy-beta'"; exit 1; }
+	@if ssh $(REMOTE) "sudo test -f $(BETA_DB)" && [ "$(FORCE)" != "1" ]; then \
+		echo "seed-beta: $(BETA_DB) existiert bereits — mit FORCE=1 ersetzen"; exit 1; fi
+	@mkdir -p $(BUILD_DIR)
+	@bash deploy/beta-seed.sh $(BUILD_DIR)/beta-seed.db > $(BUILD_DIR)/beta-password.txt
+	rsync -az $(BUILD_DIR)/beta-seed.db $(REMOTE):/tmp/teamwerk-beta-seed.db
+	ssh $(REMOTE) "sudo systemctl stop teamwerk-beta 2>/dev/null; \
+		sudo rm -f $(BETA_DB) $(BETA_DB)-wal $(BETA_DB)-shm && \
+		sudo mv /tmp/teamwerk-beta-seed.db $(BETA_DB) && \
+		sudo $(BETA_BIN) migrate up --db $(BETA_DB) && \
+		sudo chown www-data:www-data $(BETA_DB) && \
+		sudo systemctl start teamwerk-beta"
+	@rm -f $(BUILD_DIR)/beta-seed.db
+	@echo "Beta-DB eingespielt. Logins: vorstand@beispiel.de / trainer@beispiel.de (und alle anderen anonymisierten Konten)"
+	@echo "Passwort steht in $(BUILD_DIR)/beta-password.txt"
+
+deploy-beta: build ## Aktuellen Arbeitsstand auf die Beta-Instanz deployen (Prod bleibt unberührt)
+	@ssh $(REMOTE) "sudo test -f /etc/teamwerk-beta/env" || { echo "deploy-beta: erst 'make setup-beta'"; exit 1; }
+	rsync -az $(BUILD_DIR)/$(BINARY) $(REMOTE):/tmp/teamwerk-beta.new
+	ssh $(REMOTE) "sudo cp $(BETA_BIN) $(BETA_BIN).prev 2>/dev/null || true; \
+		sudo mv /tmp/teamwerk-beta.new $(BETA_BIN) && sudo chmod 755 $(BETA_BIN) && \
+		if sudo test -f $(BETA_DB); then sudo $(BETA_BIN) migrate up --db $(BETA_DB) && sudo chown www-data:www-data $(BETA_DB); fi; \
+		sudo systemctl restart teamwerk-beta"
+	@echo "Smoke-Test Beta: warte auf /api/healthz (bis 30s)..."
+	@ssh $(REMOTE) 'ok=0; for i in $$(seq 1 15); do \
+			if curl -fsS http://127.0.0.1:8081/api/healthz >/dev/null 2>&1; then ok=1; break; fi; sleep 2; done; \
+		if [ "$$ok" != "1" ]; then sudo systemctl status teamwerk-beta --no-pager | tail -20 >&2; \
+			echo "Beta antwortet nicht" >&2; exit 1; fi; echo "Smoke-Test Beta OK (Port 8081)."'
+	@git rev-parse --short HEAD > .deployed-beta-hash
 
 migrate-up: ## Migrationen lokal anwenden
 	$(GO) run ./cmd/teamwerk migrate up

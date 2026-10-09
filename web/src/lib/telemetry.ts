@@ -26,6 +26,14 @@ function push(cmd: PaqCommand): void {
   window._paq.push(cmd)
 }
 
+// Die Beta-Instanz (beta.teamwerk.team-stuttgart.org) läuft mit demselben Build
+// wie Prod und damit derselben Matomo-Konfiguration. Ohne diese Sperre zählte jeder
+// Testklick als Prod-Besuch. Gesperrt wird nach Host-Präfix statt Prod per Gleichheit
+// freizugeben, damit ein Server-Umzug auf einen neuen Host die Erfassung nicht verliert.
+export function isTelemetryHost(hostname: string): boolean {
+  return !hostname.startsWith('beta.')
+}
+
 export function initTelemetry(url: string | undefined, siteId: number | undefined): void {
   if (!url || !siteId || Number.isNaN(siteId)) {
     enabled = false

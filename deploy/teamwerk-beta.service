@@ -1,0 +1,25 @@
+[Unit]
+Description=TeamWERK Beta (beta.teamwerk.team-stuttgart.org) – Vorschau, getrennt von Prod
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+# Eigenes Arbeitsverzeichnis: greift irgendwo ein relativer Storage-Default
+# (./storage/…), landet er hier und nicht neben dem Prod-Binary.
+WorkingDirectory=/var/lib/teamwerk-beta
+ExecStart=/usr/local/bin/teamwerk-beta
+EnvironmentFile=/etc/teamwerk-beta/env
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+# Die Beta teilt sich den VPS mit Prod und darf ihn nicht ausbremsen: harte
+# Speichergrenze (Prod-Prozess bleibt bei OOM unberührt, systemd killt nur die
+# Beta), halbe CPU, niedrigere Priorität für CPU und Platte.
+MemoryMax=350M
+CPUQuota=50%
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

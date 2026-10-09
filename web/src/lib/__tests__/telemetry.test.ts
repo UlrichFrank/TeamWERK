@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   initTelemetry,
+  isTelemetryHost,
   isTelemetryEnabled,
   detectChannel,
   slugifyTeam,
@@ -181,5 +182,15 @@ describe('telemetry — enabled state', () => {
     initTelemetry('https://matomo.example.com', 7)
     initTelemetry('https://matomo.example.com', 7)
     expect(document.querySelectorAll('script[data-matomo]').length).toBe(1)
+  })
+})
+
+describe('isTelemetryHost', () => {
+  test('Prod-Host erfasst', () => {
+    expect(isTelemetryHost('teamwerk.team-stuttgart.org')).toBe(true)
+  })
+
+  test('Beta-Host erfasst nicht', () => {
+    expect(isTelemetryHost('beta.teamwerk.team-stuttgart.org')).toBe(false)
   })
 })

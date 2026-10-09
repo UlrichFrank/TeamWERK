@@ -235,3 +235,21 @@ Worker packt nur noch um. Reihenfolge (design.md, Migration Plan):
 Das Tool ist **nicht signiert**: macOS meldet beim ersten Start einen nicht verifizierten
 Entwickler (Rechtsklick → Öffnen), Windows SmartScreen einen unbekannten Herausgeber. Den
 Filmenden das einmal sagen.
+
+## Beta-Instanz (`beta.teamwerk.team-stuttgart.org`)
+
+Zweite Instanz auf demselben VPS zum Ausprobieren neuer Oberflächen (zuerst: Kachelform „Eckfahne", Change `kachel-eckfahne`). **Teilt keinen Zustand mit Prod:** Binary `/usr/local/bin/teamwerk-beta`, Env `/etc/teamwerk-beta/env`, DB und alle Storage-Pfade (inkl. Videos) unter `/var/lib/teamwerk-beta/`, Dienst `teamwerk-beta` auf Port 8081, nginx-Site `sites-available/teamwerk-beta` mit eigener Rate-Limit-Zone und eigenem Zertifikat. Das Refresh-Cookie ist host-only — eine Prod-Sitzung im selben Browser bleibt bestehen.
+
+**Keine Außenwirkung:** `MAILER_DISABLED=true`, keine VAPID-Schlüssel (kein Push), `BWHV_ORG_ID=0`, **kein** Scheduler- und kein Backup-Cron (keine Erinnerungen, keine Retention — die Beta ist Wegwerf-Zustand), keine Matomo-Erfassung (`isTelemetryHost` in `web/src/lib/telemetry.ts` sperrt Hosts mit `beta.`). Die Unit begrenzt die Beta auf 350 MB RAM und eine halbe CPU (`MemoryMax`, `CPUQuota`, `Nice`, `IOSchedulingClass=idle`), damit sie Prod auf dem kleinen VPS nicht verdrängt.
+
+**Daten:** `make seed-beta` baut **lokal** aus `./teamwerk.db` (vorher `make pull-db`) eine anonymisierte Kopie (`deploy/beta-seed.sh` → `docs/schulung/tools/anon.py`) und härtet sie für eine öffentlich erreichbare Instanz: Bank-/SEPA-Ciphertexte und der Tresor-Schlüssel werden entfernt (die Ciphertexte wären mit der Vereins-Passphrase entschlüsselbar), alle Tokens gelöscht, alle Logins bekommen ein **zufälliges** Passwort (anon.py setzt ein im Repo dokumentiertes) — es steht danach in `bin/beta-password.txt`. Personas: `vorstand@beispiel.de`, `trainer@beispiel.de`. Ersetzt die Beta-DB nur mit `FORCE=1`. Den Tresor richtet man auf der Beta bei Bedarf neu ein.
+
+```bash
+make setup-beta                  # einmalig + idempotent: Verzeichnisse, Env (Secrets zufällig), Dienst, nginx, certbot
+make deploy-beta                 # Arbeitsstand bauen und NUR auf die Beta ausrollen (+ Smoke-Test Port 8081)
+make seed-beta [FORCE=1]         # Beta-DB aus anonymisierter lokaler Kopie neu aufsetzen
+```
+
+**Voraussetzung DNS:** A-Record `beta.teamwerk.team-stuttgart.org → 31.70.110.19` in der Zone bei agenturserver/Mittwald. Ohne ihn installiert `setup-beta` nur einen Port-80-Platzhalter (503) und meldet den fehlenden Record; nach dem Anlegen `make setup-beta` erneut ausführen — dann holt certbot das Zertifikat (Webroot `/var/www/certbot`, Erneuerung über denselben Block) und der volle 443-Block geht live. Jeder nginx-Reload läuft nur nach `nginx -t`; scheitert der Test, entfernt das Skript ausschließlich die Beta-Site.
+
+**Abbau:** `systemctl disable --now teamwerk-beta`, `rm /etc/nginx/sites-enabled/teamwerk-beta && systemctl reload nginx`, `rm -rf /var/lib/teamwerk-beta /etc/teamwerk-beta /usr/local/bin/teamwerk-beta*`, `certbot delete --cert-name beta.teamwerk.team-stuttgart.org`.

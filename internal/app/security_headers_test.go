@@ -74,11 +74,15 @@ func TestSecurityHeaders_CSPErlaubtCastSDK(t *testing.T) {
 // nginx setzt die CSP als zweite Schicht. Zwei CSP-Header wirken im Browser als
 // Schnittmenge — weicht nginx ab, blockt es, was die Go-Middleware erlaubt.
 func TestSecurityHeaders_NginxCSPDeckungsgleich(t *testing.T) {
-	conf, err := os.ReadFile("../../deploy/nginx-teamwerk.conf")
-	if err != nil {
-		t.Fatalf("nginx-Konfiguration lesen: %v", err)
-	}
-	if !strings.Contains(string(conf), `add_header Content-Security-Policy "`+contentSecurityPolicy+`" always;`) {
-		t.Errorf("CSP in deploy/nginx-teamwerk.conf weicht von contentSecurityPolicy ab")
+	// Die Beta-Instanz (deploy/nginx-teamwerk-beta.conf) läuft mit demselben
+	// Binary und braucht deshalb dieselbe CSP.
+	for _, name := range []string{"nginx-teamwerk.conf", "nginx-teamwerk-beta.conf"} {
+		conf, err := os.ReadFile("../../deploy/" + name)
+		if err != nil {
+			t.Fatalf("nginx-Konfiguration lesen: %v", err)
+		}
+		if !strings.Contains(string(conf), `add_header Content-Security-Policy "`+contentSecurityPolicy+`" always;`) {
+			t.Errorf("CSP in deploy/%s weicht von contentSecurityPolicy ab", name)
+		}
 	}
 }
