@@ -44,12 +44,12 @@ gefahrlos änderbar.
 
 ```bash
 # 1. Binary + Bundle mit den neuen Code-Änderungen auf den Neu-Host
-make deploy REMOTE=vServerNeu
+make deploy REMOTE=teamwerk.team-stuttgart.org
 
 # 2. Neue Nginx-Config auf den Neu-Host — server_name enthält vorerst
 #    NUR teamwerk.*, weil DNS für internal.* noch nicht steht.
-scp deploy/nginx-teamwerk.conf vServerNeu:/tmp/teamwerk.conf
-ssh vServerNeu <<'REMOTE'
+scp deploy/nginx-teamwerk.conf teamwerk.team-stuttgart.org:/tmp/teamwerk.conf
+ssh teamwerk.team-stuttgart.org <<'REMOTE'
   # Übergangs-Zustand: server_name reduzieren auf teamwerk.* — internal.*
   # kommt in Phase C dazu, damit certbot --expand vorher nicht auf einen
   # 404 des Alt-Hosts läuft.
@@ -59,7 +59,7 @@ ssh vServerNeu <<'REMOTE'
 REMOTE
 
 # 3. Env auf Neu-Host — BASE_URL zeigt auf Primärhost
-ssh vServerNeu "sudo grep '^BASE_URL=' /etc/teamwerk/env"
+ssh teamwerk.team-stuttgart.org "sudo grep '^BASE_URL=' /etc/teamwerk/env"
 # Sollte bereits durch server-bootstrap auf https://teamwerk.team-stuttgart.org
 # stehen. Falls nicht, jetzt setzen und `sudo systemctl restart teamwerk`.
 
@@ -101,13 +101,13 @@ fehl.
 ## Phase C — Zertifikat um `internal.*` erweitern
 
 ```bash
-ssh vServerNeu 'certbot --nginx --expand \
+ssh teamwerk.team-stuttgart.org 'certbot --nginx --expand \
   -d teamwerk.team-stuttgart.org \
   -d internal.team-stuttgart.org \
   --non-interactive --agree-tos -m vorstand@team-stuttgart.org'
 
 # Verifikation: genau ein Zertifikat, beide SANs
-ssh vServerNeu "sudo certbot certificates"
+ssh teamwerk.team-stuttgart.org "sudo certbot certificates"
 # Erwartet:
 #   Certificate Name: teamwerk.team-stuttgart.org
 #     Domains: teamwerk.team-stuttgart.org internal.team-stuttgart.org
@@ -129,8 +129,8 @@ Primärhost bleibt in dieser Zeit unbetroffen erreichbar.
 ```bash
 # Neue Config mit beiden server_name-Einträgen deployen (die Original-Fassung,
 # nicht die in Phase A reduzierte).
-scp deploy/nginx-teamwerk.conf vServerNeu:/tmp/teamwerk.conf
-ssh vServerNeu <<'REMOTE'
+scp deploy/nginx-teamwerk.conf teamwerk.team-stuttgart.org:/tmp/teamwerk.conf
+ssh teamwerk.team-stuttgart.org <<'REMOTE'
   sudo cp /etc/nginx/sites-available/teamwerk \
           /etc/nginx/sites-available/teamwerk.pre-alias.bak
   sudo mv /tmp/teamwerk.conf /etc/nginx/sites-available/teamwerk
@@ -170,20 +170,20 @@ Alt-IP zugreift.
 
 ```bash
 # 1. Nachlaufender Traffic auf Alt-Host (letzte 30 min)
-ssh vServer 'sudo tail -n 5000 /var/log/nginx/access.log | \
+ssh teamwerkAlt 'sudo tail -n 5000 /var/log/nginx/access.log | \
              awk "{print \$1, \$7}" | sort -u | head -50'
 
 # 2. teamwerk-Service auf Alt-Host stoppen und disablen
-ssh vServer 'sudo systemctl stop teamwerk && sudo systemctl disable teamwerk'
-ssh vServer 'sudo systemctl status teamwerk --no-pager | head -5'
+ssh teamwerkAlt 'sudo systemctl stop teamwerk && sudo systemctl disable teamwerk'
+ssh teamwerkAlt 'sudo systemctl status teamwerk --no-pager | head -5'
 # Erwartet: inactive (dead), disabled
 
 # 3. Cron-Wrapper deaktivieren, damit Scheduler nicht mehr auf toter DB tickt
-ssh vServer 'sudo crontab -l | grep -v teamwerk-scheduler | sudo crontab -'
-ssh vServer 'sudo crontab -l'
+ssh teamwerkAlt 'sudo crontab -l | grep -v teamwerk-scheduler | sudo crontab -'
+ssh teamwerkAlt 'sudo crontab -l'
 
 # 4. Nginx auf Alt-Host stoppen (Zertifikate lassen wir stehen für Rollback)
-ssh vServer 'sudo systemctl stop nginx && sudo systemctl disable nginx'
+ssh teamwerkAlt 'sudo systemctl stop nginx && sudo systemctl disable nginx'
 
 # 5. Sanity: Alt-Host antwortet nicht mehr auf HTTP/HTTPS
 curl -sS -o /dev/null -w '%{http_code}\n' --resolve \
@@ -223,7 +223,7 @@ muss:
 ### Rollback A: nur Nginx-Config falsch (Banner, Config-Fehler)
 
 ```bash
-ssh vServerNeu 'sudo cp /etc/nginx/sites-available/teamwerk.pre-alias.bak \
+ssh teamwerk.team-stuttgart.org 'sudo cp /etc/nginx/sites-available/teamwerk.pre-alias.bak \
                         /etc/nginx/sites-available/teamwerk && \
                  sudo nginx -t && sudo systemctl reload nginx'
 ```
@@ -240,10 +240,10 @@ Wenn der neue Host als Ganzes zickt und ein Fix > 30 min dauern würde:
 #    internal.team-stuttgart.org  A → 217.160.118.39
 
 # 2. Alt-Host wieder hochfahren
-ssh vServer 'sudo systemctl enable teamwerk && sudo systemctl start teamwerk'
-ssh vServer 'sudo systemctl enable nginx && sudo systemctl start nginx'
-ssh vServer 'curl -s http://localhost:8080/api/healthz'   # → status:ok
-ssh vServer 'sudo crontab -e'   # Scheduler-Cron wieder einhängen — siehe Backup
+ssh teamwerkAlt 'sudo systemctl enable teamwerk && sudo systemctl start teamwerk'
+ssh teamwerkAlt 'sudo systemctl enable nginx && sudo systemctl start nginx'
+ssh teamwerkAlt 'curl -s http://localhost:8080/api/healthz'   # → status:ok
+ssh teamwerkAlt 'sudo crontab -e'   # Scheduler-Cron wieder einhängen — siehe Backup
 
 # 3. DNS-Propagation abwarten
 until [ "$(dig +short internal.team-stuttgart.org)" = "217.160.118.39" ]; do
@@ -271,9 +271,9 @@ gezogen.
 
 ```bash
 # Phase A
-make deploy REMOTE=vServerNeu
-scp deploy/nginx-teamwerk.conf vServerNeu:/tmp/teamwerk.conf
-ssh vServerNeu 'sed -i "s/server_name teamwerk.team-stuttgart.org internal.team-stuttgart.org;/server_name teamwerk.team-stuttgart.org;/" /tmp/teamwerk.conf && \
+make deploy REMOTE=teamwerk.team-stuttgart.org
+scp deploy/nginx-teamwerk.conf teamwerk.team-stuttgart.org:/tmp/teamwerk.conf
+ssh teamwerk.team-stuttgart.org 'sed -i "s/server_name teamwerk.team-stuttgart.org internal.team-stuttgart.org;/server_name teamwerk.team-stuttgart.org;/" /tmp/teamwerk.conf && \
                 sudo mv /tmp/teamwerk.conf /etc/nginx/sites-available/teamwerk && \
                 sudo nginx -t && sudo systemctl reload nginx'
 curl -sSf https://teamwerk.team-stuttgart.org/api/healthz
@@ -282,19 +282,19 @@ curl -sSf https://teamwerk.team-stuttgart.org/api/healthz
 until [ "$(dig +short internal.team-stuttgart.org)" = "31.70.110.19" ]; do sleep 30; done
 
 # Phase C
-ssh vServerNeu 'certbot --nginx --expand \
+ssh teamwerk.team-stuttgart.org 'certbot --nginx --expand \
   -d teamwerk.team-stuttgart.org -d internal.team-stuttgart.org \
   --non-interactive --agree-tos -m vorstand@team-stuttgart.org'
 
 # Phase D
-scp deploy/nginx-teamwerk.conf vServerNeu:/tmp/teamwerk.conf
-ssh vServerNeu 'sudo cp /etc/nginx/sites-available/teamwerk /etc/nginx/sites-available/teamwerk.pre-alias.bak && \
+scp deploy/nginx-teamwerk.conf teamwerk.team-stuttgart.org:/tmp/teamwerk.conf
+ssh teamwerk.team-stuttgart.org 'sudo cp /etc/nginx/sites-available/teamwerk /etc/nginx/sites-available/teamwerk.pre-alias.bak && \
                 sudo mv /tmp/teamwerk.conf /etc/nginx/sites-available/teamwerk && \
                 sudo nginx -t && sudo systemctl reload nginx'
 curl -sSf https://teamwerk.team-stuttgart.org/api/healthz
 curl -sSf https://internal.team-stuttgart.org/api/healthz
 
 # Phase E
-ssh vServer 'sudo systemctl stop teamwerk && sudo systemctl disable teamwerk && \
+ssh teamwerkAlt 'sudo systemctl stop teamwerk && sudo systemctl disable teamwerk && \
              sudo systemctl stop nginx && sudo systemctl disable nginx'
 ```

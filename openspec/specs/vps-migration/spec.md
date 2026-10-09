@@ -8,15 +8,15 @@ Alle drei Migrations-Makefile-Targets (`server-bootstrap`, `server-sync-data`, `
 
 #### Scenario: Zielhost fehlt komplett
 - **WHEN** ein Migrations-Target ohne `NEW_REMOTE=…`-Argument und ohne `REMOTE_NEW=…` in `.env` aufgerufen wird
-- **THEN** bricht das Target vor jeder Netzwerk- oder Dateisystemaktion ab und gibt eine Fehlermeldung mit dem korrekten Aufrufbeispiel aus (`make server-bootstrap NEW_REMOTE=vServerNeu`)
+- **THEN** bricht das Target vor jeder Netzwerk- oder Dateisystemaktion ab und gibt eine Fehlermeldung mit dem korrekten Aufrufbeispiel aus (`make server-bootstrap NEW_REMOTE=teamwerkNeu`)
 
 #### Scenario: Zielhost aus `.env`
-- **WHEN** `REMOTE_NEW=vServerNeu` in `.env` steht und ein Migrations-Target ohne `NEW_REMOTE=`-Argument läuft
-- **THEN** verwendet das Target `vServerNeu` als Zielhost und protokolliert die Herkunft (`REMOTE_NEW aus .env`) in der ersten Ausgabezeile
+- **WHEN** `REMOTE_NEW=teamwerkNeu` in `.env` steht und ein Migrations-Target ohne `NEW_REMOTE=`-Argument läuft
+- **THEN** verwendet das Target `teamwerkNeu` als Zielhost und protokolliert die Herkunft (`REMOTE_NEW aus .env`) in der ersten Ausgabezeile
 
 #### Scenario: CLI-Argument überschreibt `.env`
-- **WHEN** `REMOTE_NEW=vServerAlt` in `.env` steht und das Target mit `make server-bootstrap NEW_REMOTE=vServerNeu` aufgerufen wird
-- **THEN** verwendet das Target `vServerNeu`, nicht `vServerAlt`
+- **WHEN** `REMOTE_NEW=teamwerkAlt` in `.env` steht und das Target mit `make server-bootstrap NEW_REMOTE=teamwerkNeu` aufgerufen wird
+- **THEN** verwendet das Target `teamwerkNeu`, nicht `teamwerkAlt`
 
 ---
 
@@ -169,6 +169,6 @@ Alle drei Migrations-Targets MUST/MÜSSEN die neue Zieldomain aus `BASE_URL_NEW`
 Wenn `REMOTE` in `.env` nicht gesetzt oder leer ist, MUST/MÜSSEN alle drei Migrations-Targets vor jeder Aktion mit einer klaren Fehlermeldung abbrechen, weil ohne Quelle kein Umzug möglich ist.
 
 #### Scenario: Quelle fehlt
-- **WHEN** `.env` kein `REMOTE=`-Eintrag hat und `make server-bootstrap NEW_REMOTE=vServerNeu` läuft
+- **WHEN** `.env` kein `REMOTE=`-Eintrag hat und `make server-bootstrap NEW_REMOTE=teamwerkNeu` läuft
 - **THEN** bricht das Target mit einer Fehlermeldung ab, die explizit auf das fehlende `REMOTE=` in `.env` hinweist, und macht keine Änderungen am Zielhost
 

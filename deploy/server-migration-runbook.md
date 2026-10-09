@@ -25,16 +25,16 @@ produktiven Video-Betrieb), Root-SSH offen.
 
 1. SSH-Alias für Ziel-VPS in `~/.ssh/config`:
    ```
-   Host vServerNeu
+   Host teamwerkNeu
      HostName 31.70.110.19
      User root
      IdentityFile ~/.ssh/id_ed25519
    ```
-   Test: `ssh vServerNeu "uname -a"`.
+   Test: `ssh teamwerkNeu "uname -a"`.
 
 2. `.env` ergänzen um:
    ```
-   REMOTE_NEW=vServerNeu
+   REMOTE_NEW=teamwerkNeu
    REMOTE_NEW_DIR=/usr/local/bin
    BASE_URL_NEW=https://teamwerk.team-stuttgart.org
    ```
@@ -49,7 +49,7 @@ produktiven Video-Betrieb), Root-SSH offen.
 ## 1. Bootstrap (einmalig)
 
 ```bash
-make server-bootstrap NEW_REMOTE=vServerNeu
+make server-bootstrap NEW_REMOTE=teamwerkNeu
 ```
 
 Was passiert:
@@ -73,15 +73,15 @@ Was passiert:
 
 ```bash
 # Health über IP + Host-Header (DNS ist noch nicht umgestellt)
-ssh vServerNeu "curl -k -s -H 'Host: teamwerk.team-stuttgart.org' https://localhost/api/healthz"
+ssh teamwerkNeu "curl -k -s -H 'Host: teamwerk.team-stuttgart.org' https://localhost/api/healthz"
 # → {"status":"ok","db":"ok",...}
 
 # Env-Rewrite
-ssh vServerNeu "sudo grep '^BASE_URL=' /etc/teamwerk/env"
+ssh teamwerkNeu "sudo grep '^BASE_URL=' /etc/teamwerk/env"
 # → BASE_URL=https://teamwerk.team-stuttgart.org
 
 # Journal
-ssh vServerNeu "journalctl -u teamwerk -n 30 --no-pager"
+ssh teamwerkNeu "journalctl -u teamwerk -n 30 --no-pager"
 ```
 
 ---
@@ -106,7 +106,7 @@ Kollegen.
 alle Testdaten auf dem Ziel):
 
 ```bash
-make server-sync-data NEW_REMOTE=vServerNeu
+make server-sync-data NEW_REMOTE=teamwerkNeu
 # Bestätigungsdialog: „…überschreibt Testdaten…, ok? [y/N]"
 ```
 
@@ -120,7 +120,7 @@ make server-sync-data NEW_REMOTE=vServerNeu
   aufgeht wie auf der Produktion.
 - Fee-Run (SEPA-XML) im Browser durchspielen (nicht bestätigen).
 - Kalender, Dienstbörse, Chat einmal laden.
-- Ein Test-Push senden: `make push-test-remote USER=<id> TITLE=Test BODY=Testcut REMOTE=vServerNeu` (kommt beim User an? Bei alter PWA vermutlich **nicht**, weil dessen Subscription auf die alte Origin registriert ist — das ist erwartet und wird nach Cutover per HTTP-410-Cleanup aufgeräumt).
+- Ein Test-Push senden: `make push-test-remote USER=<id> TITLE=Test BODY=Testcut REMOTE=teamwerkNeu` (kommt beim User an? Bei alter PWA vermutlich **nicht**, weil dessen Subscription auf die alte Origin registriert ist — das ist erwartet und wird nach Cutover per HTTP-410-Cleanup aufgeräumt).
 
 ---
 
@@ -138,7 +138,7 @@ auf den Ziel-Host und ihre Änderungen gehen beim `server-sync-data` verloren.
    ```
 3. Certbot auf Ziel:
    ```bash
-   ssh vServerNeu "certbot --nginx -d teamwerk.team-stuttgart.org --non-interactive --agree-tos -m vorstand@team-stuttgart.org"
+   ssh teamwerkNeu "certbot --nginx -d teamwerk.team-stuttgart.org --non-interactive --agree-tos -m vorstand@team-stuttgart.org"
    ```
 4. Test:
    ```bash
@@ -179,7 +179,7 @@ make backup && make backup-files
 Erst wenn 4a–4d ok sind:
 
 ```bash
-make server-cutover NEW_REMOTE=vServerNeu
+make server-cutover NEW_REMOTE=teamwerkNeu
 ```
 
 Was passiert (nach Bestätigung `[y/N]`):
@@ -282,25 +282,25 @@ Für den TeamStuttgart-Umzug (`intern.` → `teamwerk.`):
 ```bash
 # 0. .env-Ergänzung
 cat >> .env <<'EOF'
-REMOTE_NEW=vServerNeu
+REMOTE_NEW=teamwerkNeu
 REMOTE_NEW_DIR=/usr/local/bin
 BASE_URL_NEW=https://teamwerk.team-stuttgart.org
 EOF
 
 # 1. Bootstrap
-make server-bootstrap NEW_REMOTE=vServerNeu
+make server-bootstrap NEW_REMOTE=teamwerkNeu
 
 # 2. Testphase — lokale /etc/hosts-Zeile
 echo "31.70.110.19  teamwerk.team-stuttgart.org" | sudo tee -a /etc/hosts
 
 # ... tagelanges Testen, bei Bedarf:
-make server-sync-data NEW_REMOTE=vServerNeu
+make server-sync-data NEW_REMOTE=teamwerkNeu
 
 # 3. DNS im Provider-Panel setzen, warten, /etc/hosts-Zeile entfernen
-ssh vServerNeu "certbot --nginx -d teamwerk.team-stuttgart.org --non-interactive --agree-tos -m vorstand@team-stuttgart.org"
+ssh teamwerkNeu "certbot --nginx -d teamwerk.team-stuttgart.org --non-interactive --agree-tos -m vorstand@team-stuttgart.org"
 
 # 4. Cutover
-make server-cutover NEW_REMOTE=vServerNeu
+make server-cutover NEW_REMOTE=teamwerkNeu
 
 # 5. Better-Stack-Monitor umhängen, User informieren.
 ```
