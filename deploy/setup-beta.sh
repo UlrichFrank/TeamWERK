@@ -22,6 +22,7 @@ for d in "$DATA" "$DATA"/{uploads,files,media,beitragslauf-protokolle,match-repo
   mkdir -p "$d"
 done
 chown -R www-data:www-data "$DATA"
+chmod 750 "$DATA"
 mkdir -p /var/www/certbot
 
 echo "==> Env ($ENV)"
@@ -89,7 +90,7 @@ EOF
   reload_nginx
 
   MYIP="$(curl -fsS -4 https://api.ipify.org 2>/dev/null || true)"
-  DNSIP="$(getent ahostsv4 "$HOST" 2>/dev/null | awk 'NR==1{print $1}')"
+  DNSIP="$( (getent ahostsv4 "$HOST" 2>/dev/null || true) | awk 'NR==1{print $1}')"
   if [ -z "$DNSIP" ] || [ "$DNSIP" != "$MYIP" ]; then
     echo "  DNS: $HOST löst nicht auf diesen Server auf (DNS='${DNSIP:-keiner}', Server='$MYIP')."
     echo "  A-Record $HOST -> $MYIP anlegen, dann 'make setup-beta' erneut ausführen."
