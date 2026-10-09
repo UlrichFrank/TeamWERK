@@ -39,7 +39,7 @@ export default function LoginPage() {
       </div>
 
       {/* Login Form */}
-      <div className="flex-1 flex items-center justify-center bg-brand-white sm:rounded-l-3xl sm:border-l-4 sm:border-brand-yellow">
+      <div className="flex-1 flex items-center justify-center bg-brand-white sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne sm:eckfahne-lg">
         <div className="w-full max-w-sm px-4 sm:px-8 py-8 sm:py-0">
           {/* Mobile Logo */}
           <div className="sm:hidden flex flex-col items-center mb-8">
