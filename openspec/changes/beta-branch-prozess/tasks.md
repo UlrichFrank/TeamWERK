@@ -14,4 +14,4 @@
 ## 3. Branch und Verifikation
 
 - [x] 3.1 Doku (02-workflow, 10-deployment, github-actions-setup)
-- [ ] 3.2 Branch `beta` anlegen, `make deploy ENV=beta` vom Branch beta, Prod-PID unverändert
+- [x] 3.2 Branch `beta` anlegen, `make deploy ENV=beta` vom Branch beta, Prod-PID unverändert
