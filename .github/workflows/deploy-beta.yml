@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: '1.26.0'
+  GO_VERSION: '1.26.9'
   NODE_VERSION: '22'
   PNPM_VERSION: '11.17.0'
 
