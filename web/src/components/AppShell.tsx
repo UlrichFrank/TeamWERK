@@ -525,7 +525,12 @@ export default function AppShell() {
         )}
 
         {/* Main content */}
-        <main ref={mainRef} className="flex-1 px-4 py-4 sm:p-8 overflow-auto bg-brand-white text-brand-text sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne-bg sm:eckfahne-lg">
+        {/* Rahmen um den Scroll-Container: die große Eckfahne sitzt hier statt als
+            Hintergrund von <main> — als Hintergrund lief gescrollter Inhalt (Kalender,
+            lange Listen) darüber. So bleibt sie in der Ecke und im Vordergrund. */}
+        <div className="relative flex-1 flex flex-col min-h-0">
+        <div aria-hidden="true" className="hidden sm:block pointer-events-none absolute top-0 left-[3px] z-30 w-11 h-11 eckfahne-bg eckfahne-lg" />
+        <main ref={mainRef} className="flex-1 min-h-0 px-4 py-4 sm:p-8 overflow-auto bg-brand-white text-brand-text sm:border-l-[3px] sm:border-brand-yellow">
           {canGoBack && (
             <div className="hidden sm:block -mt-2 mb-3">
               <button
@@ -561,6 +566,7 @@ export default function AppShell() {
             <Outlet />
           </HistoryBaseContext.Provider>
         </main>
+        </div>
       </div>
 
       {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}

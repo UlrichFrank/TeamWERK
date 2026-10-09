@@ -66,7 +66,7 @@ Der Tag (`h1`/`h2`/`h3`) folgt der Dokumentgliederung, die Rolle dem Aussehen. E
 ## Mobile & PWA
 
 - **Breakpoint:** `sm:` (640px) ist die einzige Mobile/Desktop-Grenze. Keine `md:`-Logik für Mobile.
-- **Navigation:** Hamburger (`<Menu>`) öffnet die Sidebar als Fixed-Overlay (`z-50`) mit Backdrop. Desktop-Sidebar immer sichtbar. Main-Padding Mobile `px-4 py-4` statt `p-8`; Deko-Klassen (`sm:border-l-[3px] sm:border-brand-yellow sm:eckfahne-bg sm:eckfahne-lg` — 3-px-Streifen ohne Rundung plus große Fahne) nur `sm:`.
+- **Navigation:** Hamburger (`<Menu>`) öffnet die Sidebar als Fixed-Overlay (`z-50`) mit Backdrop. Desktop-Sidebar immer sichtbar. Main-Padding Mobile `px-4 py-4` statt `p-8`; Deko-Klassen (`sm:border-l-[3px] sm:border-brand-yellow` — 3-px-Streifen ohne Rundung; die große Fahne ist ein eigenes Element im Rahmen um `<main>`, siehe Gotcha „Eckfahne“) nur `sm:`.
 - **Tabellen auf Mobile:** Card-Layout statt `<table>`; Actions hinter `<MoreVertical>`-Dropdown; Multi-Feld-Inline-Edit als Modal. Shared: `MobileCard`, `ActionMenu`, `EditModal` in `web/src/components/`.
 - **Touch-Targets:** min. 44px Höhe → `py-2.5` auf Mobile (`sm:py-1.5`). **Header-Controls sind davon ausgenommen** (`h-8 sm:h-[30px]` = 32/30px): die Kopfzeile ist eine dichte Leiste, ein Sprung auf 44px macht sie auf kleinen Geräten unverhältnismäßig hoch.
 - **PWA** (`vite-plugin-pwa`): Service Worker network-first für `/api/*`, cache-first für Assets. Manifest `web/public/manifest.json`, Icons `web/public/icons/`. Offline-Shell mit Hinweis.
