@@ -327,10 +327,9 @@ describe('StaffelnPage', () => {
 
   // Der Reiter trägt zwei Darstellungen: den Tabellenverlauf der Staffel und
   // darunter die Spielmatrix der eigenen Mannschaft (design.md §12).
-  test('der Reiter verlauf zeigt Tabellenverlauf UND Spielmatrix', async () => {
+  test('der Reiter spieler zeigt die Spielmatrix, verlauf nur die Grafik', async () => {
     mockAll()
-    setup('/staffeln?tab=verlauf')
-    await waitFor(() => expect(screen.getByRole('img', { name: /Platzierungsverlauf/ })).toBeInTheDocument())
+    setup('/staffeln?tab=spieler')
     expect(await screen.findByText('Anna Beispiel')).toBeInTheDocument()
     expect(screen.getByText(/1 Spiel, davon\s+1 mit Spielbericht/)).toBeInTheDocument()
   })
@@ -338,7 +337,7 @@ describe('StaffelnPage', () => {
   // Klick auf die Begegnung in der Spielmatrix: Reiter Spielplan, Bericht offen.
   test('Klick auf eine Begegnung der Spielmatrix springt zum Bericht', async () => {
     mockAll()
-    setup('/staffeln?tab=verlauf')
+    setup('/staffeln?tab=spieler')
     await screen.findByText('Anna Beispiel')
     fireEvent.click(screen.getByRole('button', { name: /Bericht/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: /Bericht/ })).toHaveAttribute('aria-expanded', 'true'))
@@ -350,7 +349,7 @@ describe('StaffelnPage', () => {
     const fremd = { ...spielmatrix[0], team: 'Verein B', players: [{ ...spielmatrix[0].players[0], playerId: 9, name: 'Bea Fremd' }] }
     mock.onGet(/\/staffeln\/\d+\/player-games/).reply((cfg) =>
       [200, { teams: cfg.params?.team === 'Verein B' ? [fremd] : spielmatrix }])
-    setup('/staffeln?tab=verlauf')
+    setup('/staffeln?tab=spieler')
     await screen.findByText('Anna Beispiel')
     fireEvent.change(screen.getByRole('combobox', { name: /Mannschaft der Spielerübersicht/ }), { target: { value: 'Verein B' } })
     expect(await screen.findByText('Bea Fremd')).toBeInTheDocument()
@@ -359,10 +358,28 @@ describe('StaffelnPage', () => {
 
   // Ohne verknüpfte Begegnung gibt es keine Mannschaft — und statt einer
   // leeren Tabelle den Grund dafür (design.md §2).
+  // Klick auf eine Mannschaft in der Tabelle: Reiter Spieler, Filter gesetzt.
+  test('Klick auf eine Mannschaft der Tabelle öffnet die Spielerübersicht mit Filter', async () => {
+    mockAll()
+    const fremd = { ...spielmatrix[0], team: 'Verein B', players: [{ ...spielmatrix[0].players[0], playerId: 9, name: 'Bea Fremd' }] }
+    mock.onGet(/\/staffeln\/\d+\/player-games/).reply((cfg) =>
+      [200, { teams: cfg.params?.team === 'Verein B' ? [fremd] : spielmatrix }])
+    setup('/staffeln?tab=tabelle')
+    fireEvent.click(await screen.findByRole('button', { name: 'Verein B' }))
+    expect(await screen.findByText('Bea Fremd')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /Mannschaft der Spielerübersicht/ })).toHaveValue('Verein B')
+  })
+
+  test.each(['spielplan', 'kreuztabelle'])('Klick auf eine Mannschaft im Reiter %s öffnet die Spielerübersicht', async (tab) => {
+    mockAll()
+    setup(`/staffeln?tab=${tab}`)
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Verein B' }))[0])
+    expect(await screen.findByRole('combobox', { name: /Mannschaft der Spielerübersicht/ })).toHaveValue('Verein B')
+  })
+
   test('der Reiter verlauf nennt den Grund, wenn die Spielmatrix fehlt', async () => {
     mockAll(affiliation, [])
-    setup('/staffeln?tab=verlauf')
-    await waitFor(() => expect(screen.getByRole('img', { name: /Platzierungsverlauf/ })).toBeInTheDocument())
+    setup('/staffeln?tab=spieler')
     expect(await screen.findByText(/Verbindung zur eigenen Mannschaft/)).toBeInTheDocument()
     expect(screen.queryByText('Anna Beispiel')).not.toBeInTheDocument()
   })

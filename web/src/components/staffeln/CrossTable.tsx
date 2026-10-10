@@ -1,6 +1,8 @@
 import type { CrossTable as CrossTableData } from '../../lib/staffeln'
 import { isOwnTeam } from '../../lib/staffelHighlight'
 
+const TEAM_BTN = 'hover:underline'
+
 const TD = 'px-2 py-2 text-xs text-brand-text text-center whitespace-nowrap'
 
 /**
@@ -13,8 +15,8 @@ const TD = 'px-2 py-2 text-xs text-brand-text text-center whitespace-nowrap'
  * waagerecht — dasselbe Muster wie der Verlauf.
  */
 export default function CrossTable({
-  data, ownTeams,
-}: { data: CrossTableData; ownTeams: string[] }) {
+  data, ownTeams, onTeamClick,
+}: { data: CrossTableData; ownTeams: string[]; onTeamClick?: (team: string) => void }) {
   if (data.teams.length === 0) {
     return (
       <div className="p-3 bg-brand-info/10 border border-brand-info/30 rounded-lg text-sm text-brand-text">
@@ -46,7 +48,7 @@ export default function CrossTable({
                   aria-current={isOwnTeam(ownTeams, team) || undefined}
                 >
                   <span className="block origin-bottom-left translate-x-1/2 -rotate-90 w-6 whitespace-nowrap">
-                    {team}
+                    <TeamLabel team={team} onClick={onTeamClick} />
                   </span>
                 </th>
               ))}
@@ -67,7 +69,7 @@ export default function CrossTable({
                       ownRow ? 'bg-brand-table-select font-semibold' : 'bg-brand-surface-card'
                     }`}
                   >
-                    {row.team}
+                    <TeamLabel team={row.team} onClick={onTeamClick} />
                   </th>
                   {row.cells.map((cell, c) => {
                     // Zeile UND Spalte der eigenen Mannschaft sind markiert:
@@ -106,4 +108,13 @@ export default function CrossTable({
 function shortDate(date: string): string {
   const d = new Date(`${date.slice(0, 10)}T12:00:00`)
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
+}
+
+function TeamLabel({ team, onClick }: { team: string; onClick?: (team: string) => void }) {
+  if (!onClick) return <>{team}</>
+  return (
+    <button type="button" onClick={() => onClick(team)} className={TEAM_BTN} title="Spielerübersicht dieser Mannschaft">
+      {team}
+    </button>
+  )
 }

@@ -34,13 +34,13 @@ Diese Dinge müssen **vor** dem Setup existieren, sonst hängt das Script.
 
 ```bash
 # ~/.ssh/config
-Host vServer
+Host teamwerk.team-stuttgart.org
   HostName <VPS-IP>
   User root
   IdentityFile ~/.ssh/id_ed25519
 ```
 
-Test: `ssh vServer "uname -a"`.
+Test: `ssh teamwerk.team-stuttgart.org "uname -a"`.
 
 ---
 
@@ -48,8 +48,8 @@ Test: `ssh vServer "uname -a"`.
 
 ```bash
 # Vom lokalen Repo aus
-rsync -az deploy/ vServer:/tmp/deploy/
-ssh vServer "cd /tmp/deploy && bash setup-vps.sh"
+rsync -az deploy/ teamwerk.team-stuttgart.org:/tmp/deploy/
+ssh teamwerk.team-stuttgart.org "cd /tmp/deploy && bash setup-vps.sh"
 ```
 
 Das Script ist idempotent (kann mehrfach laufen). Es legt an:
@@ -127,7 +127,7 @@ zeitweise mehrere GB (raw + processed-Peak vor raw-Delete).
 
 ```bash
 # Owner und Struktur prüfen (vom Setup-Script angelegt)
-ssh vServer "ls -la /storage/videos && df -h /storage"
+ssh teamwerk.team-stuttgart.org "ls -la /storage/videos && df -h /storage"
 ```
 
 **2. ffmpeg.** Transcode (HLS 720p + 360p) braucht `ffmpeg`/`ffprobe`. Das
@@ -135,7 +135,7 @@ Setup-Script installiert `ffmpeg` via `apt`. Benötigt wird **≥ 4.x** (Ubuntu
 24.04 liefert 6.x). Verifizieren:
 
 ```bash
-ssh vServer "ffmpeg -version | head -1 && ffprobe -version | head -1"
+ssh teamwerk.team-stuttgart.org "ffmpeg -version | head -1 && ffprobe -version | head -1"
 # → ffmpeg version 6.x …  (mindestens 4.x)
 ```
 
@@ -147,7 +147,7 @@ ssh vServer "ffmpeg -version | head -1 && ffprobe -version | head -1"
 | `VIDEO_STORAGE_DIR` | nein | `/storage/videos` | Wurzel der Video-Ablage. Muss `www-data` gehören und auf dem erweiterten Storage liegen. |
 | `VIDEO_RESERVED_BYTES` | nein | `1073741824` (1 GiB) | Reserve, die der Disk-Guard zusätzlich zur geschätzten Dateigröße freihält (DB-Wachstum, Logs, parallele Uploads). Auf größerem Storage gerne hochsetzen. |
 
-Nach Änderung an der Env-Datei: `ssh vServer "systemctl restart teamwerk"`.
+Nach Änderung an der Env-Datei: `ssh teamwerk.team-stuttgart.org "systemctl restart teamwerk"`.
 
 ---
 
@@ -167,12 +167,12 @@ Dies baut den Linux-Binary, kopiert nach `/usr/local/bin/teamwerk`, führt
 ## 5. VAPID-Keys erzeugen (Push-Notifications)
 
 ```bash
-ssh vServer "/usr/local/bin/teamwerk gen-vapid"
+ssh teamwerk.team-stuttgart.org "/usr/local/bin/teamwerk gen-vapid"
 # Output:
 #   VAPID_PUBLIC_KEY=…
 #   VAPID_PRIVATE_KEY=…
-ssh vServer "vim /etc/teamwerk/env"   # Werte eintragen
-ssh vServer "systemctl restart teamwerk"
+ssh teamwerk.team-stuttgart.org "vim /etc/teamwerk/env"   # Werte eintragen
+ssh teamwerk.team-stuttgart.org "systemctl restart teamwerk"
 ```
 
 ---
@@ -188,9 +188,9 @@ make create-admin-remote EMAIL=admin@example.org PASSWORD='…' NAME='Admin'
 Mit Backup einer alten DB:
 
 ```bash
-ssh vServer "systemctl stop teamwerk"
-scp teamwerk.db.backup vServer:/var/lib/teamwerk/teamwerk.db
-ssh vServer "chown www-data:www-data /var/lib/teamwerk/teamwerk.db && \
+ssh teamwerk.team-stuttgart.org "systemctl stop teamwerk"
+scp teamwerk.db.backup teamwerk.team-stuttgart.org:/var/lib/teamwerk/teamwerk.db
+ssh teamwerk.team-stuttgart.org "chown www-data:www-data /var/lib/teamwerk/teamwerk.db && \
              /usr/local/bin/teamwerk migrate up --db /var/lib/teamwerk/teamwerk.db && \
              systemctl start teamwerk"
 ```
@@ -222,7 +222,7 @@ auf Bestandsservern sonst dauerhaft fehlt.
 Nach Schritt 3c + 3d:
 
 ```bash
-ssh vServer "systemctl restart vector && systemctl is-active vector"
+ssh teamwerk.team-stuttgart.org "systemctl restart vector && systemctl is-active vector"
 ```
 
 Vector betreibt jetzt **drei Sources** (`journald` für Logs, `host_metrics` für
@@ -239,7 +239,7 @@ Verifizieren:
 Wenn nichts erscheint, prüfen:
 
 ```bash
-ssh vServer "journalctl -u vector -n 50 --no-pager"
+ssh teamwerk.team-stuttgart.org "journalctl -u vector -n 50 --no-pager"
 ```
 
 Typische Fallstricke: `METRICS_TOKEN` nicht in `/etc/teamwerk/env` gesetzt →
@@ -252,7 +252,7 @@ Vector scrapet `/api/metrics`, erhält 404, Metriken fehlen.
 Sobald Domain auf VPS-IP zeigt:
 
 ```bash
-ssh vServer "apt-get install -y certbot python3-certbot-nginx && \
+ssh teamwerk.team-stuttgart.org "apt-get install -y certbot python3-certbot-nginx && \
              certbot --nginx -d <DOMAIN> --non-interactive --agree-tos -m <EMAIL>"
 ```
 
@@ -284,7 +284,7 @@ curl -s -H "Authorization: Bearer $METRICS_TOKEN" https://<DOMAIN>/api/metrics
 
 | Datei | Was tun |
 |---|---|
-| `~/.ssh/config` lokal | Alias `vServer` auf neue IP umstellen |
+| `~/.ssh/config` lokal | Alias `teamwerk.team-stuttgart.org` auf neue IP umstellen |
 | `Makefile` | Falls SSH-Host oder Pfade abweichen, Targets prüfen |
 | `CLAUDE.md` | IP-Adresse aktualisieren |
 

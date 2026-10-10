@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Trophy, CalendarDays, ListOrdered, FileText, Home, MapPin, RefreshCw,
-  Grid3x3, TrendingUp, Swords, Scale, PieChart, Users, ChevronDown, ChevronUp,
+  Grid3x3, TrendingUp, Swords, Scale, PieChart, Users, UserRound, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { useLiveUpdates } from '../hooks/useLiveUpdates'
 import { useAuth } from '../contexts/AuthContext'
@@ -29,9 +29,9 @@ import { PAGE_TITLE, SUBSECTION_TITLE } from '../lib/typography'
 
 type Tab =
   | 'tabelle' | 'spielplan' | 'kreuztabelle' | 'verlauf'
-  | 'tore' | 'fairplay' | 'verteilung' | 'ranglisten' | 'schiedsrichter'
+  | 'spieler' | 'tore' | 'fairplay' | 'verteilung' | 'ranglisten' | 'schiedsrichter'
 
-// Neun Reiter sind viel fuer eine Seite, auf Mobile besonders - deshalb
+// Zehn Reiter sind viel fuer eine Seite, auf Mobile besonders - deshalb
 // scrollt die Leiste waagerecht statt umzubrechen, und der gewaehlte Reiter
 // steht in der Adresse (design.md, Risks).
 //
@@ -44,6 +44,7 @@ const TABS: { id: Tab; label: string; icon: typeof Trophy }[] = [
   { id: 'spielplan', label: 'Spielplan', icon: CalendarDays },
   { id: 'kreuztabelle', label: 'Kreuztabelle', icon: Grid3x3 },
   { id: 'verlauf', label: 'Verlauf', icon: TrendingUp },
+  { id: 'spieler', label: 'Spieler', icon: UserRound },
   { id: 'tore', label: 'Tore', icon: Swords },
   { id: 'fairplay', label: 'Fair-Play', icon: Scale },
   { id: 'verteilung', label: 'Verteilung', icon: PieChart },
@@ -171,6 +172,15 @@ export default function StaffelnPage() {
     setSearch('')
     setParams(next)
   }
+  // Sprung auf die Spielerübersicht mit gesetztem Mannschaftsfilter (?team=).
+  // Echter Verlaufseintrag, damit „Zurück" zur Tabelle/Grafik führt.
+  const openTeam = (team: string) => {
+    const next = new URLSearchParams(params)
+    next.set('tab', 'spieler')
+    next.set('team', team)
+    next.delete('bericht')
+    setParams(next)
+  }
   const focusGameId = Number(params.get('bericht')) || null
 
   if (loading) return <p className="text-sm text-brand-text-muted">Lade…</p>
@@ -271,7 +281,7 @@ export default function StaffelnPage() {
         />
       ) : (
         <>
-          {tab === 'tabelle' && <TableView rows={table.filter((r) => matchesSearch([r.TeamName], search))} searching={search.trim() !== ''} ownTeams={affiliation.teamNames} />}
+          {tab === 'tabelle' && <TableView rows={table.filter((r) => matchesSearch([r.TeamName], search))} searching={search.trim() !== ''} ownTeams={affiliation.teamNames} onTeamClick={openTeam} />}
           {tab === 'spielplan' && (
             <ScheduleView
               games={games.filter((g) => matchesSearch(gameSearchFields(g), search))}
@@ -279,19 +289,25 @@ export default function StaffelnPage() {
               ownTeams={affiliation.teamNames}
               halfDurationMinutes={staffelHalfDuration(matrices)}
               focusGameId={focusGameId}
+              onTeamClick={openTeam}
             />
           )}
           {tab === 'kreuztabelle' && (
-            cross ? <CrossTable data={cross} ownTeams={affiliation.teamNames} /> : <Empty text={NOCH_NICHTS} />
+            cross ? <CrossTable data={cross} ownTeams={affiliation.teamNames} onTeamClick={openTeam} /> : <Empty text={NOCH_NICHTS} />
           )}
           {tab === 'verlauf' && (
-            <VerlaufView
+            <StandingsChart days={progression} ownTeams={affiliation.teamNames} onTeamClick={openTeam} />
+          )}
+          {tab === 'spieler' && (
+            <SpielerView
               staffelId={selected?.id ?? 0}
               days={progression}
               ownTeams={affiliation.teamNames}
               matrices={matrices}
               ownPlayers={affiliation.playerIds}
               onOpenGame={openGame}
+              auswahl={params.get('team') ?? EIGENE}
+              onAuswahl={(t) => setParam('team', t)}
             />
           )}
           {tab === 'tore' && (
@@ -316,26 +332,21 @@ const EIGENE = ''
 const ALLE = '*'
 
 /**
- * Der Reiter „Verlauf" trägt zwei Darstellungen derselben Frage „wie ist es
- * gelaufen": oben für die Staffel (Platzierung je Spieltag), darunter je
- * Mannschaft (Spieler je Begegnung; Vorgabe die eigene, umschaltbar auf jede
- * andere der Staffel). Ein eigener Reiter dafür hätte die
- * Leiste auf zehn getrieben, und bestehende Verweise auf ?tab=verlauf bleiben
- * so gültig (design.md §12).
+ * Der Reiter „Spieler": Spieler je Begegnung, Vorgabe die eigene Mannschaft,
+ * umschaltbar auf jede andere der Staffel. Der Filter steht in der Adresse
+ * (?team=), damit ein Klick auf eine Mannschaft in Tabelle oder Verlauf direkt
+ * hierher springen kann.
  */
-function VerlaufView({ staffelId, days, ownTeams, matrices, ownPlayers, onOpenGame }: {
+function SpielerView({ staffelId, days, ownTeams, matrices, ownPlayers, onOpenGame, auswahl, onAuswahl }: {
   staffelId: number
   days: ProgressionDay[]
   ownTeams: string[]
   matrices: TeamMatrix[]
   ownPlayers: number[]
   onOpenGame: (bwhvGameId: number) => void
+  auswahl: string
+  onAuswahl: (team: string) => void
 }) {
-  // Welche Spielerübersicht: die eigenen Mannschaften (Vorgabe), alle der
-  // Staffel oder eine einzelne. Die Namen kommen aus dem Verlauf — der rechnet
-  // über bwhv_games, trägt also die Schreibweise des Spielplans, die die Route
-  // für ?team= verlangt.
-  const [auswahl, setAuswahl] = useState(EIGENE)
   // Das Ergebnis trägt die Auswahl, zu der es gehört: nach einem Wechsel zeigt
   // die Ansicht "lädt", bis die passende Antwort da ist, statt kurz die alte.
   const [geladen, setGeladen] = useState<{ auswahl: string; data: TeamMatrix[] | null }>({ auswahl: EIGENE, data: null })
@@ -362,14 +373,13 @@ function VerlaufView({ staffelId, days, ownTeams, matrices, ownPlayers, onOpenGa
 
   return (
     <div className="space-y-6">
-      <StandingsChart days={days} ownTeams={ownTeams} />
       {teams.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className={SUBSECTION_TITLE}>Spielerübersicht</h2>
           <select
             className={HEADER_FIELD}
             value={auswahl}
-            onChange={(e) => setAuswahl(e.target.value)}
+            onChange={(e) => onAuswahl(e.target.value)}
             aria-label="Mannschaft der Spielerübersicht"
           >
             <option value={EIGENE}>Eigene Mannschaft</option>
@@ -405,7 +415,7 @@ function VerlaufView({ staffelId, days, ownTeams, matrices, ownPlayers, onOpenGa
   )
 }
 
-function TableView({ rows, ownTeams, searching }: { rows: TableRow[]; ownTeams: string[]; searching: boolean }) {
+function TableView({ rows, ownTeams, searching, onTeamClick }: { rows: TableRow[]; ownTeams: string[]; searching: boolean; onTeamClick: (team: string) => void }) {
   if (rows.length === 0) return <Empty text={searching ? 'Keine Mannschaft passt zur Suche.' : 'Noch kein Tabellenstand abgerufen.'} />
   return (
     <div className={CARD}>
@@ -435,7 +445,16 @@ function TableView({ rows, ownTeams, searching }: { rows: TableRow[]; ownTeams: 
                   : 'hover:bg-brand-table-select transition-colors'}
               >
                 <td className={TD}>{r.Position}</td>
-                <td className={`${TD} font-medium`}>{r.TeamName}</td>
+                <td className={`${TD} font-medium`}>
+                  <button
+                    type="button"
+                    onClick={() => onTeamClick(r.TeamName)}
+                    className="text-left hover:underline"
+                    title="Spielerübersicht dieser Mannschaft"
+                  >
+                    {r.TeamName}
+                  </button>
+                </td>
                 <td className={TD}>{r.Games}</td>
                 <td className={`${TD} hidden sm:table-cell`}>{r.Won}</td>
                 <td className={`${TD} hidden sm:table-cell`}>{r.Drawn}</td>
@@ -452,13 +471,14 @@ function TableView({ rows, ownTeams, searching }: { rows: TableRow[]; ownTeams: 
   )
 }
 
-function ScheduleView({ games, ownTeams, searching, halfDurationMinutes, focusGameId }: {
+function ScheduleView({ games, ownTeams, searching, halfDurationMinutes, focusGameId, onTeamClick }: {
   games: ScheduleGame[]
   ownTeams: string[]
   searching: boolean
   halfDurationMinutes: number | null
   /** Begegnung, zu der gesprungen wurde (?bericht=) — aufklappen und zeigen. */
   focusGameId: number | null
+  onTeamClick: (team: string) => void
 }) {
   // Genau ein Bericht ist aufgeklappt: der Bericht ist lang (zwei Mannschafts-
   // listen plus Spielverlauf), mehrere gleichzeitig machten die Liste unbenutzbar.
@@ -498,7 +518,9 @@ function ScheduleView({ games, ownTeams, searching, halfDurationMinutes, focusGa
                 )}
               </div>
               <div className="text-sm text-brand-text font-medium truncate">
-                {g.HomeTeam} <span className="text-brand-text-subtle">–</span> {g.GuestTeam}
+                <button type="button" onClick={() => onTeamClick(g.HomeTeam)} className="hover:underline" title="Spielerübersicht dieser Mannschaft">{g.HomeTeam}</button>
+                {' '}<span className="text-brand-text-subtle">–</span>{' '}
+                <button type="button" onClick={() => onTeamClick(g.GuestTeam)} className="hover:underline" title="Spielerübersicht dieser Mannschaft">{g.GuestTeam}</button>
               </div>
               {g.Venue ? (
                 <div className="mt-1">
