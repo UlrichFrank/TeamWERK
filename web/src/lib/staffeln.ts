@@ -124,6 +124,23 @@ export function gespieltePunkte(days: ProgressionDay[], team: string): { day: nu
   return out
 }
 
+/**
+ * Die Platzierung einer Mannschaft an JEDEM Spieltag des Verlaufs (ab ihrem
+ * ersten Eintrag), mit Kennzeichen, ob sie an diesem Tag gespielt hat. Die
+ * Linie läuft durch alle Tage, Markierungen gehören nur an `played`.
+ */
+export function verlaufPunkte(days: ProgressionDay[], team: string): { day: number; rank: number; played: boolean }[] {
+  const out: { day: number; rank: number; played: boolean }[] = []
+  let vorher = 0
+  days.forEach((d, i) => {
+    const e = d.entries.find((x) => x.team === team)
+    if (!e) return
+    out.push({ day: i, rank: e.rank, played: e.games > vorher })
+    vorher = e.games
+  })
+  return out
+}
+
 // --- Mannschafts-Ranglisten -----------------------------------------------
 
 export interface GoalDistribution {

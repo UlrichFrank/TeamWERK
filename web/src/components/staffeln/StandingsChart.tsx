@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { gespieltePunkte } from '../../lib/staffeln'
+import { verlaufPunkte } from '../../lib/staffeln'
 import type { ProgressionDay } from '../../lib/staffeln'
 import { isOwnTeam } from '../../lib/staffelHighlight'
 
@@ -38,8 +38,8 @@ const PAD = { top: 12, right: 16, bottom: 30, left: 28 }
  * Tabellenführer unten läuft, liest sich falsch herum.
  */
 export default function StandingsChart({
-  days, ownTeams,
-}: { days: ProgressionDay[]; ownTeams: string[] }) {
+  days, ownTeams, onTeamClick,
+}: { days: ProgressionDay[]; ownTeams: string[]; onTeamClick?: (team: string) => void }) {
   const [hover, setHover] = useState<string | null>(null)
 
   if (days.length === 0) {
@@ -88,7 +88,7 @@ export default function StandingsChart({
           ))}
           {teams.map((team, ti) => {
             const own = isOwnTeam(ownTeams, team)
-            const punkte = gespieltePunkte(days, team)
+            const punkte = verlaufPunkte(days, team)
             if (punkte.length === 0) return null
             const color = COLORS[ti % COLORS.length]
             const faded = hover !== null && hover !== team && !own
@@ -98,8 +98,9 @@ export default function StandingsChart({
             const width = own ? 4 : hover === team ? 3 : 1.5
             return (
               <g key={team} data-team={team} data-own={own || undefined} opacity={faded ? 0.25 : 1}>
-                {/* Eine Polyline aus einem Punkt zeichnet nichts — am ersten
-                    Spieltag steht deshalb nur der Punkt, keine Linie. */}
+                {/* Die Linie läuft durch jeden Spieltag (auch spielfrei), die
+                    Kreise markieren nur Tage mit eigenem Spiel. Eine Polyline
+                    aus einem Punkt zeichnet nichts. */}
                 {punkte.length > 1 && (
                   <polyline
                     points={punkte.map((p) => `${x(p.day)},${y(p.rank)}`).join(' ')}
@@ -110,7 +111,7 @@ export default function StandingsChart({
                     strokeLinejoin="round"
                   />
                 )}
-                {punkte.map((p) => (
+                {punkte.filter((p) => p.played).map((p) => (
                   <circle
                     key={p.day}
                     cx={x(p.day)}
@@ -146,7 +147,16 @@ export default function StandingsChart({
                 style={{ backgroundColor: COLORS[ti % COLORS.length] }}
                 aria-hidden="true"
               />
-              {team}
+              {onTeamClick ? (
+                <button
+                  type="button"
+                  onClick={() => onTeamClick(team)}
+                  className="hover:underline"
+                  title="Spielerübersicht dieser Mannschaft"
+                >
+                  {team}
+                </button>
+              ) : team}
             </li>
           )
         })}
